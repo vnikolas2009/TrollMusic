@@ -501,6 +501,7 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (item == null) return;
     settings.lastTrackId = item.id;
     settings.lastPositionMs = 0;
+    if (!_restoring) settings.recordPlay(item.id);
   }
 
   void _onCompleted() {

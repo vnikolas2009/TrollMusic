@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/network_providers.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
@@ -45,6 +46,7 @@ class HomeScreen extends ConsumerWidget {
             children: [
               if (tracks.isNotEmpty) _DailyPick(tracks: tracks.take(12).toList()),
               _Stations(tracks: tracks),
+              if (tracks.isNotEmpty) _Recent(tracks: tracks),
               _Discoveries(tracks: tracks),
               const SizedBox(height: 28),
             ],
@@ -147,6 +149,120 @@ class _DailyPick extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _Recent extends ConsumerStatefulWidget {
+  const _Recent({required this.tracks});
+
+  final List<Track> tracks;
+
+  @override
+  ConsumerState<_Recent> createState() => _RecentState();
+}
+
+class _RecentState extends ConsumerState<_Recent> {
+  int _revision = 0;
+
+  Future<void> _clear() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surfaceAlt,
+        title: const Text('Очистить историю?'),
+        content: const Text('Рекомендации и станции начнутся заново.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Очистить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    ref.read(settingsProvider).clearHistory();
+    setState(() => _revision++);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = ref.watch(settingsProvider);
+    final byId = {for (final t in widget.tracks) t.id: t};
+    final recent = settings.recentIds
+        .map((id) => byId[id])
+        .whereType<Track>()
+        .take(10)
+        .toList();
+    if (recent.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Недавно слушали',
+          action: TextButton(
+            onPressed: _clear,
+            child: const Text('Очистить'),
+          ),
+        ),
+        SizedBox(
+          height: 150,
+          child: ListView.separated(
+            key: ValueKey(_revision),
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: recent.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final track = recent[i];
+              final plays = settings.playCounts[track.id] ?? 0;
+              return SizedBox(
+                width: 104,
+                child: InkWell(
+                  onTap: () => ref
+                      .read(audioHandlerProvider)
+                      .playTrack(track, contextQueue: recent),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CoverArt(
+                        url: track.thumbnailUrl,
+                        path: track.artworkPath,
+                        size: 104,
+                        radius: 8,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        plays > 1 ? '${track.artist} · $plays раз' : track.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

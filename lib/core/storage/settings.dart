@@ -82,4 +82,34 @@ class Settings {
       (_box.get('lastPositionMs') as num?)?.toInt() ?? 0;
 
   set lastPositionMs(int value) => _box.put('lastPositionMs', value);
+
+  List<String> get recentIds =>
+      (_box.get('recentIds') as List?)?.cast<String>().toList() ?? const [];
+
+  Map<String, int> get playCounts {
+    final raw = _box.get('playCounts');
+    if (raw is Map) {
+      return {
+        for (final entry in raw.entries)
+          entry.key.toString(): (entry.value as num?)?.toInt() ?? 0,
+      };
+    }
+    return const {};
+  }
+
+  void recordPlay(String trackId) {
+    if (trackId.isEmpty) return;
+    final recent = [...recentIds]..remove(trackId);
+    recent.insert(0, trackId);
+    _box.put('recentIds', recent.take(100).toList());
+
+    final counts = {...playCounts};
+    counts[trackId] = (counts[trackId] ?? 0) + 1;
+    _box.put('playCounts', counts);
+  }
+
+  void clearHistory() {
+    _box.delete('recentIds');
+    _box.delete('playCounts');
+  }
 }

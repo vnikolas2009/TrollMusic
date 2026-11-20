@@ -233,8 +233,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: const Text('Очистить'),
             ),
           ),
-          _Section('Разрешения'),
+          _Section('История прослушивания'),
           ListTile(
+            title: const Text('Очистить историю'),
+            subtitle: Text(
+              '${settings.recentIds.length} треков в истории',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            trailing: TextButton(
+              onPressed: () {
+                ref.read(settingsProvider).clearHistory();
+                setState(() {});
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('История очищена')),
+                );
+              },
+              child: const Text('Очистить'),
+            ),
+          ),
+          _Section('Разрешения'),          ListTile(
             title: const Text('Уведомления'),
             subtitle: const Text('Экран блокировки и фоновое воспроизведение'),
             trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
