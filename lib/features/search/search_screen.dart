@@ -90,6 +90,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   List<Track> _results = const [];
   bool _loading = false;
   String? _error;
+  TrackSource? _source;
+
+  List<Track> get _filtered => _source == null
+      ? _results
+      : _results.where((t) => t.source == _source).toList();
+
+  List<({String label, TrackSource? source})> get _sourceFilters => [
+        (label: 'Все', source: null),
+        if (_results.any((t) => t.source == TrackSource.youtube))
+          (label: 'YouTube', source: TrackSource.youtube),
+        if (_results.any((t) => t.source == TrackSource.spotify))
+          (label: 'Spotify', source: TrackSource.spotify),
+      ];
 
   @override
   void dispose() {
@@ -120,7 +133,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       _error = null;
     });
     try {
-      final results = await ref.read(musicRepositoryProvider).searchYouTube(trimmed);
+      final repo = ref.read(musicRepositoryProvider);
+      final results = repo.spotify.hasCredentials
+          ? await repo.searchAll(trimmed)
+          : await repo.searchYouTube(trimmed);
       if (!mounted) return;
       setState(() {
         _results = results;
@@ -201,7 +217,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         else ...[
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+              padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
               child: Row(
                 children: [
                   Expanded(
@@ -213,7 +229,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   TextButton.icon(
                     onPressed: () => ref
                         .read(audioHandlerProvider)
-                        .playTrack(_results.first, contextQueue: _results),
+                        .playTrack(_filtered.first, contextQueue: _filtered),
                     icon: const Icon(Icons.play_arrow_rounded, size: 18),
                     label: const Text('Слушать все'),
                   ),
@@ -226,10 +242,37 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ),
           ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  for (final filter in _sourceFilters)
+                    ChoiceChip(
+                      label: Text(
+                        filter.label,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _source == filter.source
+                              ? Colors.black
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                      selected: _source == filter.source,
+                      selectedColor: AppColors.textPrimary,
+                      backgroundColor: AppColors.surfaceAlt,
+                      side: BorderSide.none,
+                      onSelected: (_) => setState(() => _source = filter.source),
+                    ),
+                ],
+              ),
+            ),
+          ),
           SliverList.builder(
-            itemCount: _results.length,
+            itemCount: _filtered.length,
             itemBuilder: (context, i) {
-              final track = _results[i];
+              final track = _filtered[i];
               return TrackTile(
                 title: track.title,
                 artist: track.artist,
@@ -237,7 +280,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 explicit: track.explicit,
                 onTap: () => ref
                     .read(audioHandlerProvider)
-                    .playTrack(track, contextQueue: _results),
+                    .playTrack(track, contextQueue: _filtered),
                 onMenu: () => _open(track),
               );
             },
@@ -248,7 +291,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   void _saveResults() async {
-    if (_results.isEmpty) return;
+    final tracks = _filtered;
+    if (tracks.isEmpty) return;
     final library = ref.read(libraryProvider);
     final query = _controller.text.trim();
     final title = query.isEmpty ? 'Поиск' : query;
@@ -258,14 +302,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         id: 'search:${now.millisecondsSinceEpoch}',
         title: title,
         description: 'Результаты поиска',
-        imageUrl: _results.first.thumbnailUrl,
-        tracks: _results,
+        imageUrl: tracks.first.thumbnailUrl,
+        tracks: tracks,
       ),
     );
-    await library.saveTracks(_results);
+    await library.saveTracks(tracks);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Сохранено: ${_results.length} треков')),
+      SnackBar(content: Text('Сохранено: ${tracks.length} треков')),
     );
   }
 
