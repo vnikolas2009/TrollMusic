@@ -138,6 +138,49 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await setLibraryQueue([track]);
   }
 
+  Future<bool> playNext(Track track) async {
+    final prepared = await _prepare([track]);
+    if (prepared.isEmpty) return false;
+    final resolved = prepared.first;
+
+    final items = [...queue.value];
+    final current = _player.currentIndex;
+    final insertAt = current == null ? items.length : (current + 1).clamp(0, items.length);
+    items.insert(insertAt, _toMediaItem(resolved));
+    queue.add(items);
+
+    try {
+      final source = AudioSource.uri(
+        Uri.parse(resolved.localPath ?? resolved.streamUrl!),
+        tag: _toMediaItem(resolved),
+      );
+      await _player.insertAudioSource(insertAt, source);
+    } catch (_) {
+      return false;
+    }
+    return true;
+  }
+
+  Future<bool> addToQueue(Track track) async {
+    final prepared = await _prepare([track]);
+    if (prepared.isEmpty) return false;
+    final resolved = prepared.first;
+
+    final items = [...queue.value, _toMediaItem(resolved)];
+    queue.add(items);
+
+    try {
+      final source = AudioSource.uri(
+        Uri.parse(resolved.localPath ?? resolved.streamUrl!),
+        tag: _toMediaItem(resolved),
+      );
+      await _player.addAudioSource(source);
+    } catch (_) {
+      return false;
+    }
+    return true;
+  }
+
   Future<List<Track>> _prepare(Iterable<Track> tracks, {String? anchorId}) async {
     final list = tracks.toList();
     final results = List<Track?>.filled(list.length, null);

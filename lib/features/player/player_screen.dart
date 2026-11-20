@@ -365,6 +365,38 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.playlist_play_rounded),
+              title: const Text('Играть следующим'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                final ok = await ref.read(audioHandlerProvider).playNext(track);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok
+                        ? 'Трек будет следующим'
+                        : 'Не удалось добавить в очередь'),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.queue_music_rounded),
+              title: const Text('В очередь'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                final ok = await ref.read(audioHandlerProvider).addToQueue(track);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok
+                        ? 'Добавлено в конец очереди'
+                        : 'Не удалось добавить в очередь'),
+                  ),
+                );
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.info_outline),
               title: const Text('Информация о треке'),
               onTap: () {

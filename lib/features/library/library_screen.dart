@@ -463,6 +463,22 @@ class _TracksTab extends ConsumerWidget {
                 },
               ),
             ListTile(
+              leading: const Icon(Icons.playlist_play_rounded),
+              title: const Text('Играть следующим'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                final ok = await ref.read(audioHandlerProvider).playNext(track);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok
+                        ? 'Трек будет следующим'
+                        : 'Не удалось добавить в очередь'),
+                  ),
+                );
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.edit_outlined),
               title: const Text('Редактировать теги и текст'),
               onTap: () {
