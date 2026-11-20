@@ -1,0 +1,88 @@
+import 'package:dio/dio.dart';
+
+import '../config/app_config.dart';
+import '../storage/settings.dart';
+import 'proxy.dart';
+
+enum MirrorKind { piped, invidious }
+
+class MirrorManager {
+  MirrorManager({required Settings settings, required Dio dio})
+      : _settings = settings,
+        _dio = dio,
+        _proxy = ProxyConfig(settings);
+
+  final Settings _settings;
+  final Dio _dio;
+  final ProxyConfig _proxy;
+  final Map<MirrorKind, String?> _sticky = {};
+  final Map<String, DateTime> _failed = {};
+
+  List<String> instancesOf(MirrorKind kind) => kind == MirrorKind.piped
+      ? _settings.pipedInstances
+      : _settings.invidiousInstances;
+
+  Future<Response<dynamic>> get(
+    MirrorKind kind,
+    String path, {
+    Map<String, dynamic>? query,
+    Duration timeout = AppConfig.mirrorTimeout,
+  }) async {
+    final instances = instancesOf(kind);
+    if (instances.isEmpty) {
+      throw DioException(
+        requestOptions: RequestOptions(path: path),
+        message: 'Список зеркал пуст',
+      );
+    }
+
+    final ordered = _order(kind, instances);
+    Object? lastError;
+
+    for (final origin in ordered) {
+      if (_isCoolingDown(origin)) continue;
+      try {
+        final uri = kind == MirrorKind.piped
+            ? _proxy.piped(origin, path, query)
+            : _proxy.invidious(origin, path, query);
+        final response = await _dio
+            .getUri<dynamic>(uri)
+            .timeout(timeout, onTimeout: () => throw DioException(
+                  requestOptions: RequestOptions(path: uri.toString()),
+                  type: DioExceptionType.connectionTimeout,
+                ));
+        if (response.statusCode == 200 && response.data != null) {
+          _sticky[kind] = origin;
+          _failed.remove(origin);
+          return response;
+        }
+        lastError = 'HTTP ${response.statusCode}';
+      } catch (error) {
+        lastError = error;
+        _failed[origin] = DateTime.now();
+      }
+    }
+
+    throw DioException(
+      requestOptions: RequestOptions(path: path),
+      message: 'Все зеркала ${kind.name} недоступны: $lastError',
+    );
+  }
+
+  List<String> _order(MirrorKind kind, List<String> instances) {
+    final sticky = _sticky[kind];
+    if (sticky == null || !instances.contains(sticky)) return instances;
+    return [sticky, ...instances.where((i) => i != sticky)];
+  }
+
+  bool _isCoolingDown(String origin) {
+    final failedAt = _failed[origin];
+    if (failedAt == null) return false;
+    return DateTime.now().difference(failedAt) < const Duration(minutes: 2);
+  }
+
+  void resetHealth() {
+    _failed.clear();
+    _sticky.clear();
+  }
+}

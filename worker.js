@@ -14,6 +14,7 @@
 
 const UPSTREAM = {
   spotify: 'https://api.spotify.com',
+  accounts: 'https://accounts.spotify.com',
   cdn: 'https://i.scdn.co',
   embed: 'https://open.spotify.com',
 };
@@ -67,6 +68,10 @@ const buildUpstreamHeaders = (request, env) => {
   headers.set('user-agent', ua || 'YSPlayer/0.1 (+https://github.com/vnikolas2009/YSPlayer)');
   const accept = request.headers.get('accept');
   if (accept) headers.set('accept', accept);
+  for (const name of ['content-type', 'spotify-app-version', 'if-none-match']) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
   return headers;
 };
 
@@ -103,7 +108,7 @@ export default {
       const tail = rest.join('/');
       const qs = url.search ? url.search : '';
 
-      if (prefix === 'spotify' || prefix === 'cdn' || prefix === 'embed') {
+      if (prefix === 'spotify' || prefix === 'accounts' || prefix === 'cdn' || prefix === 'embed') {
         const base = UPSTREAM[prefix];
         const target = `${base}/${tail}${qs}`;
         return withCors(await forward(target, request, env));
