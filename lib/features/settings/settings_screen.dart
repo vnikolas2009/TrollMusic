@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../app/network_providers.dart';
 import '../../app/providers.dart';
 import '../../core/config/app_config.dart';
+import '../../core/network/mirror_manager.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/permission_service.dart';
@@ -19,6 +20,29 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   int _cacheBytes = 0;
   bool _loadingCache = true;
+  bool _probing = false;
+  Map<String, MirrorProbe> _pipedProbes = const {};
+  Map<String, MirrorProbe> _invidiousProbes = const {};
+
+  String get _probeSummary {
+    final all = <String, MirrorProbe>{..._pipedProbes, ..._invidiousProbes};
+    if (all.isEmpty) return 'Проверка доступности зеркал';
+    final ok = all.values.where((p) => p.ok).length;
+    return 'Доступно $ok из ${all.length}';
+  }
+
+  Future<void> _probeMirrors() async {
+    setState(() => _probing = true);
+    final manager = ref.read(mirrorManagerProvider);
+    final piped = await manager.probeAll(MirrorKind.piped);
+    final invidious = await manager.probeAll(MirrorKind.invidious);
+    if (!mounted) return;
+    setState(() {
+      _pipedProbes = {for (final p in piped) p.origin: p};
+      _invidiousProbes = {for (final p in invidious) p.origin: p};
+      _probing = false;
+    });
+  }
 
   @override
   void initState() {
@@ -112,9 +136,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onSaved: (v) => settings.spotifyClientSecret = v,
           ),
           _Section('Зеркала YouTube (Piped / Invidious)'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _probing ? 'Проверка зеркал...' : _probeSummary,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _probing ? null : _probeMirrors,
+                  child: const Text('Проверить'),
+                ),
+              ],
+            ),
+          ),
           for (var i = 0; i < settings.pipedInstances.length; i++)
             _MirrorTile(
               origin: settings.pipedInstances[i],
+              probe: _pipedProbes[settings.pipedInstances[i]],
               onDelete: () {
                 final list = [...settings.pipedInstances]..removeAt(i);
                 setState(() => settings.pipedInstances = list);
@@ -131,6 +176,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           for (var i = 0; i < settings.invidiousInstances.length; i++)
             _MirrorTile(
               origin: settings.invidiousInstances[i],
+              probe: _invidiousProbes[settings.invidiousInstances[i]],
               onDelete: () {
                 final list = [...settings.invidiousInstances]..removeAt(i);
                 setState(() => settings.invidiousInstances = list);
@@ -363,16 +409,33 @@ class _TextFieldTileState extends State<_TextFieldTile> {
 }
 
 class _MirrorTile extends StatelessWidget {
-  const _MirrorTile({required this.origin, required this.onDelete});
+  const _MirrorTile({
+    required this.origin,
+    required this.onDelete,
+    this.probe,
+  });
 
   final String origin;
   final VoidCallback onDelete;
+  final MirrorProbe? probe;
 
   @override
   Widget build(BuildContext context) {
+    final probe = this.probe;
     return ListTile(
       dense: true,
       title: Text(origin, style: const TextStyle(fontSize: 12)),
+      subtitle: probe == null
+          ? null
+          : Text(
+              probe.ok
+                  ? 'Работает · ${probe.latency} мс'
+                  : 'Недоступно · ${probe.detail ?? 'ошибка'}',
+              style: TextStyle(
+                fontSize: 11,
+                color: probe.ok ? AppColors.accent : AppColors.textSecondary,
+              ),
+            ),
       trailing: IconButton(
         icon: const Icon(Icons.close, size: 16),
         color: AppColors.textSecondary,

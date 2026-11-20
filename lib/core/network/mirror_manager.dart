@@ -85,4 +85,61 @@ class MirrorManager {
     _failed.clear();
     _sticky.clear();
   }
+
+  Future<MirrorProbe> probe(MirrorKind kind, String origin) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final uri = kind == MirrorKind.piped
+          ? _proxy.piped(origin, '/trending', {'region': 'RU'})
+          : _proxy.invidious(origin, '/api/v1/trending', {'region': 'RU'});
+      final response = await _dio.getUri<dynamic>(uri).timeout(
+            AppConfig.mirrorTimeout,
+            onTimeout: () => throw DioException(
+              requestOptions: RequestOptions(path: uri.toString()),
+              type: DioExceptionType.connectionTimeout,
+            ),
+          );
+      stopwatch.stop();
+      final ok = response.statusCode == 200 && response.data != null;
+      if (ok) {
+        _failed.remove(origin);
+      } else {
+        _failed[origin] = DateTime.now();
+      }
+      return MirrorProbe(
+        origin: origin,
+        ok: ok,
+        latency: stopwatch.elapsedMilliseconds,
+        detail: ok ? null : 'HTTP ${response.statusCode}',
+      );
+    } catch (error) {
+      stopwatch.stop();
+      _failed[origin] = DateTime.now();
+      return MirrorProbe(
+        origin: origin,
+        ok: false,
+        latency: stopwatch.elapsedMilliseconds,
+        detail: error is DioException ? error.type.name : error.toString(),
+      );
+    }
+  }
+
+  Future<List<MirrorProbe>> probeAll(MirrorKind kind) async {
+    final instances = instancesOf(kind);
+    return Future.wait(instances.map((origin) => probe(kind, origin)));
+  }
+}
+
+class MirrorProbe {
+  const MirrorProbe({
+    required this.origin,
+    required this.ok,
+    required this.latency,
+    this.detail,
+  });
+
+  final String origin;
+  final bool ok;
+  final int latency;
+  final String? detail;
 }
