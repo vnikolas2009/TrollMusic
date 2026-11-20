@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/network_providers.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/lrc_parser.dart';
@@ -20,6 +21,12 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
   final _keys = <int, GlobalKey>{};
   int _activeIndex = -1;
   int _offsetMs = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _offsetMs = ref.read(settingsProvider).lyricsOffsetMs(widget.trackId);
+  }
 
   @override
   void dispose() {
@@ -53,7 +60,12 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
               color: AppColors.surfaceAlt,
               icon: const Icon(Icons.sync_alt, size: 20),
               tooltip: 'Сдвиг синхронизации',
-              onSelected: (value) => setState(() => _offsetMs = value),
+              onSelected: (value) {
+                setState(() => _offsetMs = value);
+                ref
+                    .read(settingsProvider)
+                    .setLyricsOffsetMs(widget.trackId, value);
+              },
               itemBuilder: (_) => [
                 for (final shift in const [-2000, -1000, -500, 0, 500, 1000, 2000])
                   PopupMenuItem(

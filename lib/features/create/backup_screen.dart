@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
@@ -66,6 +67,16 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
     }
   }
 
+  Future<void> _copyJson() async {
+    final data = ref.read(libraryProvider).exportJson();
+    final encoded = const JsonEncoder.withIndent('  ').convert(data);
+    await Clipboard.setData(ClipboardData(text: encoded));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Скопировано: ${encoded.length} символов')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final playlists = ref.watch(playlistsProvider).value ?? const [];
@@ -104,6 +115,24 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
             onPressed: _busy ? null : _import,
             icon: const Icon(Icons.file_open_outlined),
             label: const Text('Импорт из JSON'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              side: const BorderSide(color: AppColors.surfaceHigh),
+              minimumSize: const Size.fromHeight(46),
+              shape: const StadiumBorder(),
+            ),
+            onPressed: _busy ? null : _copyJson,
+            icon: const Icon(Icons.copy_all_outlined),
+            label: const Text('Скопировать JSON в буфер'),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Копия содержит треки, плейлисты и тексты песен. '
+            'Аудиофайлы и обложки нужно переносить отдельно.',
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.6),
           ),
         ],
       ),

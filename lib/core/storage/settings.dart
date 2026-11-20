@@ -88,6 +88,12 @@ class Settings {
 
   set playbackSpeed(double value) => _box.put('playbackSpeed', value);
 
+  int lyricsOffsetMs(String trackId) =>
+      (_box.get('lyricsOffset:$trackId') as num?)?.toInt() ?? 0;
+
+  void setLyricsOffsetMs(String trackId, int value) =>
+      _box.put('lyricsOffset:$trackId', value);
+
   List<String> get searchQueries =>
       (_box.get('searchQueries') as List?)?.cast<String>().toList() ?? const [];
 
