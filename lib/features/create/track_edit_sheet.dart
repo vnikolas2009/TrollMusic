@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,6 +21,7 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
   late final TextEditingController _artist;
   late final TextEditingController _album;
   String _lyricsInput = '';
+  int _revision = 0;
 
   @override
   void initState() {
@@ -71,13 +74,33 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
           const SizedBox(height: 24),
           const Text('Обложка', style: TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () async {
-              await ref.read(importProvider).importArtworkFromFile(widget.trackId);
-              setState(() {});
-            },
-            icon: const Icon(Icons.image_outlined),
-            label: const Text('Выбрать изображение'),
+          _ArtworkPreview(track: _track, revision: _revision),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await ref.read(importProvider).importArtworkFromFile(widget.trackId);
+                  setState(() => _revision++);
+                },
+                icon: const Icon(Icons.image_outlined),
+                label: const Text('Выбрать изображение'),
+              ),
+              if (_track?.artworkPath != null)
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final track = _track;
+                    if (track == null) return;
+                    final library = ref.read(libraryProvider);
+                    await library.saveTrack(track.copyWith(artworkPath: ''));
+                    setState(() => _revision++);
+                  },
+                  icon: const Icon(Icons.image_not_supported_outlined),
+                  label: const Text('Сбросить'),
+                ),
+            ],
           ),
           const SizedBox(height: 24),
           const Text('Текст песни', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -119,7 +142,42 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
             ],
           ),
           const SizedBox(height: 12),
-          _LyricsStatus(trackId: widget.trackId),
+          _LyricsStatus(trackId: widget.trackId, revision: _revision),
+          if (ref.watch(libraryProvider).hasLyrics(widget.trackId)) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _showCurrentLyrics(),
+              icon: const Icon(Icons.notes),
+              label: const Text('Посмотреть текст'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    backgroundColor: AppColors.surfaceAlt,
+                    title: const Text('Удалить текст песни?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        child: const Text('Отмена'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        child: const Text('Удалить'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true) return;
+                await ref.read(libraryProvider).clearLyrics(widget.trackId);
+                setState(() => _revision++);
+              },
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Удалить текст'),
+            ),
+          ],
         ],
       ),
     );
@@ -137,6 +195,37 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+
+  void _showCurrentLyrics() {
+    final raw = ref.read(libraryProvider).lyricsFor(widget.trackId) ?? '';
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.7,
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Текст песни', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  child: Text(
+                    raw.isEmpty ? 'Текст не задан' : raw,
+                    style: const TextStyle(fontSize: 13, height: 1.7),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -190,10 +279,54 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
   }
 }
 
+class _ArtworkPreview extends StatelessWidget {
+  const _ArtworkPreview({required this.track, required this.revision});
+
+  final Track? track;
+  final int revision;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = track?.artworkPath;
+    final url = track?.thumbnailUrl;
+
+    final child = path != null && path.isNotEmpty
+        ? Image.file(File(path), fit: BoxFit.cover, errorBuilder: (_, __, ___) => _placeholder())
+        : url != null && url.isNotEmpty
+            ? Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _placeholder())
+            : _placeholder();
+
+    return Row(
+      key: ValueKey(revision),
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(width: 72, height: 72, child: child),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            path != null && path.isNotEmpty
+                ? 'Своя обложка'
+                : 'Используется обложка из источника',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _placeholder() => Container(
+        color: AppColors.surfaceHigh,
+        child: const Icon(Icons.music_note, color: AppColors.textSecondary),
+      );
+}
+
 class _LyricsStatus extends ConsumerWidget {
-  const _LyricsStatus({required this.trackId});
+  const _LyricsStatus({required this.trackId, required this.revision});
 
   final String trackId;
+  final int revision;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -203,6 +336,7 @@ class _LyricsStatus extends ConsumerWidget {
     final synced = raw.contains(RegExp(r'\[\d{1,3}:\d{1,2}'));
 
     return Row(
+      key: ValueKey('status-$revision'),
       children: [
         Icon(
           has ? Icons.check_circle : Icons.info_outline,
