@@ -83,6 +83,11 @@ class Settings {
 
   set lastPositionMs(int value) => _box.put('lastPositionMs', value);
 
+  double get playbackSpeed =>
+      (_box.get('playbackSpeed') as num?)?.toDouble() ?? 1.0;
+
+  set playbackSpeed(double value) => _box.put('playbackSpeed', value);
+
   List<String> get recentIds =>
       (_box.get('recentIds') as List?)?.cast<String>().toList() ?? const [];
 

@@ -378,7 +378,10 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   @override
-  Future<void> setSpeed(double speed) => _player.setSpeed(speed);
+  Future<void> setSpeed(double speed) async {
+    await _player.setSpeed(speed);
+    _settings?.playbackSpeed = speed;
+  }
 
   Lyrics? lyricsForCurrent() {
     final item = mediaItem.value;

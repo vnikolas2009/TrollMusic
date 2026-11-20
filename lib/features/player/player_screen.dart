@@ -344,11 +344,198 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 _showCrossfade();
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.speed_rounded),
+              title: const Text('Скорость'),
+              trailing: Text(
+                '${ref.read(audioHandlerProvider).player.speed.toStringAsFixed(2)}×',
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showSpeed();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.playlist_add_rounded),
+              title: const Text('Добавить в плейлист'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _addToPlaylist(track);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('Информация о треке'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showInfo(track);
+              },
+            ),
           ],
         ),
       ),
     );
   }
+
+  void _showSpeed() {
+    const options = <double>[0.75, 1, 1.25, 1.5, 2];
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) {
+        final speed = ref.read(audioHandlerProvider).player.speed;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Скорость', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+              for (final value in options)
+                ListTile(
+                  title: Text(value == 1 ? 'Обычная' : '${value}×'),
+                  trailing: (speed - value).abs() < 0.01
+                      ? const Icon(Icons.check, color: AppColors.accent, size: 18)
+                      : null,
+                  onTap: () {
+                    ref.read(audioHandlerProvider).setSpeed(value);
+                    Navigator.pop(sheetContext);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _addToPlaylist(Track track) async {
+    final library = ref.read(libraryProvider);
+    final playlists = library.playlists;
+    if (playlists.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала создайте плейлист в медиатеке')),
+      );
+      return;
+    }
+
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Добавить в плейлист', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: playlists.length,
+                itemBuilder: (context, i) {
+                  final playlist = playlists[i];
+                  return ListTile(
+                    title: Text(playlist.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(
+                      '${playlist.tracks.length} треков',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    onTap: () => Navigator.pop(sheetContext, playlist.id),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (selected == null) return;
+    final playlist = library.playlistById(selected);
+    if (playlist == null) return;
+    if (playlist.tracks.any((t) => t.id == track.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Трек уже в плейлисте')),
+      );
+      return;
+    }
+    await library.savePlaylist(
+      playlist.copyWith(tracks: [...playlist.tracks, track]),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Добавлено в «${playlist.title}»')),
+    );
+  }
+
+  void _showInfo(Track track) {
+    final duration = track.duration == Duration.zero
+        ? '—'
+        : formatDuration(track.duration);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Информация о треке',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              _infoRow('Название', track.title),
+              _infoRow('Исполнитель', track.artist),
+              if (track.album.isNotEmpty) _infoRow('Альбом', track.album),
+              _infoRow('Длительность', duration),
+              _infoRow('Источник', _sourceLabel(track.source)),
+              if (track.bitrate != null) _infoRow('Битрейт', '${track.bitrate} kbps'),
+              _infoRow(
+                'Офлайн',
+                track.localPath != null && track.localPath!.isNotEmpty ? 'Да' : 'Нет',
+              ),
+              _infoRow('ID', track.id),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(value, style: const TextStyle(fontSize: 12)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _sourceLabel(TrackSource source) => switch (source) {
+        TrackSource.youtube => 'YouTube',
+        TrackSource.spotify => 'Spotify',
+        TrackSource.local => 'Локальный файл',
+        TrackSource.downloaded => 'Скачанный',
+      };
 
   void _showSleepTimer() {
     const options = <int>[0, 5, 15, 30, 60];
