@@ -1,4 +1,5 @@
 import '../../../data/models/track.dart';
+import '../../network/http_client.dart';
 import '../../network/mirror_manager.dart';
 import '../../network/proxy.dart';
 import '../../storage/settings.dart';
@@ -7,7 +8,7 @@ class InvidiousClient {
   InvidiousClient({required Settings settings, required ProxyConfig proxy})
       : _settings = settings,
         _proxy = proxy {
-    _mirrors = MirrorManager(settings: settings, dio: _createDio());
+    _mirrors = MirrorManager(settings: settings, dio: createDio());
   }
 
   final Settings _settings;

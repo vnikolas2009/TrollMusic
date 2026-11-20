@@ -33,7 +33,7 @@ class YouTubeMusicClient {
   Future<String?> streamUrl(String videoId) async {
     try {
       final url = await _piped.resolveStreamUrl(videoId);
-      if (url.isNotEmpty) return url;
+      if (url != null && url.isNotEmpty) return url;
     } catch (_) {}
     try {
       return await _invidious.audioUrl(videoId);

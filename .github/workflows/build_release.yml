@@ -16,7 +16,7 @@ permissions:
 
 env:
   APP_NAME: YSPlayer
-  FLUTTER_CHANNEL: stable
+  FLUTTER_VERSION: 3.50.1
 
 jobs:
   version:
@@ -49,18 +49,14 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
-
-      - name: Scaffold platform folders
-        run: |
-          flutter create --platforms=android,ios --project-name ysplayer --org com.ysplayer _scaffold
-          [ -d android ] || cp -R _scaffold/android ./android
-          [ -d ios ] || cp -R _scaffold/ios ./ios
 
       - name: Set version
         run: |
           sed -i -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
+          grep '^version:' pubspec.yaml
 
       - run: flutter pub get
 
@@ -91,18 +87,14 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
-
-      - name: Scaffold platform folders
-        run: |
-          flutter create --platforms=android,ios --project-name ysplayer --org com.ysplayer _scaffold
-          [ -d android ] || cp -R _scaffold/android ./android
-          [ -d ios ] || cp -R _scaffold/ios ./ios
 
       - name: Set version
         run: |
           sed -i '' -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
+          grep '^version:' pubspec.yaml
 
       - run: flutter pub get
 
@@ -140,6 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP"
+          rm -rf releases-repo
           git init -q releases-repo
           cd releases-repo
           git config user.name  "github-actions[bot]"
@@ -147,11 +140,10 @@ jobs:
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           if git fetch --depth=1 origin releases; then
             git checkout -q -B releases FETCH_HEAD
-            git rm -rq --ignore-unmatch . || true
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           else
             git checkout -q --orphan releases
           fi
-          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp "$GITHUB_WORKSPACE"/dist/* .
           echo "${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}" > latest-version.txt
           git add -A

@@ -1,4 +1,5 @@
 import '../../../data/models/track.dart';
+import '../../network/http_client.dart';
 import '../../network/mirror_manager.dart';
 import '../../network/proxy.dart';
 import '../../storage/settings.dart';
@@ -45,7 +46,7 @@ class PipedClient {
     return track.copyWith(streamUrl: url);
   }
 
-  Future<String> resolveStreamUrl(String videoId, {int? bitrate}) async {
+  Future<String?> resolveStreamUrl(String videoId, {int? bitrate}) async {
     final data = await _json(MirrorKind.piped, '/streams/$videoId', const {});
     return _pickAudioUrl(data, bitrate: bitrate ?? _settings.bitrate);
   }

@@ -145,10 +145,17 @@ class SpotifyClient {
     if (entity == null) throw StateError('Spotify: эмбед без данных');
 
     final list = entity['trackList'] as List? ?? const [];
-    final coverUrl = (entity['coverArt'] as Map<String, dynamic>?)?['sources'] is List
-        ? (((entity['coverArt'] as Map<String, dynamic>)['sources'] as List).first
-            as Map<String, dynamic>?)?['url'] as String?
-        : null;
+    final coverArt = entity['coverArt'];
+    String? coverUrl;
+    if (coverArt is Map<String, dynamic>) {
+      final sources = coverArt['sources'];
+      if (sources is List && sources.isNotEmpty) {
+        final first = sources.first;
+        if (first is Map<String, dynamic>) {
+          coverUrl = first['url'] as String?;
+        }
+      }
+    }
 
     return Playlist(
       id: entity['id'] as String? ?? id,

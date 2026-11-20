@@ -10,7 +10,6 @@ class Settings {
   static const boxName = 'settings';
 
   static Future<Settings> open() async {
-    await Hive.initFlutter();
     final box = await Hive.openBox<dynamic>(boxName);
     return Settings(box);
   }

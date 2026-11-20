@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../app/app_shell.dart';
-import '../core/theme/app_colors.dart';
+import '../../app/app_shell.dart';
+import '../../core/theme/app_colors.dart';
 
 class SplashGate extends StatefulWidget {
   const SplashGate({super.key});
@@ -16,7 +16,7 @@ class _SplashGateState extends State<SplashGate> {
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(const Duration(milliseconds: 350), () {
+    Future<void>.delayed(const Duration(milliseconds: 250), () {
       if (mounted) setState(() => _ready = true);
     });
   }
@@ -27,14 +27,20 @@ class _SplashGateState extends State<SplashGate> {
     return const Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
-        child: Text(
-          'YSPlayer',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.graphic_eq_rounded, color: AppColors.accent, size: 42),
+            SizedBox(height: 12),
+            Text(
+              'YSPlayer',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.6,
+              ),
+            ),
+          ],
         ),
       ),
     );

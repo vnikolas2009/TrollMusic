@@ -8,11 +8,11 @@ class YsBottomNav extends StatelessWidget {
   final int index;
   final ValueChanged<int> onChanged;
 
-  static const _items = <(IconData, String)>[
-    (Icons.home_filled, 'Главная'),
-    (Icons.search, 'Поиск'),
-    (Icons.library_music_outlined, 'Медиатека'),
-    (Icons.add_box_outlined, 'Создать'),
+  static const _items = <(IconData, IconData, String)>[
+    (Icons.home_filled, Icons.home_outlined, 'Главная'),
+    (Icons.search, Icons.search, 'Поиск'),
+    (Icons.library_music, Icons.library_music_outlined, 'Медиатека'),
+    (Icons.add_box, Icons.add_box_outlined, 'Создать'),
   ];
 
   @override
@@ -32,25 +32,22 @@ class YsBottomNav extends StatelessWidget {
                 onTap: () => onChanged(i),
                 borderRadius: BorderRadius.circular(18),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 9),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _items[i].$1,
+                        index == i ? _items[i].$1 : _items[i].$2,
                         size: 22,
-                        color: index == i
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
+                        color: index == i ? AppColors.textPrimary : AppColors.textSecondary,
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        _items[i].$2,
+                        _items[i].$3,
                         style: TextStyle(
                           fontSize: 10,
-                          color: index == i
-                              ? AppColors.textPrimary
-                              : AppColors.textSecondary,
+                          fontWeight: index == i ? FontWeight.w600 : FontWeight.w400,
+                          color: index == i ? AppColors.textPrimary : AppColors.textSecondary,
                         ),
                       ),
                     ],
