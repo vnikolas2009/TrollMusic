@@ -1,0 +1,170 @@
+name: Build Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+  workflow_dispatch:
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: YSPlayer
+  FLUTTER_CHANNEL: stable
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.v.outputs.name }}
+      code: ${{ steps.v.outputs.code }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - id: v
+        run: |
+          VERSION_NAME="1.0.$(( ${{ github.run_number }} - 1 ))"
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION_NAME+${{ github.run_number }}"
+
+  android:
+    name: Android APK
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Scaffold platform folders
+        run: |
+          flutter create --platforms=android,ios --project-name ysplayer --org com.ysplayer _scaffold
+          [ -d android ] || cp -R _scaffold/android ./android
+          [ -d ios ] || cp -R _scaffold/ios ./ios
+
+      - name: Set version
+        run: |
+          sed -i -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
+
+      - run: flutter pub get
+
+      - name: Build APK
+        run: |
+          flutter build apk --release \
+            --build-name=${{ needs.version.outputs.name }} \
+            --build-number=${{ needs.version.outputs.code }}
+
+      - name: Rename artifact
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-android.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS IPA (unsigned)
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Scaffold platform folders
+        run: |
+          flutter create --platforms=android,ios --project-name ysplayer --org com.ysplayer _scaffold
+          [ -d android ] || cp -R _scaffold/android ./android
+          [ -d ios ] || cp -R _scaffold/ios ./ios
+
+      - name: Set version
+        run: |
+          sed -i '' -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
+
+      - run: flutter pub get
+
+      - name: Build iOS
+        run: |
+          flutter build ios --release --no-codesign \
+            --build-name=${{ needs.version.outputs.name }} \
+            --build-number=${{ needs.version.outputs.code }}
+
+      - name: Package IPA
+        run: |
+          mkdir -p dist Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa" Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: dist/*.ipa
+          if-no-files-found: error
+
+  publish:
+    name: Publish
+    needs: [version, android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Push to releases branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          git init -q releases-repo
+          cd releases-repo
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          if git fetch --depth=1 origin releases; then
+            git checkout -q -B releases FETCH_HEAD
+            git rm -rq --ignore-unmatch . || true
+          else
+            git checkout -q --orphan releases
+          fi
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp "$GITHUB_WORKSPACE"/dist/* .
+          echo "${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}" > latest-version.txt
+          git add -A
+          git commit -q -m "release ${{ needs.version.outputs.tag }}"
+          git push -q --force origin releases
+
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: ${{ env.APP_NAME }} ${{ needs.version.outputs.name }}
+          generate_release_notes: true
+          files: |
+            dist/*.apk
+            dist/*.ipa
+          fail_on_unmatched_files: true

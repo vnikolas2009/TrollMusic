@@ -1,0 +1,33 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.iml
+.idea/
+.vscode/
+coverage/
+
+# Android
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+# iOS / macOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/ephemeral/
+.DS_Store
+
+# Obfuscation / secrets
+secrets.json
+.env
+*.log
