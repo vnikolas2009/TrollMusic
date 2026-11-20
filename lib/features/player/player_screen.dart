@@ -22,6 +22,12 @@ class PlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+  String _countdown(Duration remaining) {
+    final minutes = remaining.inMinutes;
+    final seconds = remaining.inSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
   bool _showQueue = false;
   Color _dominant = const Color(0xFF282828);
   String? _colorSourceId;
@@ -100,15 +106,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                     icon: const Icon(Icons.keyboard_arrow_down, size: 28),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-                  const Expanded(
-                    child: Text(
-                      'СЕЙЧАС ИГРАЕТ',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.4,
-                        color: AppColors.textSecondary,
+                  Expanded(
+                    child: ValueListenableBuilder<Duration?>(
+                      valueListenable: ref.read(audioHandlerProvider).sleepRemaining,
+                      builder: (context, remaining, _) => Text(
+                        remaining == null
+                            ? 'СЕЙЧАС ИГРАЕТ'
+                            : 'ТАЙМЕР СНА · ${_countdown(remaining)}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.4,
+                          color: remaining == null
+                              ? AppColors.textSecondary
+                              : AppColors.accent,
+                        ),
                       ),
                     ),
                   ),
@@ -327,6 +340,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             ListTile(
               leading: const Icon(Icons.timer_outlined),
               title: const Text('Таймер сна'),
+              trailing: ValueListenableBuilder<Duration?>(
+                valueListenable: ref.read(audioHandlerProvider).sleepRemaining,
+                builder: (context, remaining, _) => remaining == null
+                    ? const SizedBox.shrink()
+                    : Text(
+                        _countdown(remaining),
+                        style: const TextStyle(color: AppColors.accent),
+                      ),
+              ),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _showSleepTimer();

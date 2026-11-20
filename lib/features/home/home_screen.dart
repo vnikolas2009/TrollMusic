@@ -5,6 +5,7 @@ import '../../app/network_providers.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/utils/track_groups.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/cover_art.dart';
 import '../../shared/widgets/station_card.dart';
@@ -18,6 +19,8 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tracks = ref.watch(tracksProvider).value ?? const <Track>[];
+    final settings = ref.watch(settingsProvider);
+    final daily = buildDailyPick(tracks, settings.recentIds);
 
     return CustomScrollView(
       slivers: [
@@ -44,7 +47,7 @@ class HomeScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (tracks.isNotEmpty) _DailyPick(tracks: tracks.take(12).toList()),
+              if (daily.isNotEmpty) _DailyPick(tracks: daily),
               _Stations(tracks: tracks),
               if (tracks.isNotEmpty) _Recent(tracks: tracks),
               _Discoveries(tracks: tracks),
@@ -267,7 +270,11 @@ class _RecentState extends ConsumerState<_Recent> {
   }
 }
 
-class _Stations extends StatelessWidget {
+/// Группирует треки по первому исполнителю, сохраняя порядок появления.
+Map<String, List<Track>> _artistGroups(List<Track> tracks) =>
+    groupTracksByArtist(tracks);
+
+class _Stations extends ConsumerWidget {
   const _Stations({required this.tracks});
 
   final List<Track> tracks;
@@ -281,57 +288,81 @@ class _Stations extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final groups = _artistGroups(tracks).entries.take(6).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'Рекомендуемые станции'),
+        SectionHeader(
+          title: 'Рекомендуемые станции',
+          action: groups.isEmpty
+              ? null
+              : TextButton(
+                  onPressed: () {
+                    final all = [...tracks]..shuffle();
+                    if (all.isEmpty) return;
+                    ref
+                        .read(audioHandlerProvider)
+                        .playTrack(all.first, contextQueue: all);
+                  },
+                  child: const Text('Слушать'),
+                ),
+        ),
         SizedBox(
           height: 160,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: 6,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, i) {
-              final a = tracks.isEmpty ? null : tracks[i % tracks.length];
-              final b = tracks.length > 1 ? tracks[(i + 1) % tracks.length] : null;
-              final c = tracks.length > 2 ? tracks[(i + 2) % tracks.length] : null;
-              final name = a == null ? 'Радио ${i + 1}' : a.artist.split(',').first.trim();
-              return StationCard(
-                title: name,
-                background: _palette[i % _palette.length],
-                centerUrl: a?.thumbnailUrl,
-                leftUrl: b?.thumbnailUrl,
-                rightUrl: c?.thumbnailUrl,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => PlaylistScreen(
-                      id: 'station:$i',
-                      title: '$name: радио',
-                      isRadio: true,
-                      tracks: tracks.isEmpty
-                          ? const []
-                          : List.generate(20, (k) => tracks[(i + k) % tracks.length]),
+          child: groups.isEmpty
+              ? const Center(
+                  child: Text(
+                    'Добавьте треки — появятся станции по артистам',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
                     ),
                   ),
+                )
+              : ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: groups.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, i) {
+                    final name = groups[i].key;
+                    final own = groups[i].value;
+                    // Станция артиста: его треки первыми, остальное — вперемешку.
+                    final station = buildArtistMix(own, tracks);
+                    return StationCard(
+                      title: name,
+                      background: _palette[i % _palette.length],
+                      centerUrl: own.isNotEmpty ? own.first.thumbnailUrl : null,
+                      leftUrl: station.length > 1 ? station[1].thumbnailUrl : null,
+                      rightUrl: station.length > 2 ? station[2].thumbnailUrl : null,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => PlaylistScreen(
+                            id: 'station:$name',
+                            title: '$name: радио',
+                            isRadio: true,
+                            tracks: station,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
         ),
       ],
     );
   }
 }
 
-class _Discoveries extends StatelessWidget {
+class _Discoveries extends ConsumerWidget {
   const _Discoveries({required this.tracks});
 
   final List<Track> tracks;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (tracks.isEmpty) {
       return const Padding(
         padding: EdgeInsets.fromLTRB(24, 40, 24, 0),
@@ -343,13 +374,14 @@ class _Discoveries extends StatelessWidget {
       );
     }
 
-    final items = tracks.take(10).toList();
+    final groups = _artistGroups(tracks).entries.toList();
+    final items = groups.take(10).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(
           title: 'Еще больше открытий',
-          avatarUrl: items.first.thumbnailUrl,
+          avatarUrl: items.first.value.first.thumbnailUrl,
         ),
         SizedBox(
           height: 186,
@@ -359,32 +391,44 @@ class _Discoveries extends StatelessWidget {
             itemCount: items.length,
             separatorBuilder: (_, __) => const SizedBox(width: 12),
             itemBuilder: (context, i) {
-              final track = items[i];
+              final name = items[i].key;
+              final own = items[i].value;
+              final lead = own.first;
+              final mix = buildArtistMix(own, tracks, limit: 20);
               return SizedBox(
                 width: 132,
                 child: InkWell(
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => PlaylistScreen(
-                        id: 'mix:${track.id}',
-                        title: track.artist,
-                        tracks: [track],
+                        id: 'mix:$name',
+                        title: '$name: микст',
+                        subtitle: '${mix.length} треков',
+                        tracks: mix,
                       ),
                     ),
                   ),
+                  onLongPress: () => ref
+                      .read(audioHandlerProvider)
+                      .playTrack(lead, contextQueue: mix),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CoverArt(url: track.thumbnailUrl, path: track.artworkPath, size: 132, radius: 8),
+                      CoverArt(
+                        url: lead.thumbnailUrl,
+                        path: lead.artworkPath,
+                        size: 132,
+                        radius: 8,
+                      ),
                       const SizedBox(height: 8),
                       Text(
-                        track.title,
+                        name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                       Text(
-                        track.artist,
+                        own.length == 1 ? '1 трек' : '${own.length} треков',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
