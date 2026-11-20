@@ -17,8 +17,9 @@ class LyricsScreen extends ConsumerStatefulWidget {
 
 class _LyricsScreenState extends ConsumerState<LyricsScreen> {
   final _scrollController = ScrollController();
+  final _keys = <int, GlobalKey>{};
   int _activeIndex = -1;
-  static const _lineHeight = 44.0;
+  int _offsetMs = 0;
 
   @override
   void dispose() {
@@ -47,6 +48,32 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           ],
         ),
         actions: [
+          if (lyrics.synced)
+            PopupMenuButton<int>(
+              color: AppColors.surfaceAlt,
+              icon: const Icon(Icons.sync_alt, size: 20),
+              tooltip: 'Сдвиг синхронизации',
+              onSelected: (value) => setState(() => _offsetMs = value),
+              itemBuilder: (_) => [
+                for (final shift in const [-2000, -1000, -500, 0, 500, 1000, 2000])
+                  PopupMenuItem(
+                    value: shift,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            shift == 0
+                                ? 'Без сдвига'
+                                : '${shift > 0 ? '+' : ''}${shift / 1000} с',
+                          ),
+                        ),
+                        if (shift == _offsetMs)
+                          const Icon(Icons.check, size: 16, color: AppColors.accent),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           if (lyrics.isEmpty)
             TextButton(
               onPressed: () async {
@@ -77,11 +104,17 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
               ? StreamBuilder<Duration>(
                   stream: ref.watch(audioHandlerProvider).positionStream,
                   builder: (context, snapshot) {
-                    final position = snapshot.data ?? Duration.zero;
-                    final index = lyrics.indexAt(position);
+                    final raw = snapshot.data ?? Duration.zero;
+                    final position = raw +
+                        Duration(milliseconds: _offsetMs);
+                    final index = lyrics.indexAt(
+                      position < Duration.zero ? Duration.zero : position,
+                    );
                     if (index != _activeIndex) {
                       _activeIndex = index;
-                      _autoScroll(index, lyrics.lines.length);
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _ensureVisible(index),
+                      );
                     }
                     return ListView.builder(
                       controller: _scrollController,
@@ -90,6 +123,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                       itemBuilder: (context, i) {
                         final active = i == _activeIndex;
                         return GestureDetector(
+                          key: _keys.putIfAbsent(i, () => GlobalKey()),
                           onTap: () => ref
                               .read(audioHandlerProvider)
                               .seek(lyrics.lines[i].time),
@@ -129,14 +163,13 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     );
   }
 
-  void _autoScroll(int index, int total) {
-    if (index < 0 || !_scrollController.hasClients) return;
-    final target = (index * _lineHeight - 120).clamp(
-      0.0,
-      _scrollController.position.maxScrollExtent,
-    );
-    _scrollController.animateTo(
-      target,
+  void _ensureVisible(int index) {
+    final key = _keys[index];
+    final ctx = key?.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.35,
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOut,
     );
