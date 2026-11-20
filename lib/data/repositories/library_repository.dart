@@ -35,7 +35,11 @@ class LibraryRepository {
 
   List<Track> get tracks => _decodeTracks();
   List<Track> get downloaded => tracks
-      .where((t) => t.localPath != null && t.localPath!.isNotEmpty && File(t.localPath!).existsSync())
+      .where((t) =>
+          t.source != TrackSource.local &&
+          t.localPath != null &&
+          t.localPath!.isNotEmpty &&
+          File(t.localPath!).existsSync())
       .toList();
   List<Track> get local => tracks.where((t) => t.source == TrackSource.local).toList();
 

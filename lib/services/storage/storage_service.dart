@@ -53,14 +53,15 @@ class StorageService {
   }
 
   Future<void> clearCache() async {
-    for (final dir in [audioDir, artworkDir, lyricsDir]) {
-      if (!await dir.exists()) continue;
-      await for (final entity in dir.list(recursive: true, followLinks: false)) {
-        if (entity is File) await entity.delete();
-      }
-    }
     for (final track in _library.downloaded) {
-      await _library.saveTrack(track.copyWith(localPath: '', lyricsPath: ''));
+      for (final path in [track.localPath, track.artworkPath, track.lyricsPath]) {
+        if (path == null || path.isEmpty) continue;
+        final file = File(path);
+        if (await file.exists()) await file.delete();
+      }
+      await _library.saveTrack(
+        track.copyWith(localPath: '', artworkPath: '', lyricsPath: ''),
+      );
     }
   }
 

@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/playlist.dart';
 import '../../data/models/track.dart';
+import '../../services/download/download_service.dart';
 import '../../shared/widgets/circle_collage.dart';
 import '../../shared/widgets/track_tile.dart';
 
@@ -185,16 +186,49 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
                               icon: Icons.download_rounded,
                               onTap: () async {
                                 final downloads = ref.read(downloadProvider);
-                                for (final t in tracks) {
-                                  try {
-                                    await downloads.download(t);
-                                  } catch (_) {}
-                                }
-                                if (context.mounted) {
+                                final pending = tracks
+                                    .where((t) => !downloads.isDownloading(t.id))
+                                    .where((t) =>
+                                        t.localPath == null ||
+                                        t.localPath!.isEmpty)
+                                    .toList();
+                                if (pending.isEmpty) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Скачивание завершено')),
+                                    const SnackBar(
+                                      content: Text('Все треки уже скачаны'),
+                                    ),
                                   );
+                                  return;
                                 }
+                                final messenger = ScaffoldMessenger.of(context);
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Скачиваю 0 из ${pending.length}...',
+                                    ),
+                                  ),
+                                );
+                                await downloads.downloadAll(
+                                  pending,
+                                  onProgress: (done, total) {
+                                    messenger
+                                      ..hideCurrentSnackBar()
+                                      ..showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Скачиваю $done из $total...',
+                                          ),
+                                        ),
+                                      );
+                                  },
+                                );
+                                messenger
+                                  ..hideCurrentSnackBar()
+                                  ..showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Скачивание завершено'),
+                                    ),
+                                  );
                               },
                             ),
                           ],
@@ -213,17 +247,20 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
               final downloads = ref.read(downloadProvider);
               return ValueListenableBuilder<int>(
                 valueListenable: downloads.revision,
-                builder: (context, _, __) => TrackTile(
-                  title: track.title,
-                  artist: track.artist,
-                  coverUrl: track.thumbnailUrl,
-                  coverPath: track.artworkPath,
-                  explicit: track.explicit,
-                  downloaded: track.localPath != null && track.localPath!.isNotEmpty,
-                  downloadProgress: downloads.progressOf(track.id),
-                  onTap: () => audio.playTrack(track, contextQueue: tracks),
-                  onMenu: () => _showMenu(track),
-                ),
+                builder: (context, _, __) {
+                  final progress = downloads.progressOf(track.id);
+                  return TrackTile(
+                    title: track.title,
+                    artist: track.artist,
+                    coverUrl: track.thumbnailUrl,
+                    coverPath: track.artworkPath,
+                    explicit: track.explicit,
+                    downloaded: track.localPath != null && track.localPath!.isNotEmpty,
+                    downloadProgress: progress?.fraction,
+                    onTap: () => audio.playTrack(track, contextQueue: tracks),
+                    onMenu: () => _showMenu(track, progress),
+                  );
+                },
               );
             },
           ),
@@ -233,7 +270,9 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
     );
   }
 
-  void _showMenu(Track track) {
+  void _showMenu(Track track, DownloadProgress? progress) {
+    final downloads = ref.read(downloadProvider);
+    final isDownloaded = track.localPath != null && track.localPath!.isNotEmpty;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surfaceAlt,
@@ -242,12 +281,32 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.download_rounded),
-              title: const Text('Скачать трек'),
+              leading: Icon(
+                progress != null
+                    ? Icons.stop_circle_outlined
+                    : isDownloaded
+                        ? Icons.delete_outline
+                        : Icons.download_rounded,
+              ),
+              title: Text(
+                progress != null
+                    ? 'Отменить загрузку'
+                    : isDownloaded
+                        ? 'Удалить скачивание'
+                        : 'Скачать трек',
+              ),
               onTap: () async {
                 Navigator.pop(sheetContext);
+                if (progress != null) {
+                  downloads.cancel(track.id);
+                  return;
+                }
                 try {
-                  await ref.read(downloadProvider).download(track);
+                  if (isDownloaded) {
+                    await downloads.deleteDownload(track.id);
+                  } else {
+                    await downloads.download(track);
+                  }
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context)

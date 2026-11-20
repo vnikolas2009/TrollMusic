@@ -35,6 +35,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     });
   }
 
+  Future<void> _confirmClearCache() async {
+    final downloads = ref.read(downloadProvider);
+    if (downloads.activeCount > 0) {
+      downloads.cancelAll();
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surfaceAlt,
+        title: const Text('Очистить скачанное?'),
+        content: const Text(
+          'Будут удалены аудиофайлы, обложки и тексты скачанных треков. '
+          'Импортированные локальные файлы останутся.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Очистить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await ref.read(storageProvider).clearCache();
+    await _loadCache();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Кэш очищен')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
@@ -194,13 +229,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
             trailing: TextButton(
-              onPressed: () async {
-                await ref.read(storageProvider).clearCache();
-                await _loadCache();
-                if (!mounted) return;
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(const SnackBar(content: Text('Кэш очищен')));
-              },
+              onPressed: _confirmClearCache,
               child: const Text('Очистить'),
             ),
           ),

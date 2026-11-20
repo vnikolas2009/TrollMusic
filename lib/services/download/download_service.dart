@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -9,6 +10,27 @@ import '../../core/utils/lrc_parser.dart';
 import '../../data/models/track.dart';
 import '../../data/repositories/library_repository.dart';
 import '../storage/storage_service.dart';
+
+enum DownloadState { queued, running, done, failed, canceled }
+
+class DownloadProgress {
+  const DownloadProgress({
+    required this.received,
+    required this.total,
+    required this.state,
+  });
+
+  final int received;
+  final int total;
+  final DownloadState state;
+
+  double get fraction {
+    if (total <= 0) {
+      return state == DownloadState.done ? 1 : 0;
+    }
+    return (received / total).clamp(0.0, 1.0);
+  }
+}
 
 class DownloadService {
   DownloadService({
@@ -29,22 +51,38 @@ class DownloadService {
   final YouTubeMusicClient _youtube;
   final Dio _dio;
 
-  final _progress = <String, double>{};
-  final _active = <String>{};
+  static const maxConcurrent = 2;
+
+  final _jobs = <String, DownloadProgress>{};
+  final _tokens = <String, CancelToken>{};
+  bool _batchCanceled = false;
+
   final _revision = ValueNotifier<int>(0);
 
   ValueListenable<int> get revision => _revision;
 
-  double? progressOf(String trackId) => _progress[trackId];
-  bool isDownloading(String trackId) => _active.contains(trackId);
+  DownloadProgress? progressOf(String trackId) => _jobs[trackId];
+  bool isDownloading(String trackId) => _jobs.containsKey(trackId);
+  int get activeCount => _jobs.length;
 
   void _bump() => _revision.value++;
 
-  Future<Track> download(Track track, {bool withLyrics = true}) async {
-    if (_active.contains(track.id)) return track;
-    _active.add(track.id);
-    _progress[track.id] = 0;
+  void _set(String trackId, DownloadProgress progress) {
+    _jobs[trackId] = progress;
     _bump();
+  }
+
+  Future<Track> download(Track track, {bool withLyrics = true}) async {
+    if (_jobs.containsKey(track.id)) return track;
+
+    final token = CancelToken();
+    _tokens[track.id] = token;
+
+    _set(track.id, const DownloadProgress(
+      received: 0,
+      total: 0,
+      state: DownloadState.queued,
+    ));
 
     try {
       final url = track.streamUrl ?? await _youtube.streamUrl(track.id);
@@ -54,7 +92,7 @@ class DownloadService {
 
       final extension = _extensionOf(url);
       final target = File(p.join(_storage.audioDir.path, '${track.id}.$extension'));
-      await _downloadFile(url, target, track.id);
+      await _downloadFile(url, target, track.id, token);
 
       String? artworkPath;
       if (track.artworkPath == null && (track.thumbnailUrl?.isNotEmpty ?? false)) {
@@ -74,9 +112,14 @@ class DownloadService {
       );
       await _library.saveTrack(saved);
       return saved;
+    } on DioException catch (error) {
+      if (CancelToken.isCancel(error)) {
+        throw const DownloadCanceled();
+      }
+      rethrow;
     } finally {
-      _progress.remove(track.id);
-      _active.remove(track.id);
+      _tokens.remove(track.id);
+      _jobs.remove(track.id);
       _bump();
     }
   }
@@ -86,39 +129,99 @@ class DownloadService {
     void Function(int done, int total)? onProgress,
   }) async {
     final list = tracks.toList();
-    final result = <Track>[];
-    for (var i = 0; i < list.length; i++) {
-      result.add(await download(list[i]));
-      onProgress?.call(i + 1, list.length);
+    final done = <Track>[];
+    var cursor = 0;
+    var finished = 0;
+    _batchCanceled = false;
+
+    Future<void> worker() async {
+      while (cursor < list.length && !_batchCanceled) {
+        final track = list[cursor++];
+        try {
+          done.add(await download(track));
+        } catch (_) {
+          if (_batchCanceled) return;
+        } finally {
+          finished++;
+          onProgress?.call(finished, list.length);
+        }
+      }
     }
-    return result;
+
+    final workers = list.length < maxConcurrent ? list.length : maxConcurrent;
+    await Future.wait(List.generate(workers, (_) => worker()));
+    return done;
+  }
+
+  void cancel(String trackId) {
+    final token = _tokens[trackId];
+    if (token == null) return;
+    if (!token.isCancelled) token.cancel('cancelled');
+  }
+
+  void cancelAll() {
+    _batchCanceled = true;
+    for (final id in _tokens.keys.toList()) {
+      cancel(id);
+    }
   }
 
   Future<void> deleteDownload(String trackId) async {
     final track = _library.trackById(trackId);
     if (track == null) return;
-    final files = [track.localPath, track.artworkPath, track.lyricsPath];
-    for (final path in files) {
-      if (path == null || path.isEmpty) continue;
-      final file = File(path);
-      if (await file.exists()) await file.delete();
-    }
+    await _removeFile(track.localPath);
+    await _removeFile(track.artworkPath);
+    await _removeFile(track.lyricsPath);
     await _library.saveTrack(
       track.copyWith(localPath: '', artworkPath: '', lyricsPath: ''),
     );
+    _jobs.remove(trackId);
+    _bump();
   }
 
-  Future<void> _downloadFile(String url, File target, String trackId) async {
+  Future<void> deleteMany(Iterable<String> trackIds) async {
+    for (final id in trackIds) {
+      await deleteDownload(id);
+    }
+  }
+
+  Future<int> downloadedBytes() async {
+    var total = 0;
+    for (final track in _library.downloaded) {
+      final path = track.localPath;
+      if (path == null || path.isEmpty) continue;
+      final file = File(path);
+      if (await file.exists()) total += await file.length();
+    }
+    return total;
+  }
+
+  Future<void> _removeFile(String? path) async {
+    if (path == null || path.isEmpty) return;
+    final file = File(path);
+    if (await file.exists()) await file.delete();
+  }
+
+  Future<void> _downloadFile(
+    String url,
+    File target,
+    String trackId,
+    CancelToken token,
+  ) async {
     await _dio.download(
       url,
       target.path,
       deleteOnError: true,
-      cancelToken: CancelToken(),
+      cancelToken: token,
       onReceiveProgress: (received, total) {
-        if (total > 0) {
-          _progress[trackId] = received / total;
-          _bump();
-        }
+        _set(
+          trackId,
+          DownloadProgress(
+            received: received,
+            total: total > 0 ? total : 0,
+            state: DownloadState.running,
+          ),
+        );
       },
     );
   }
@@ -180,4 +283,11 @@ class DownloadService {
     }
     return 'm4a';
   }
+}
+
+class DownloadCanceled implements Exception {
+  const DownloadCanceled();
+
+  @override
+  String toString() => 'Загрузка отменена';
 }

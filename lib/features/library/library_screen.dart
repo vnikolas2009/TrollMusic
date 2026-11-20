@@ -6,8 +6,10 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/playlist.dart';
 import '../../data/models/track.dart';
+import '../../services/download/download_service.dart';
 import '../../shared/widgets/cover_art.dart';
 import '../../shared/widgets/track_tile.dart';
+import '../create/track_edit_sheet.dart';
 import '../playlist/playlist_screen.dart';
 import '../settings/settings_screen.dart';
 
@@ -179,16 +181,116 @@ class _TracksTab extends ConsumerWidget {
       itemCount: tracks.length,
       itemBuilder: (context, i) {
         final track = tracks[i];
-        return TrackTile(
-          title: track.title,
-          artist: track.artist,
-          coverUrl: track.thumbnailUrl,
-          coverPath: track.artworkPath,
-          explicit: track.explicit,
-          downloaded: track.localPath != null && track.localPath!.isNotEmpty,
-          onTap: () => ref.read(audioHandlerProvider).playTrack(track, contextQueue: tracks),
+        final downloads = ref.read(downloadProvider);
+        return ValueListenableBuilder<int>(
+          valueListenable: downloads.revision,
+          builder: (context, _, __) {
+            final progress = downloads.progressOf(track.id);
+            return TrackTile(
+              title: track.title,
+              artist: track.artist,
+              coverUrl: track.thumbnailUrl,
+              coverPath: track.artworkPath,
+              explicit: track.explicit,
+              downloaded: track.localPath != null && track.localPath!.isNotEmpty,
+              downloadProgress: progress?.fraction,
+              onTap: () => ref
+                  .read(audioHandlerProvider)
+                  .playTrack(track, contextQueue: tracks),
+              onMenu: () => _trackMenu(context, ref, track, progress, downloads),
+            );
+          },
         );
       },
+    );
+  }
+
+  void _trackMenu(
+    BuildContext context,
+    WidgetRef ref,
+    Track track,
+    DownloadProgress? progress,
+    DownloadService downloads,
+  ) {
+    final library = ref.read(libraryProvider);
+    final isDownloaded = track.localPath != null && track.localPath!.isNotEmpty;
+    final liked = library.isLiked(track.id);
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(liked ? Icons.favorite : Icons.favorite_border),
+              title: Text(liked ? 'Убрать из избранного' : 'В избранное'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                await library.toggleLike(track.id);
+              },
+            ),
+            if (track.source != TrackSource.local)
+              ListTile(
+                leading: Icon(
+                  progress != null
+                      ? Icons.stop_circle_outlined
+                      : isDownloaded
+                          ? Icons.delete_outline
+                          : Icons.download_rounded,
+                ),
+                title: Text(
+                  progress != null
+                      ? 'Отменить загрузку'
+                      : isDownloaded
+                          ? 'Удалить скачивание'
+                          : 'Скачать трек',
+                ),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  if (progress != null) {
+                    downloads.cancel(track.id);
+                    return;
+                  }
+                  try {
+                    if (isDownloaded) {
+                      await downloads.deleteDownload(track.id);
+                    } else {
+                      await downloads.download(track);
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                    }
+                  }
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Редактировать теги и текст'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => TrackEditSheet(trackId: track.id),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_forever_outlined),
+              title: const Text('Удалить из медиатеки'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                await downloads.deleteDownload(track.id);
+                await library.deleteTrack(track.id);
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
