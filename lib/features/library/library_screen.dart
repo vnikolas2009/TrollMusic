@@ -54,6 +54,19 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 ),
               ),
               IconButton(
+                tooltip: 'Новый плейлист',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => PlaylistScreen(
+                      id: 'user:${DateTime.now().millisecondsSinceEpoch}',
+                      title: 'Новый плейлист',
+                      tracks: const [],
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.playlist_add_rounded),
+              ),
+              IconButton(
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const SettingsScreen()),
                 ),

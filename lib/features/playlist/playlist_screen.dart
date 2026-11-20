@@ -35,15 +35,228 @@ class PlaylistScreen extends ConsumerStatefulWidget {
 
 class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
   Color _dominant = const Color(0xFF3E3A1F);
+  late List<Track> _tracks = [...widget.tracks];
+  late String _title = widget.title;
+  late String? _subtitle = widget.subtitle;
+  bool _saved = false;
 
   @override
   void initState() {
     super.initState();
     _resolveColor();
+    _loadSaved();
+  }
+
+  Future<void> _loadSaved() async {
+    final playlist = ref.read(libraryProvider).playlistById(widget.id);
+    if (playlist == null) return;
+    if (!mounted) return;
+    setState(() {
+      _saved = true;
+      _title = playlist.title;
+      _subtitle = playlist.description.isEmpty ? null : playlist.description;
+      _tracks = playlist.tracks;
+    });
+  }
+
+  Future<void> _persist() async {
+    final library = ref.read(libraryProvider);
+    final existing = library.playlistById(widget.id);
+    if (existing == null) return;
+    await library.savePlaylist(
+      existing.copyWith(
+        title: _title,
+        description: _subtitle ?? '',
+        tracks: _tracks,
+        colorValue: _dominant.value,
+      ),
+    );
+  }
+
+  Future<void> _addTracks() async {
+    final library = ref.read(libraryProvider);
+    final all = library.tracks;
+    final existingIds = _tracks.map((t) => t.id).toSet();
+    final candidates = all.where((t) => !existingIds.contains(t.id)).toList();
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('В медиатеке нет новых треков')),
+      );
+      return;
+    }
+
+    final selected = <String>{};
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(sheetContext).size.height * 0.7,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Добавить треки',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(
+                          sheetContext,
+                          selected.isNotEmpty,
+                        ),
+                        child: Text('Готово (${selected.length})'),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: candidates.length,
+                    itemBuilder: (context, i) {
+                      final track = candidates[i];
+                      final checked = selected.contains(track.id);
+                      return CheckboxListTile(
+                        value: checked,
+                        activeColor: AppColors.accent,
+                        checkColor: Colors.black,
+                        title: Text(
+                          track.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          track.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        onChanged: (value) => setSheetState(() {
+                          if (value == true) {
+                            selected.add(track.id);
+                          } else {
+                            selected.remove(track.id);
+                          }
+                        }),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true || selected.isEmpty) return;
+    final added = candidates.where((t) => selected.contains(t.id));
+    setState(() => _tracks = [..._tracks, ...added]);
+    if (!_saved) {
+      await ref.read(libraryProvider).savePlaylist(
+            Playlist(
+              id: widget.id,
+              title: _title,
+              description: _subtitle ?? '',
+              imageUrl: widget.coverUrl ?? _tracks.firstOrNull?.thumbnailUrl,
+              tracks: _tracks,
+              isRadio: widget.isRadio,
+              colorValue: _dominant.value,
+            ),
+          );
+      if (mounted) setState(() => _saved = true);
+    } else {
+      await _persist();
+    }
+  }
+
+  Future<void> _rename() async {
+    final controller = TextEditingController(text: _title);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surfaceAlt,
+        title: const Text('Название плейлиста'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Новое название'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null || result.isEmpty) return;
+    setState(() => _title = result);
+    await _persist();
+  }
+
+  Future<void> _deletePlaylist() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surfaceAlt,
+        title: const Text('Удалить плейлист?'),
+        content: const Text('Треки останутся в медиатеке.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(libraryProvider).deletePlaylist(widget.id);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _removeTrack(Track track) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surfaceAlt,
+        title: const Text('Убрать из плейлиста?'),
+        content: Text(track.title),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Убрать'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _tracks = _tracks.where((t) => t.id != track.id).toList());
+    await _persist();
   }
 
   Future<void> _resolveColor() async {
-    final url = widget.coverUrl ?? widget.tracks.firstOrNull?.thumbnailUrl;
+    final url = widget.coverUrl ?? _tracks.firstOrNull?.thumbnailUrl;
     if (url == null || url.isEmpty) return;
     try {
       final palette = await PaletteGenerator.fromImageProvider(
@@ -59,7 +272,7 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tracks = widget.tracks;
+    final tracks = _tracks;
     final audio = ref.read(audioHandlerProvider);
     final lead = tracks.firstOrNull;
     final total = tracks.fold(Duration.zero, (s, t) => s + t.duration);
@@ -76,6 +289,24 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
               icon: const Icon(Icons.arrow_back),
               onPressed: () => Navigator.of(context).pop(),
             ),
+            actions: [
+              PopupMenuButton<String>(
+                color: AppColors.surfaceAlt,
+                icon: const Icon(Icons.more_vert),
+                onSelected: (value) {
+                  if (value == 'add') _addTracks();
+                  if (value == 'rename') _rename();
+                  if (value == 'delete') _deletePlaylist();
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'add', child: Text('Добавить треки')),
+                  if (_saved)
+                    const PopupMenuItem(value: 'rename', child: Text('Переименовать')),
+                  if (_saved)
+                    const PopupMenuItem(value: 'delete', child: Text('Удалить плейлист')),
+                ],
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: BoxDecoration(
@@ -102,7 +333,7 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          widget.title,
+                          _title,
                           textAlign: TextAlign.center,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -114,7 +345,7 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          widget.subtitle ??
+                          _subtitle ??
                               '${widget.isRadio ? 'Радио' : 'Плейлист'} · '
                                   '${tracks.length} треков · ${formatLongDuration(total)}',
                           textAlign: TextAlign.center,
@@ -160,25 +391,30 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
                             ),
                             const SizedBox(width: 12),
                             _RoundButton(
-                              icon: Icons.add,
+                              icon: _saved ? Icons.edit_outlined : Icons.add,
                               onTap: () async {
                                 final library = ref.read(libraryProvider);
+                                final existing = library.playlistById(widget.id);
                                 await library.savePlaylist(
                                   Playlist(
                                     id: widget.id,
-                                    title: widget.title,
-                                    description: widget.subtitle ?? '',
+                                    title: _title,
+                                    description: _subtitle ?? '',
                                     imageUrl: widget.coverUrl ?? lead?.thumbnailUrl,
-                                    tracks: tracks,
+                                    tracks: _tracks,
                                     isRadio: widget.isRadio,
                                     colorValue: _dominant.value,
                                   ),
                                 );
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Добавлено в медиатеку')),
-                                  );
-                                }
+                                if (!mounted) return;
+                                setState(() => _saved = true);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(existing == null
+                                        ? 'Добавлено в медиатеку'
+                                        : 'Плейлист обновлён'),
+                                  ),
+                                );
                               },
                             ),
                             const SizedBox(width: 8),
@@ -331,6 +567,15 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
                 );
               },
             ),
+            if (_saved)
+              ListTile(
+                leading: const Icon(Icons.playlist_remove),
+                title: const Text('Убрать из плейлиста'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _removeTrack(track);
+                },
+              ),
           ],
         ),
       ),
