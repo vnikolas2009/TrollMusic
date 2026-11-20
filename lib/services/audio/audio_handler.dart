@@ -24,7 +24,7 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   final LibraryRepository _library;
   final Settings? _settings;
-  final Future<String?> Function(String videoId)? resolveStream;
+  final Future<String?> Function(Track track)? resolveStream;
 
   final AudioPlayer _player = AudioPlayer();
 
@@ -233,7 +233,7 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         final track = list[index];
         String? url;
         try {
-          url = await resolve(track.id);
+          url = await resolve(track);
         } catch (_) {
           url = null;
         }
@@ -469,7 +469,7 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (needsFresh) {
       String? url;
       try {
-        url = await resolve(track.id);
+        url = await resolve(track);
       } catch (_) {
         url = null;
       }

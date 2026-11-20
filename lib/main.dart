@@ -45,7 +45,7 @@ Future<void> main() async {
     builder: () => YsAudioHandler(
       library: library,
       settings: settings,
-      resolveStream: youtube.streamUrl,
+      resolveStream: youtube.streamUrlForTrack,
     ),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.ysplayer.audio',

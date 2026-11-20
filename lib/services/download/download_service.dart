@@ -85,7 +85,7 @@ class DownloadService {
     ));
 
     try {
-      final url = track.streamUrl ?? await _youtube.streamUrl(track.id);
+      final url = track.streamUrl ?? await _youtube.streamUrlForTrack(track);
       if (url == null || url.isEmpty) {
         throw StateError('Не удалось получить ссылку на аудио');
       }

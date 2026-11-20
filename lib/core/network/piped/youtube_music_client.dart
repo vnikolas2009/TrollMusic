@@ -1,4 +1,5 @@
 import '../../../data/models/track.dart';
+import '../../utils/track_match.dart';
 import 'invidious_client.dart';
 import 'piped_client.dart';
 
@@ -40,6 +41,33 @@ class YouTubeMusicClient {
     } catch (_) {
       return null;
     }
+  }
+
+  final _matched = <String, String>{};
+
+  /// Поток для любого трека. Для Spotify (`sp:`) сначала находим видео на YouTube
+  /// по «исполнитель + название» и запоминаем соответствие на время сессии.
+  Future<String?> streamUrlForTrack(Track track) async {
+    var videoId = track.id;
+    if (track.source == TrackSource.spotify || track.id.startsWith('sp:')) {
+      final cached = _matched[track.id];
+      if (cached != null) {
+        videoId = cached;
+      } else {
+        try {
+          final found = pickBestMatch(
+            track,
+            await search('${track.artist.split(',').first} ${track.title}'),
+          );
+          if (found == null) return null;
+          videoId = found.id;
+          _matched[track.id] = videoId;
+        } catch (_) {
+          return null;
+        }
+      }
+    }
+    return streamUrl(videoId);
   }
 
   Future<Track> resolveTrack(Track track) async {
