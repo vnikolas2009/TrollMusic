@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/utils/track_search.dart';
 import '../../data/models/playlist.dart';
 import '../../data/models/track.dart';
 import '../../services/download/download_service.dart';
@@ -24,9 +25,15 @@ class LibraryScreen extends ConsumerStatefulWidget {
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 4, vsync: this);
+  late final TabController _tabs = TabController(length: 5, vsync: this);
 
-  static const _labels = ['Плейлисты', 'Скачанные', 'Локальные', 'Избранное'];
+  static const _labels = [
+    'Все треки',
+    'Плейлисты',
+    'Скачанные',
+    'Локальные',
+    'Избранное',
+  ];
 
   @override
   void dispose() {
@@ -36,6 +43,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
 
   @override
   Widget build(BuildContext context) {
+    final all = ref.watch(tracksProvider).value ?? const <Track>[];
     final playlists = ref.watch(playlistsProvider).value ?? const <Playlist>[];
     final downloaded = ref.watch(downloadedProvider).value ?? const <Track>[];
     final local = ref.watch(localTracksProvider).value ?? const <Track>[];
@@ -90,6 +98,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           child: TabBarView(
             controller: _tabs,
             children: [
+              _AllTracksTab(tracks: all),
               _PlaylistsTab(playlists: playlists),
               _DownloadedTab(tracks: downloaded),
               _TracksTab(
@@ -104,6 +113,250 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AllTracksTab extends ConsumerStatefulWidget {
+  const _AllTracksTab({required this.tracks});
+
+  final List<Track> tracks;
+
+  @override
+  ConsumerState<_AllTracksTab> createState() => _AllTracksTabState();
+}
+
+class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
+  final _controller = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.tracks.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Медиатека пуста.\nНайдите музыку в «Поиске» или импортируйте файлы.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary, height: 1.6),
+          ),
+        ),
+      );
+    }
+
+    final tracks = filterTracks(widget.tracks, _query).toList()
+      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    final totalDuration = tracks.fold<Duration>(
+      Duration.zero,
+      (sum, t) => sum + t.duration,
+    );
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+          child: TextField(
+            controller: _controller,
+            onChanged: (value) => setState(() => _query = value),
+            textInputAction: TextInputAction.search,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Поиск по медиатеке',
+              hintStyle: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+              prefixIcon: const Icon(Icons.search, size: 18),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () {
+                        _controller.clear();
+                        setState(() => _query = '');
+                      },
+                    ),
+              filled: true,
+              fillColor: AppColors.surfaceAlt,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  tracks.isEmpty
+                      ? 'Ничего не найдено'
+                      : '${tracks.length} треков · ${formatLongDuration(totalDuration)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              if (tracks.isNotEmpty)
+                IconButton(
+                  tooltip: 'Слушать всё',
+                  onPressed: () => ref
+                      .read(audioHandlerProvider)
+                      .playTrack(tracks.first, contextQueue: tracks),
+                  icon: const Icon(Icons.play_arrow_rounded),
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(bottom: 8),
+            itemCount: tracks.length,
+            itemBuilder: (context, i) {
+              final track = tracks[i];
+              final downloads = ref.read(downloadProvider);
+              return ValueListenableBuilder<int>(
+                valueListenable: downloads.revision,
+                builder: (context, _, __) {
+                  final progress = downloads.progressOf(track.id);
+                  return TrackTile(
+                    title: track.title,
+                    artist: track.artist,
+                    coverUrl: track.thumbnailUrl,
+                    coverPath: track.artworkPath,
+                    explicit: track.explicit,
+                    downloaded:
+                        track.localPath != null && track.localPath!.isNotEmpty,
+                    downloadProgress: progress?.fraction,
+                    onTap: () => ref
+                        .read(audioHandlerProvider)
+                        .playTrack(track, contextQueue: tracks),
+                    onMenu: () =>
+                        _trackMenu(context, ref, track, progress, downloads),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _trackMenu(
+    BuildContext context,
+    WidgetRef ref,
+    Track track,
+    DownloadProgress? progress,
+    DownloadService downloads,
+  ) {
+    final library = ref.read(libraryProvider);
+    final isDownloaded = track.localPath != null && track.localPath!.isNotEmpty;
+    final liked = library.isLiked(track.id);
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(liked ? Icons.favorite : Icons.favorite_border),
+              title: Text(liked ? 'Убрать из избранного' : 'В избранное'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                await library.toggleLike(track.id);
+              },
+            ),
+            if (track.source != TrackSource.local)
+              ListTile(
+                leading: Icon(
+                  progress != null
+                      ? Icons.stop_circle_outlined
+                      : isDownloaded
+                          ? Icons.delete_outline
+                          : Icons.download_rounded,
+                ),
+                title: Text(
+                  progress != null
+                      ? 'Отменить загрузку'
+                      : isDownloaded
+                          ? 'Удалить скачивание'
+                          : 'Скачать трек',
+                ),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  if (progress != null) {
+                    downloads.cancel(track.id);
+                    return;
+                  }
+                  try {
+                    if (isDownloaded) {
+                      await downloads.deleteDownload(track.id);
+                    } else {
+                      await downloads.download(track);
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                    }
+                  }
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.playlist_play_rounded),
+              title: const Text('Играть следующим'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                final ok = await ref.read(audioHandlerProvider).playNext(track);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok
+                        ? 'Трек будет следующим'
+                        : 'Не удалось добавить в очередь'),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Редактировать теги и текст'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => TrackEditSheet(trackId: track.id),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_forever_outlined),
+              title: const Text('Удалить из медиатеки'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                await downloads.deleteDownload(track.id);
+                await library.deleteTrack(track.id);
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
