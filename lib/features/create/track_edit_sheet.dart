@@ -266,7 +266,8 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
                   if (_lyricsInput.trim().isEmpty) return;
                   await ref.read(importProvider).saveManualLyrics(widget.trackId, _lyricsInput);
                   if (sheetContext.mounted) Navigator.pop(sheetContext);
-                  setState(() {});
+                  if (!mounted) return;
+                  setState(() => _revision++);
                 },
                 child: const Text('Сохранить'),
               ),
