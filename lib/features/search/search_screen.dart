@@ -18,6 +18,72 @@ class SearchScreen extends ConsumerStatefulWidget {
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
 }
 
+class _RecentQueries extends StatelessWidget {
+  const _RecentQueries({
+    required this.queries,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final List<String> queries;
+  final ValueChanged<String> onPick;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    if (queries.isEmpty) {
+      return const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Text(
+            'Начните вводить название трека или имя артиста',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Недавние запросы',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onClear,
+                  child: const Text('Очистить'),
+                ),
+              ],
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final query in queries)
+                  ActionChip(
+                    label: Text(query, style: const TextStyle(fontSize: 12)),
+                    backgroundColor: AppColors.surfaceAlt,
+                    side: const BorderSide(color: AppColors.surfaceHigh),
+                    onPressed: () => onPick(query),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _controller = TextEditingController();
   Timer? _debounce;
@@ -47,6 +113,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       });
       return;
     }
+    ref.read(settingsProvider).rememberQuery(trimmed);
+    if (mounted) setState(() {});
     setState(() {
       _loading = true;
       _error = null;
@@ -119,15 +187,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ),
           )
         else if (_results.isEmpty)
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: Text(
-                'Начните вводить название трека или имя артиста',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-            ),
+          _RecentQueries(
+            queries: ref.watch(settingsProvider).searchQueries,
+            onPick: (query) {
+              _controller.text = query;
+              _search(query);
+            },
+            onClear: () {
+              ref.read(settingsProvider).clearSearchQueries();
+              setState(() {});
+            },
           )
         else ...[
           SliverToBoxAdapter(

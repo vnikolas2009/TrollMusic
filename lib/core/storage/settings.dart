@@ -88,6 +88,19 @@ class Settings {
 
   set playbackSpeed(double value) => _box.put('playbackSpeed', value);
 
+  List<String> get searchQueries =>
+      (_box.get('searchQueries') as List?)?.cast<String>().toList() ?? const [];
+
+  void rememberQuery(String query) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+    final list = [...searchQueries]..removeWhere((q) => q.toLowerCase() == trimmed.toLowerCase());
+    list.insert(0, trimmed);
+    _box.put('searchQueries', list.take(12).toList());
+  }
+
+  void clearSearchQueries() => _box.delete('searchQueries');
+
   List<String> get recentIds =>
       (_box.get('recentIds') as List?)?.cast<String>().toList() ?? const [];
 

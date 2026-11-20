@@ -81,6 +81,7 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _repeat.value = YsRepeat.values[settings.repeatIndex.clamp(0, 2)];
     _player.setLoopMode(_loopModeOf(_repeat.value));
     _player.setShuffleModeEnabled(_shuffleEnabled.value);
+    _player.setSpeed(settings.playbackSpeed.clamp(0.5, 2.0));
   }
 
   Future<void> restoreLastPlayed() async {
