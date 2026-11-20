@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +8,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'app/app.dart';
 import 'app/network_providers.dart';
 import 'app/providers.dart';
+import 'core/network/http_overrides.dart';
 import 'core/network/lyrics/lyrics_client.dart';
 import 'core/network/piped/invidious_client.dart';
 import 'core/network/piped/piped_client.dart';
@@ -22,6 +25,7 @@ Future<void> main() async {
 
   await Hive.initFlutter();
   final settings = await Settings.open();
+  HttpOverrides.global = AppHttpOverrides(settings);
   final library = await LibraryRepository.open();
 
   final proxy = ProxyConfig(settings);

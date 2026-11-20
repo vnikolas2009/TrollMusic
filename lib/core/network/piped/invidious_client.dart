@@ -105,7 +105,9 @@ class InvidiousClient {
     final raw = best?['url'] as String?;
     if (raw == null) return null;
     final absolute = _absolute(raw, videoId);
-    return _settings.proxyAudioStreams ? _proxy.passthrough(absolute).toString() : absolute;
+    return (_settings.proxyAudioStreams && _proxy.hasWorker)
+        ? _proxy.passthrough(absolute).toString()
+        : absolute;
   }
 
   String _absolute(String url, String videoId) {

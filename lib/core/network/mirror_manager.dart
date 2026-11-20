@@ -39,27 +39,31 @@ class MirrorManager {
     final ordered = _order(kind, instances);
     Object? lastError;
 
-    for (final origin in ordered) {
-      if (_isCoolingDown(origin)) continue;
-      try {
-        final uri = kind == MirrorKind.piped
-            ? _proxy.piped(origin, path, query)
-            : _proxy.invidious(origin, path, query);
-        final response = await _dio
-            .getUri<dynamic>(uri)
-            .timeout(timeout, onTimeout: () => throw DioException(
-                  requestOptions: RequestOptions(path: uri.toString()),
-                  type: DioExceptionType.connectionTimeout,
-                ));
-        if (response.statusCode == 200 && response.data != null) {
-          _sticky[kind] = origin;
-          _failed.remove(origin);
-          return response;
+    // Сначала обычный путь, затем (если указан Worker) — запасной через Worker.
+    final passes = <bool>[false, if (_proxy.hasWorker && !_proxy.enabled) true];
+    for (final viaWorker in passes) {
+      for (final origin in viaWorker ? ordered.take(2) : ordered) {
+        if (!viaWorker && _isCoolingDown(origin)) continue;
+        try {
+          final uri = kind == MirrorKind.piped
+              ? _proxy.piped(origin, path, query, viaWorker)
+              : _proxy.invidious(origin, path, query, viaWorker);
+          final response = await _dio
+              .getUri<dynamic>(uri)
+              .timeout(timeout, onTimeout: () => throw DioException(
+                    requestOptions: RequestOptions(path: uri.toString()),
+                    type: DioExceptionType.connectionTimeout,
+                  ));
+          if (response.statusCode == 200 && response.data != null) {
+            _sticky[kind] = origin;
+            _failed.remove(origin);
+            return response;
+          }
+          lastError = 'HTTP ${response.statusCode}';
+        } catch (error) {
+          lastError = error;
+          if (!viaWorker) _failed[origin] = DateTime.now();
         }
-        lastError = 'HTTP ${response.statusCode}';
-      } catch (error) {
-        lastError = error;
-        _failed[origin] = DateTime.now();
       }
     }
 

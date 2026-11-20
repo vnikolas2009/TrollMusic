@@ -10,23 +10,30 @@ class ProxyConfig {
     return raw.endsWith('/') ? raw.substring(0, raw.length - 1) : raw;
   }
 
-  bool get enabled => _settings.useWorkerProxy && workerUrl.isNotEmpty;
+  /// Worker вообще указан (годится как запасной путь).
+  bool get hasWorker => workerUrl.isNotEmpty;
 
-  Uri spotifyApi(String path, [Map<String, dynamic>? query]) =>
-      _build('spotify', path, query);
+  /// Worker используется всегда, а не только как запасной путь.
+  bool get enabled => _settings.useWorkerProxy && hasWorker;
 
-  Uri spotifyAccounts(String path) => _build('accounts', path);
+  Uri spotifyApi(String path, [Map<String, dynamic>? query, bool viaWorker = false]) =>
+      _build('spotify', path, query, viaWorker);
+
+  Uri spotifyAccounts(String path, [bool viaWorker = false]) =>
+      _build('accounts', path, null, viaWorker);
 
   Uri spotifyCdn(String path) => _build('cdn', path);
 
-  Uri spotifyEmbed(String path, [Map<String, dynamic>? query]) =>
-      _build('embed', path, query);
+  Uri spotifyEmbed(String path, [Map<String, dynamic>? query, bool viaWorker = false]) =>
+      _build('embed', path, query, viaWorker);
 
-  Uri piped(String origin, String path, [Map<String, dynamic>? query]) =>
-      _build('piped', '${_host(origin)}$path', query);
+  Uri piped(String origin, String path,
+          [Map<String, dynamic>? query, bool viaWorker = false]) =>
+      _mirror('piped', origin, path, query, viaWorker);
 
-  Uri invidious(String origin, String path, [Map<String, dynamic>? query]) =>
-      _build('invidious', '${_host(origin)}$path', query);
+  Uri invidious(String origin, String path,
+          [Map<String, dynamic>? query, bool viaWorker = false]) =>
+      _mirror('invidious', origin, path, query, viaWorker);
 
   Uri passthrough(String url) => Uri.parse('$workerUrl/proxy').replace(
         queryParameters: {'url': url},
@@ -46,8 +53,22 @@ class ProxyConfig {
     return media(url);
   }
 
-  Uri _build(String prefix, String path, [Map<String, dynamic>? query]) {
-    final base = enabled ? '$workerUrl/$prefix' : _directBase(prefix);
+  Uri _mirror(String prefix, String origin, String path,
+      Map<String, dynamic>? query, bool viaWorker) {
+    if ((enabled || viaWorker) && hasWorker) {
+      return _build(prefix, '${_host(origin)}$path', query, true);
+    }
+    final base = origin.endsWith('/') ? origin.substring(0, origin.length - 1) : origin;
+    final clean = path.startsWith('/') ? path : '/$path';
+    return Uri.parse('$base$clean').replace(
+      queryParameters: query?.map((k, v) => MapEntry(k, '$v')),
+    );
+  }
+
+  Uri _build(String prefix, String path,
+      [Map<String, dynamic>? query, bool viaWorker = false]) {
+    final useWorker = (enabled || viaWorker) && hasWorker;
+    final base = useWorker ? '$workerUrl/$prefix' : _directBase(prefix);
     final clean = path.startsWith('/') ? path.substring(1) : path;
     return Uri.parse('$base/$clean').replace(
       queryParameters: query?.map((k, v) => MapEntry(k, '$v')),
@@ -62,8 +83,7 @@ class ProxyConfig {
         _ => throw ArgumentError('unsupported prefix $prefix'),
       };
 
-  bool _isWorkerHosted(String url) =>
-      enabled && url.startsWith(workerUrl);
+  bool _isWorkerHosted(String url) => enabled && url.startsWith(workerUrl);
 
   String _host(String origin) {
     final uri = Uri.parse(origin);

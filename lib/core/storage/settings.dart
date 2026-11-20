@@ -1,6 +1,7 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../config/app_config.dart';
+import '../utils/proxy_address.dart';
 
 class Settings {
   Settings(this._box);
@@ -21,7 +22,17 @@ class Settings {
 
   set workerUrl(String value) => _box.put('workerUrl', value.trim());
 
-  bool get useWorkerProxy => _box.get('useWorkerProxy', defaultValue: true) as bool;
+  /// HTTP-прокси `host:port` для всех соединений приложения (пусто — напрямую).
+  String get httpProxy => normalizeProxyAddress(_box.get('httpProxy') as String? ?? '');
+
+  set httpProxy(String value) => _box.put('httpProxy', value.trim());
+
+  /// Кэшировать проигрываемый аудиопоток на диск (мгновенный повтор, работа через прокси).
+  bool get audioCache => _box.get('audioCache', defaultValue: false) as bool;
+
+  set audioCache(bool value) => _box.put('audioCache', value);
+
+  bool get useWorkerProxy => _box.get('useWorkerProxy', defaultValue: false) as bool;
 
   set useWorkerProxy(bool value) => _box.put('useWorkerProxy', value);
 
@@ -57,7 +68,7 @@ class Settings {
   set preferOpus(bool value) => _box.put('preferOpus', value);
 
   bool get proxyAudioStreams =>
-      _box.get('proxyAudioStreams', defaultValue: true) as bool;
+      _box.get('proxyAudioStreams', defaultValue: false) as bool;
 
   set proxyAudioStreams(bool value) => _box.put('proxyAudioStreams', value);
 

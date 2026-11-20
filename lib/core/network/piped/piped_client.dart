@@ -124,7 +124,7 @@ class PipedClient {
   }
 
   String _proxied(String url) {
-    if (!_settings.proxyAudioStreams) return url;
+    if (!_settings.proxyAudioStreams || !_proxy.hasWorker) return url;
     return _proxy.passthrough(url).toString();
   }
 

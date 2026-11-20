@@ -1,6 +1,7 @@
 abstract final class AppConfig {
   static const appName = 'YSPlayer';
-  static const defaultWorkerUrl = 'https://ysplayer-proxy.workers.dev';
+  /// Публичного Worker нет: пользователь разворачивает свой (см. README).
+  static const defaultWorkerUrl = '';
   static const mirrorTimeout = Duration(seconds: 3);
   static const requestTimeout = Duration(seconds: 15);
 

@@ -108,24 +108,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _TextFieldTile(
             label: 'Cloudflare Worker URL',
             value: settings.workerUrl,
-            hint: AppConfig.defaultWorkerUrl,
+            hint: 'https://ваш-worker.example.workers.dev',
             onSaved: (v) {
               settings.workerUrl = v;
               ref.read(mirrorManagerProvider).resetHealth();
             },
           ),
           SwitchListTile(
-            title: const Text('Проксировать через Worker'),
-            subtitle: const Text('Spotify API, обложки, аудиопоток Piped'),
+            title: const Text('Всегда идти через Worker'),
+            subtitle: const Text('Выкл — напрямую, а Worker подключается сам, если зеркало недоступно'),
             value: settings.useWorkerProxy,
             activeThumbColor: AppColors.accent,
             onChanged: (v) => setState(() => settings.useWorkerProxy = v),
           ),
-          _Section('Spotify (опционально)'),
+          _TextFieldTile(
+            label: 'HTTP-прокси (host:port)',
+            value: settings.httpProxy,
+            hint: '127.0.0.1:8080 — например, локальный прокси VPN-клиента',
+            onSaved: (v) {
+              settings.httpProxy = v;
+              ref.read(mirrorManagerProvider).resetHealth();
+            },
+          ),
+          SwitchListTile(
+            title: const Text('Кэшировать аудио при прослушивании'),
+            subtitle: const Text('Повтор без сети; нужен, чтобы звук шёл через HTTP-прокси'),
+            value: settings.audioCache,
+            activeThumbColor: AppColors.accent,
+            onChanged: (v) => setState(() => settings.audioCache = v),
+          ),
+          _Section('Spotify (ключи не нужны)'),
           _TextFieldTile(
             label: 'Client ID',
             value: settings.spotifyClientId,
-            hint: 'без ключей — парсинг эмбедов',
+            hint: 'не обязательно: без ключей работает embed',
             onSaved: (v) => settings.spotifyClientId = v,
           ),
           _TextFieldTile(

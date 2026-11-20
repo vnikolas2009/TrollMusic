@@ -8,6 +8,10 @@ import '../../network/http_client.dart';
 import '../../network/proxy.dart';
 import '../../storage/settings.dart';
 
+const _browserUa =
+    'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) '
+    'Chrome/126.0 Mobile Safari/537.36';
+
 class SpotifyClient {
   SpotifyClient({required Settings settings, required ProxyConfig proxy})
       : _settings = settings,
@@ -26,6 +30,14 @@ class SpotifyClient {
 
   Future<bool> ensureToken() async {
     if (!hasCredentials) return false;
+    try {
+      return await _fetchToken();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _fetchToken() async {
     if (_token != null &&
         _expiresAt != null &&
         DateTime.now().isBefore(_expiresAt!.subtract(const Duration(seconds: 30)))) {
@@ -55,7 +67,7 @@ class SpotifyClient {
 
   Future<List<Track>> search(String query, {int limit = 20}) async {
     if (!await ensureToken()) {
-      throw StateError('Spotify: не заданы client id/secret');
+      return const [];
     }
     final data = await _get('/v1/search', {
       'q': query,
@@ -66,11 +78,29 @@ class SpotifyClient {
     return tracks.whereType<Map<String, dynamic>>().map(_toTrack).toList();
   }
 
+  /// Плейлист: через API, если заданы ключи, иначе (и при любой ошибке) через публичный embed.
   Future<Playlist> playlist(String id) async {
-    if (!await ensureToken()) return playlistViaEmbed(id);
+    if (await ensureToken()) {
+      try {
+        return await _playlistApi(id);
+      } catch (_) {}
+    }
+    return playlistViaEmbed(id);
+  }
 
+  /// Альбом: аналогично — без ключей через embed.
+  Future<Playlist> album(String id) async {
+    if (await ensureToken()) {
+      try {
+        return await _albumApi(id);
+      } catch (_) {}
+    }
+    return playlistViaEmbed(id, kind: 'album');
+  }
+
+  Future<Playlist> _playlistApi(String id) async {
     final data = await _get('/v1/playlists/$id');
-    if (data == null) return playlistViaEmbed(id);
+    if (data == null) throw StateError('Spotify: плейлист не найден');
 
     final tracks = <Track>[];
     var next = data['tracks'] as Map<String, dynamic>?;
@@ -97,10 +127,7 @@ class SpotifyClient {
     );
   }
 
-  Future<Playlist> album(String id) async {
-    if (!await ensureToken()) {
-      throw StateError('Spotify: не заданы client id/secret');
-    }
+  Future<Playlist> _albumApi(String id) async {
     final data = await _get('/v1/albums/$id');
     if (data == null) throw StateError('Spotify: альбом не найден');
     final tracks = (data['tracks'] as Map<String, dynamic>?)?['items'] as List? ?? const [];
@@ -122,16 +149,27 @@ class SpotifyClient {
     );
   }
 
-  Future<Playlist> playlistViaEmbed(String id) async {
-    final uri = _proxy.spotifyEmbed('/embed/playlist/$id');
-    final response = await _dio.getUri<String>(
-      uri,
-      options: Options(responseType: ResponseType.plain),
-    );
-    return _parseEmbed(response.data ?? '', id);
+  Future<Playlist> playlistViaEmbed(String id, {String kind = 'playlist'}) async {
+    Object? error;
+    final passes = <bool>[false, if (_proxy.hasWorker && !_proxy.enabled) true];
+    for (final viaWorker in passes) {
+      try {
+        final response = await _dio.getUri<String>(
+          _proxy.spotifyEmbed('/embed/$kind/$id', null, viaWorker),
+          options: Options(
+            responseType: ResponseType.plain,
+            headers: {'user-agent': _browserUa, 'accept': 'text/html'},
+          ),
+        );
+        return _parseEmbed(response.data ?? '', id, kind);
+      } catch (e) {
+        error = e;
+      }
+    }
+    throw error ?? StateError('Spotify: embed недоступен');
   }
 
-  Playlist _parseEmbed(String html, String id) {
+  Playlist _parseEmbed(String html, String id, [String kind = 'playlist']) {
     final match = RegExp(
       r'<script[^>]+id="__NEXT_DATA__"[^>]*>(.*?)</script>',
       dotAll: true,
@@ -172,6 +210,7 @@ class SpotifyClient {
           id: 'sp:$trackId',
           title: item['title'] as String? ?? 'Без названия',
           artist: item['subtitle'] as String? ?? 'Spotify',
+          album: kind == 'album' ? (entity['name'] as String? ?? '') : '',
           duration: Duration(milliseconds: (item['duration'] as num?)?.toInt() ?? 0),
           thumbnailUrl: coverUrl,
           source: TrackSource.spotify,

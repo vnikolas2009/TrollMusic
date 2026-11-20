@@ -28,6 +28,18 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   final AudioPlayer _player = AudioPlayer();
 
+  /// Сетевые потоки — через локальный кэширующий прокси just_audio: повтор без
+  /// сети и обход блокировок через HTTP-прокси приложения (нативный плеер его не видит).
+  IndexedAudioSource _source(String location, MediaItem tag) {
+    final uri = Uri.parse(location);
+    final remote = uri.scheme == 'http' || uri.scheme == 'https';
+    final s = _settings;
+    if (remote && s != null && (s.audioCache || s.httpProxy.isNotEmpty)) {
+      return LockCachingAudioSource(uri, tag: tag);
+    }
+    return AudioSource.uri(uri, tag: tag);
+  }
+
   final _crossfade = ValueNotifier<Duration>(Duration.zero);
   final _shuffleEnabled = ValueNotifier<bool>(false);
   final _repeat = ValueNotifier<YsRepeat>(YsRepeat.off);
@@ -150,9 +162,9 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     queue.add(items);
 
     try {
-      final source = AudioSource.uri(
-        Uri.parse(resolved.localPath ?? resolved.streamUrl!),
-        tag: _toMediaItem(resolved),
+      final source = _source(
+        resolved.localPath ?? resolved.streamUrl!,
+        _toMediaItem(resolved),
       );
       await _player.insertAudioSource(insertAt, source);
     } catch (_) {
@@ -170,9 +182,9 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     queue.add(items);
 
     try {
-      final source = AudioSource.uri(
-        Uri.parse(resolved.localPath ?? resolved.streamUrl!),
-        tag: _toMediaItem(resolved),
+      final source = _source(
+        resolved.localPath ?? resolved.streamUrl!,
+        _toMediaItem(resolved),
       );
       await _player.addAudioSource(source);
     } catch (_) {
@@ -244,10 +256,7 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     bool autoPlay = true,
   }) async {
     final items = tracks
-        .map((t) => AudioSource.uri(
-              Uri.parse(t.localPath ?? t.streamUrl!),
-              tag: _toMediaItem(t),
-            ))
+        .map((t) => _source(t.localPath ?? t.streamUrl!, _toMediaItem(t)))
         .toList();
     final target = index.clamp(0, items.length - 1);
     mediaItem.add(items[target].tag as MediaItem);
@@ -467,7 +476,7 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (url != null && url.isNotEmpty) {
         try {
           await _player.setAudioSource(
-            AudioSource.uri(Uri.parse(url), tag: item),
+            _source(url, item),
             initialIndex: index,
           );
           await _player.setVolume(1);

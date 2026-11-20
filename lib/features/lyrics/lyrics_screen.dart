@@ -1,11 +1,19 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:palette_generator/palette_generator.dart';
 
 import '../../app/network_providers.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../data/models/lyrics.dart';
+import '../../data/models/track.dart';
+import 'aurora_background.dart';
+
+const _defaultAurora = Color(0xFF3A4570);
 
 class LyricsScreen extends ConsumerStatefulWidget {
   const LyricsScreen({super.key, required this.trackId});
@@ -21,6 +29,8 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
   final _keys = <int, GlobalKey>{};
   int _activeIndex = -1;
   int _offsetMs = 0;
+  Color _aurora = _defaultAurora;
+  String? _colorSourceId;
 
   @override
   void initState() {
@@ -34,156 +44,255 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     super.dispose();
   }
 
+  Future<void> _resolveColor(Track track) async {
+    if (_colorSourceId == track.id) return;
+    _colorSourceId = track.id;
+
+    ImageProvider? image;
+    final local = track.artworkPath;
+    if (local != null && local.isNotEmpty && File(local).existsSync()) {
+      image = FileImage(File(local));
+    } else if (track.thumbnailUrl != null && track.thumbnailUrl!.isNotEmpty) {
+      image = NetworkImage(track.thumbnailUrl!);
+    }
+    if (image == null) return;
+    try {
+      final palette = await PaletteGenerator.fromImageProvider(
+        image,
+        size: const Size(96, 96),
+      );
+      final color = palette.vibrantColor?.color ??
+          palette.dominantColor?.color ??
+          palette.darkVibrantColor?.color;
+      if (color != null && mounted) setState(() => _aurora = color);
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     final raw = ref.watch(libraryProvider).lyricsFor(widget.trackId);
     final lyrics = raw == null ? const Lyrics() : LrcParser.parse(raw);
     final track = ref.watch(currentTrackProvider).value;
+    if (track != null) _resolveColor(track);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Текст песни', style: TextStyle(fontSize: 16)),
+            Text(
+              track?.title ?? 'Текст песни',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
             if (track != null)
               Text(
                 track.artist,
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: Colors.white70),
               ),
           ],
         ),
         actions: [
-          if (lyrics.synced)
-            PopupMenuButton<int>(
-              color: AppColors.surfaceAlt,
-              icon: const Icon(Icons.sync_alt, size: 20),
-              tooltip: 'Сдвиг синхронизации',
-              onSelected: (value) {
-                setState(() => _offsetMs = value);
-                ref
-                    .read(settingsProvider)
-                    .setLyricsOffsetMs(widget.trackId, value);
-              },
-              itemBuilder: (_) => [
-                for (final shift in const [-2000, -1000, -500, 0, 500, 1000, 2000])
-                  PopupMenuItem(
-                    value: shift,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            shift == 0
-                                ? 'Без сдвига'
-                                : '${shift > 0 ? '+' : ''}${shift / 1000} с',
-                          ),
-                        ),
-                        if (shift == _offsetMs)
-                          const Icon(Icons.check, size: 16, color: AppColors.accent),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          if (lyrics.isEmpty)
-            TextButton(
-              onPressed: () async {
-                if (track == null) return;
-                final result = await ref.read(importProvider).findLyricsOnline(track);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(result.found ? 'Текст найден' : 'Текст не найден')),
-                );
-                setState(() {});
-              },
-              child: const Text('Найти'),
-            ),
+          if (lyrics.synced) _offsetMenu(),
+          if (lyrics.isEmpty) _findButton(context, track),
         ],
       ),
-      body: lyrics.isEmpty
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text(
-                  'Текст не найден.\nНажмите «Найти» — поиск в LRCLIB по названию и исполнителю.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textSecondary, height: 1.6),
+      body: Stack(
+        children: [
+          Positioned.fill(child: AuroraBackground(color: _aurora)),
+          Positioned.fill(child: _body(lyrics)),
+        ],
+      ),
+    );
+  }
+
+  Widget _offsetMenu() {
+    return PopupMenuButton<int>(
+      color: AppColors.surfaceAlt,
+      icon: const Icon(Icons.sync_alt, size: 20),
+      tooltip: 'Сдвиг синхронизации',
+      onSelected: (value) {
+        setState(() => _offsetMs = value);
+        ref.read(settingsProvider).setLyricsOffsetMs(widget.trackId, value);
+      },
+      itemBuilder: (_) => [
+        for (final shift in const [-2000, -1000, -500, 0, 500, 1000, 2000])
+          PopupMenuItem(
+            value: shift,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    shift == 0 ? 'Без сдвига' : '${shift > 0 ? '+' : ''}${shift / 1000} с',
+                  ),
                 ),
+                if (shift == _offsetMs)
+                  const Icon(Icons.check, size: 16, color: AppColors.accent),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _findButton(BuildContext context, Track? track) {
+    return TextButton(
+      onPressed: () async {
+        if (track == null) return;
+        final result = await ref.read(importProvider).findLyricsOnline(track);
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.found ? 'Текст найден' : 'Текст не найден')),
+        );
+        setState(() {});
+      },
+      child: const Text('Найти'),
+    );
+  }
+
+  Widget _body(Lyrics lyrics) {
+    if (lyrics.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Text(
+            'Текст не найден.\nНажмите «Найти» — поиск в LRCLIB по названию и исполнителю.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white70, height: 1.6),
+          ),
+        ),
+      );
+    }
+    if (!lyrics.synced) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(24, 110, 24, 120),
+        children: [
+          Text(
+            lyrics.plainText,
+            style: const TextStyle(fontSize: 20, height: 1.6, fontWeight: FontWeight.w600),
+          ),
+        ],
+      );
+    }
+
+    return StreamBuilder<Duration>(
+      stream: ref.watch(audioHandlerProvider).positionStream,
+      builder: (context, snapshot) {
+        final position = (snapshot.data ?? Duration.zero) + Duration(milliseconds: _offsetMs);
+        final safe = position < Duration.zero ? Duration.zero : position;
+        final index = lyrics.indexAt(safe);
+        if (index != _activeIndex) {
+          _activeIndex = index;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(index));
+        }
+        return ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.fromLTRB(24, 120, 24, 260),
+          itemCount: lyrics.lines.length,
+          itemBuilder: (context, i) {
+            final line = lyrics.lines[i];
+            final end = i + 1 < lyrics.lines.length
+                ? lyrics.lines[i + 1].time
+                : line.time + const Duration(seconds: 5);
+            final span = (end - line.time).inMilliseconds;
+            final progress = i == index && span > 0
+                ? ((safe - line.time).inMilliseconds / span).clamp(0.0, 1.0).toDouble()
+                : 0.0;
+            return GestureDetector(
+              key: _keys.putIfAbsent(i, () => GlobalKey()),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => ref.read(audioHandlerProvider).seek(line.time),
+              child: _LyricLine(
+                text: line.text,
+                distance: index < 0 ? 99 : i - index,
+                progress: progress,
               ),
-            )
-          : lyrics.synced
-              ? StreamBuilder<Duration>(
-                  stream: ref.watch(audioHandlerProvider).positionStream,
-                  builder: (context, snapshot) {
-                    final raw = snapshot.data ?? Duration.zero;
-                    final position = raw +
-                        Duration(milliseconds: _offsetMs);
-                    final index = lyrics.indexAt(
-                      position < Duration.zero ? Duration.zero : position,
-                    );
-                    if (index != _activeIndex) {
-                      _activeIndex = index;
-                      WidgetsBinding.instance.addPostFrameCallback(
-                        (_) => _ensureVisible(index),
-                      );
-                    }
-                    return ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(24, 80, 24, 220),
-                      itemCount: lyrics.lines.length,
-                      itemBuilder: (context, i) {
-                        final active = i == _activeIndex;
-                        return GestureDetector(
-                          key: _keys.putIfAbsent(i, () => GlobalKey()),
-                          onTap: () => ref
-                              .read(audioHandlerProvider)
-                              .seek(lyrics.lines[i].time),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Text(
-                              lyrics.lines[i].text.isEmpty ? '♪' : lyrics.lines[i].text,
-                              style: TextStyle(
-                                fontSize: active ? 22 : 18,
-                                height: 1.35,
-                                fontWeight: active ? FontWeight.w800 : FontWeight.w500,
-                                color: active
-                                    ? AppColors.textPrimary
-                                    : AppColors.textSecondary.withValues(alpha: 0.55),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                )
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
-                  children: [
-                    Text(
-                      lyrics.plainText,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        height: 1.6,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
+            );
+          },
+        );
+      },
     );
   }
 
   void _ensureVisible(int index) {
-    final key = _keys[index];
-    final ctx = key?.currentContext;
+    final ctx = _keys[index]?.currentContext;
     if (ctx == null) return;
     Scrollable.ensureVisible(
       ctx,
-      alignment: 0.35,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOut,
+      alignment: 0.32,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+    );
+  }
+}
+
+/// Строка текста: активная заливается слева направо по времени,
+/// соседние тем сильнее размыты, чем дальше от активной.
+class _LyricLine extends StatelessWidget {
+  const _LyricLine({required this.text, required this.distance, required this.progress});
+
+  final String text;
+  final int distance;
+  final double progress;
+
+  static const _style = TextStyle(
+    fontSize: 28,
+    height: 1.25,
+    fontWeight: FontWeight.w800,
+    color: Colors.white,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final label = text.isEmpty ? '♪' : text;
+    final active = distance == 0;
+
+    Widget child;
+    if (active) {
+      child = TweenAnimationBuilder<double>(
+        tween: Tween<double>(end: progress),
+        duration: const Duration(milliseconds: 240),
+        builder: (context, p, text) => ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (rect) => LinearGradient(
+            colors: const [Colors.white, Colors.white, Color(0x66FFFFFF), Color(0x66FFFFFF)],
+            stops: [
+              0,
+              (p - 0.04).clamp(0.0, 1.0).toDouble(),
+              (p + 0.04).clamp(0.0, 1.0).toDouble(),
+              1,
+            ],
+          ).createShader(rect),
+          child: text,
+        ),
+        child: Text(label, style: _style),
+      );
+    } else {
+      final dist = distance.abs();
+      child = Text(
+        label,
+        style: _style.copyWith(color: Colors.white.withValues(alpha: dist > 6 ? 0.22 : 0.36)),
+      );
+      if (dist <= 6) {
+        final sigma = (dist * 1.3).clamp(0.0, 5.0).toDouble();
+        child = ImageFiltered(
+          imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+          child: child,
+        );
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Align(alignment: Alignment.centerLeft, child: child),
     );
   }
 }
