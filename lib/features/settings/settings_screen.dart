@@ -151,6 +151,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             activeThumbColor: AppColors.accent,
             onChanged: (v) => setState(() => settings.proxyAudioStreams = v),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Кроссфейд', style: TextStyle(fontSize: 13)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final seconds in const [0, 3, 6, 10, 12])
+                      ChoiceChip(
+                        label: Text(seconds == 0 ? 'Выкл' : '$seconds с'),
+                        selected: settings.crossfadeSeconds == seconds,
+                        selectedColor: AppColors.textPrimary,
+                        labelStyle: TextStyle(
+                          color: settings.crossfadeSeconds == seconds
+                              ? Colors.black
+                              : AppColors.textPrimary,
+                          fontSize: 12,
+                        ),
+                        backgroundColor: AppColors.surfaceAlt,
+                        onSelected: (_) {
+                          settings.crossfadeSeconds = seconds;
+                          ref.read(audioHandlerProvider).setCrossfade(
+                                Duration(seconds: seconds),
+                              );
+                          setState(() {});
+                        },
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
           _Section('Кэш и офлайн'),
           ListTile(
             title: const Text('Занято на устройстве'),

@@ -60,4 +60,26 @@ class Settings {
       _box.get('proxyAudioStreams', defaultValue: true) as bool;
 
   set proxyAudioStreams(bool value) => _box.put('proxyAudioStreams', value);
+
+  int get crossfadeSeconds => _box.get('crossfadeSeconds', defaultValue: 0) as int;
+
+  set crossfadeSeconds(int value) => _box.put('crossfadeSeconds', value);
+
+  bool get shuffleEnabled =>
+      _box.get('shuffleEnabled', defaultValue: false) as bool;
+
+  set shuffleEnabled(bool value) => _box.put('shuffleEnabled', value);
+
+  int get repeatIndex => _box.get('repeatIndex', defaultValue: 0) as int;
+
+  set repeatIndex(int value) => _box.put('repeatIndex', value);
+
+  String? get lastTrackId => _box.get('lastTrackId') as String?;
+
+  set lastTrackId(String? value) => _box.put('lastTrackId', value);
+
+  int get lastPositionMs =>
+      (_box.get('lastPositionMs') as num?)?.toInt() ?? 0;
+
+  set lastPositionMs(int value) => _box.put('lastPositionMs', value);
 }

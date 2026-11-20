@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../core/storage/settings.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../data/models/lyrics.dart';
 import '../../data/models/track.dart';
@@ -13,23 +15,36 @@ import '../../data/repositories/library_repository.dart';
 enum YsRepeat { off, all, one }
 
 class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
-  YsAudioHandler({required LibraryRepository library}) : _library = library;
+  YsAudioHandler({
+    required LibraryRepository library,
+    Settings? settings,
+    this.resolveStream,
+  })  : _library = library,
+        _settings = settings;
 
   final LibraryRepository _library;
+  final Settings? _settings;
+  final Future<String?> Function(String videoId)? resolveStream;
+
   final AudioPlayer _player = AudioPlayer();
 
   final _crossfade = ValueNotifier<Duration>(Duration.zero);
   final _shuffleEnabled = ValueNotifier<bool>(false);
   final _repeat = ValueNotifier<YsRepeat>(YsRepeat.off);
   final _sleepRemaining = ValueNotifier<Duration?>(null);
+  final _errors = StreamController<String>.broadcast();
 
   Timer? _sleepTimer;
+  Timer? _fadeTimer;
+  DateTime _lastPositionSave = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _fading = false;
+  bool _restoring = false;
 
+  Stream<String> get errors => _errors.stream;
   ValueNotifier<Duration> get crossfade => _crossfade;
   ValueNotifier<bool> get shuffleEnabled => _shuffleEnabled;
   ValueNotifier<YsRepeat> get repeat => _repeat;
   ValueNotifier<Duration?> get sleepRemaining => _sleepRemaining;
-
   AudioPlayer get player => _player;
   Stream<Duration> get positionStream => _player.positionStream;
   Stream<Duration?> get durationStream => _player.durationStream;
@@ -37,21 +52,80 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> init() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
+
+    _restoreSettings();
+
     _player.playbackEventStream.listen(
       _broadcastState,
-      onError: (Object error, StackTrace stack) => debugPrint('$error'),
+      onError: (Object error, StackTrace stack) => _handlePlaybackError(error),
     );
     _player.processingStateStream.listen((state) {
       if (state == ProcessingState.completed) _onCompleted();
     });
-    _player.currentIndexStream.listen((_) => _syncQueueIndex());
+    _player.currentIndexStream.listen((_) {
+      _syncQueueIndex();
+      _persistCurrentTrack();
+      if (!_restoring) _fadeIn();
+    });
+    _player.positionStream.listen((position) {
+      _maybeFadeOut(position);
+      _persistPosition(position);
+    });
   }
 
-  Future<void> setLibraryQueue(Iterable<Track> tracks, {int initialIndex = 0}) async {
-    final list = tracks.toList();
-    if (list.isEmpty) return;
-    queue.add(list.map(_toMediaItem).toList());
-    await _load(list, initialIndex.clamp(0, list.length - 1));
+  void _restoreSettings() {
+    final settings = _settings;
+    if (settings == null) return;
+    _crossfade.value = Duration(seconds: settings.crossfadeSeconds);
+    _shuffleEnabled.value = settings.shuffleEnabled;
+    _repeat.value = YsRepeat.values[settings.repeatIndex.clamp(0, 2)];
+    _player.setLoopMode(_loopModeOf(_repeat.value));
+    _player.setShuffleModeEnabled(_shuffleEnabled.value);
+  }
+
+  Future<void> restoreLastPlayed() async {
+    final settings = _settings;
+    if (settings == null) return;
+    final id = settings.lastTrackId;
+    if (id == null || id.isEmpty) return;
+    final track = _library.trackById(id);
+    if (track == null) return;
+
+    _restoring = true;
+    try {
+      await setLibraryQueue([track], autoPlay: false);
+      final saved = Duration(milliseconds: settings.lastPositionMs);
+      if (saved > Duration.zero) await _player.seek(saved);
+    } catch (_) {
+    } finally {
+      _restoring = false;
+    }
+  }
+
+  Future<void> setLibraryQueue(
+    Iterable<Track> tracks, {
+    int initialIndex = 0,
+    bool autoPlay = true,
+  }) async {
+    final requested = tracks.toList();
+    if (requested.isEmpty) return;
+
+    final anchor = requested[initialIndex.clamp(0, requested.length - 1)];
+    final playable = await _prepare(requested, anchorId: anchor.id);
+    if (playable.isEmpty) {
+      _errors.add('Не удалось получить аудиопоток. Проверьте зеркала в настройках.');
+      playbackState.add(playbackState.value.copyWith(
+        processingState: AudioProcessingState.idle,
+        playing: false,
+      ));
+      return;
+    }
+
+    var index = playable.indexWhere((t) => t.id == anchor.id);
+    if (index < 0) index = 0;
+
+    queue.add(playable.map(_toMediaItem).toList());
+    await _load(playable, index, autoPlay: autoPlay);
   }
 
   Future<void> playTrack(Track track, {List<Track>? contextQueue}) async {
@@ -63,33 +137,98 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await setLibraryQueue([track]);
   }
 
-  Future<void> _load(List<Track> tracks, int index) async {
-    final playable = tracks.where((t) {
-      final source = t.localPath ?? t.streamUrl;
-      return source != null && source.isNotEmpty;
-    }).toList();
-    if (playable.isEmpty) return;
+  Future<List<Track>> _prepare(Iterable<Track> tracks, {String? anchorId}) async {
+    final list = tracks.toList();
+    final results = List<Track?>.filled(list.length, null);
+    final pending = <int>[];
 
-    final items = playable
+    for (var i = 0; i < list.length; i++) {
+      final track = list[i];
+      final local = track.localPath;
+      if (local != null && local.isNotEmpty && File(local).existsSync()) {
+        results[i] = track;
+        continue;
+      }
+      final known = track.streamUrl;
+      if (known != null && known.isNotEmpty) {
+        results[i] = track;
+        continue;
+      }
+      pending.add(i);
+    }
+
+    final resolve = resolveStream;
+    if (resolve == null || pending.isEmpty) {
+      return results.whereType<Track>().toList();
+    }
+
+    if (anchorId != null) {
+      final anchorIndex = pending.indexWhere((i) => list[i].id == anchorId);
+      if (anchorIndex > 0) {
+        final anchor = pending.removeAt(anchorIndex);
+        pending.insert(0, anchor);
+      }
+    }
+
+    var cursor = 0;
+    Future<void> worker() async {
+      while (cursor < pending.length) {
+        final index = pending[cursor++];
+        final track = list[index];
+        String? url;
+        try {
+          url = await resolve(track.id);
+        } catch (_) {
+          url = null;
+        }
+        if (url != null && url.isNotEmpty) {
+          results[index] = track.copyWith(streamUrl: url);
+        }
+      }
+    }
+
+    final workers = pending.length < 4 ? pending.length : 4;
+    await Future.wait(List.generate(workers, (_) => worker()))
+        .timeout(const Duration(seconds: 8), onTimeout: () => const []);
+
+    return results.whereType<Track>().toList();
+  }
+
+  Future<void> _load(
+    List<Track> tracks,
+    int index, {
+    bool autoPlay = true,
+  }) async {
+    final items = tracks
         .map((t) => AudioSource.uri(
               Uri.parse(t.localPath ?? t.streamUrl!),
               tag: _toMediaItem(t),
             ))
         .toList();
-    mediaItem.add(items[index.clamp(0, items.length - 1)].tag as MediaItem);
+    final target = index.clamp(0, items.length - 1);
+    mediaItem.add(items[target].tag as MediaItem);
+    playbackState.add(playbackState.value.copyWith(
+      processingState: AudioProcessingState.loading,
+      playing: false,
+    ));
+
     await _player.setAudioSources(
       items,
-      initialIndex: index.clamp(0, items.length - 1),
+      initialIndex: target,
       initialPosition: Duration.zero,
     );
-    play();
+    await _player.setVolume(1);
+    if (autoPlay) {
+      unawaited(play());
+    }
   }
 
   Future<void> playAt(int index) async {
     final sequence = _player.sequenceState.sequence;
     if (index < 0 || index >= sequence.length) return;
+    await _player.setVolume(1);
     await _player.seek(Duration.zero, index: index);
-    play();
+    unawaited(play());
   }
 
   Future<void> reorder(int oldIndex, int newIndex) async {
@@ -103,14 +242,21 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    if (_player.volume < 1) await _player.setVolume(1);
+    await _player.play();
+  }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    await _player.pause();
+    _persistPosition(_player.position, force: true);
+  }
 
   @override
   Future<void> stop() async {
     await _player.stop();
+    _persistPosition(_player.position, force: true);
     await super.stop();
   }
 
@@ -120,14 +266,14 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> skipToNext() async {
     if (!_player.hasNext) {
-      if (_repeat.value == YsRepeat.all) {
+      if (_repeat.value == YsRepeat.all && _player.sequenceState.sequence.isNotEmpty) {
         await _player.seek(Duration.zero, index: 0);
-        play();
+        unawaited(play());
       }
       return;
     }
     await _player.seekToNext();
-    play();
+    unawaited(play());
   }
 
   @override
@@ -137,13 +283,14 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       return;
     }
     await _player.seekToPrevious();
-    play();
+    unawaited(play());
   }
 
   Future<void> setShuffle(bool enabled) async {
     _shuffleEnabled.value = enabled;
     await _player.setShuffleModeEnabled(enabled);
     if (enabled) await _player.shuffle();
+    _settings?.shuffleEnabled = enabled;
   }
 
   Future<void> cycleRepeat() async {
@@ -153,22 +300,26 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       YsRepeat.one => YsRepeat.off,
     };
     _repeat.value = next;
-    await _player.setLoopMode(switch (next) {
-      YsRepeat.off => LoopMode.off,
-      YsRepeat.all => LoopMode.all,
-      YsRepeat.one => LoopMode.one,
-    });
+    await _player.setLoopMode(_loopModeOf(next));
+    _settings?.repeatIndex = YsRepeat.values.indexOf(next);
   }
 
   Future<void> setCrossfade(Duration value) async {
     _crossfade.value = value;
+    _settings?.crossfadeSeconds = value.inSeconds;
+    if (value == Duration.zero) {
+      _fadeTimer?.cancel();
+      _fading = false;
+      await _player.setVolume(1);
+    }
   }
 
   void startSleepTimer(Duration duration) {
     _sleepTimer?.cancel();
     _sleepRemaining.value = duration;
     _sleepTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      final remaining = (_sleepRemaining.value ?? Duration.zero) - const Duration(seconds: 1);
+      final remaining =
+          (_sleepRemaining.value ?? Duration.zero) - const Duration(seconds: 1);
       if (remaining <= Duration.zero) {
         timer.cancel();
         _sleepRemaining.value = null;
@@ -192,6 +343,122 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (item == null) return null;
     final raw = _library.lyricsFor(item.id);
     return raw == null ? null : LrcParser.parse(raw);
+  }
+
+  void _handlePlaybackError(Object error) {
+    debugPrint('$error');
+    unawaited(_recoverFromError());
+  }
+
+  Future<void> _recoverFromError() async {
+    final index = _player.currentIndex;
+    final items = queue.value;
+    if (index == null || index < 0 || index >= items.length) {
+      playbackState.add(playbackState.value.copyWith(
+        processingState: AudioProcessingState.error,
+        playing: false,
+      ));
+      return;
+    }
+
+    final item = items[index];
+    final track = _library.trackById(item.id);
+    final resolve = resolveStream;
+    final needsFresh = track != null &&
+        (track.localPath == null || track.localPath!.isEmpty) &&
+        resolve != null;
+
+    if (needsFresh) {
+      String? url;
+      try {
+        url = await resolve(track.id);
+      } catch (_) {
+        url = null;
+      }
+      if (url != null && url.isNotEmpty) {
+        try {
+          await _player.setAudioSource(
+            AudioSource.uri(Uri.parse(url), tag: item),
+            initialIndex: index,
+          );
+          await _player.setVolume(1);
+          await play();
+          return;
+        } catch (_) {}
+      }
+    }
+
+    if (_player.hasNext) {
+      _errors.add('Трек недоступен, включаю следующий');
+      try {
+        await _player.seekToNext();
+        await play();
+        return;
+      } catch (_) {}
+    }
+
+    _errors.add('Не удалось воспроизвести трек');
+    playbackState.add(playbackState.value.copyWith(
+      processingState: AudioProcessingState.error,
+      playing: false,
+    ));
+  }
+
+  void _maybeFadeOut(Duration position) {
+    final fade = _crossfade.value;
+    if (fade == Duration.zero || _fading) return;
+    final duration = _player.duration;
+    if (duration == null || duration <= Duration.zero) return;
+    if (_repeat.value == YsRepeat.one) return;
+    final remaining = duration - position;
+    if (remaining <= fade && remaining > const Duration(milliseconds: 120)) {
+      _fadeTo(0, remaining);
+    }
+  }
+
+  void _fadeIn() {
+    if (_crossfade.value == Duration.zero) {
+      unawaited(_player.setVolume(1));
+      return;
+    }
+    _fadeTo(1, const Duration(milliseconds: 700));
+  }
+
+  void _fadeTo(double target, Duration over) {
+    _fadeTimer?.cancel();
+    _fading = true;
+    final steps = (over.inMilliseconds / 80).ceil().clamp(1, 120);
+    final start = _player.volume;
+    var step = 0;
+    _fadeTimer = Timer.periodic(const Duration(milliseconds: 80), (timer) {
+      step++;
+      final value = start + (target - start) * (step / steps);
+      unawaited(_player.setVolume(value.clamp(0.0, 1.0)));
+      if (step >= steps || (timer.tick * 80) >= over.inMilliseconds) {
+        timer.cancel();
+        _fading = false;
+      }
+    });
+  }
+
+  void _persistPosition(Duration position, {bool force = false}) {
+    final settings = _settings;
+    if (settings == null) return;
+    final now = DateTime.now();
+    if (!force && now.difference(_lastPositionSave) < const Duration(seconds: 5)) {
+      return;
+    }
+    _lastPositionSave = now;
+    settings.lastPositionMs = position.inMilliseconds;
+  }
+
+  void _persistCurrentTrack() {
+    final settings = _settings;
+    if (settings == null) return;
+    final item = mediaItem.value;
+    if (item == null) return;
+    settings.lastTrackId = item.id;
+    settings.lastPositionMs = 0;
   }
 
   void _onCompleted() {
@@ -221,7 +488,11 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           if (playing) MediaControl.pause else MediaControl.play,
           MediaControl.skipToNext,
         ],
-        systemActions: const {MediaAction.seek, MediaAction.seekForward, MediaAction.seekBackward},
+        systemActions: const {
+          MediaAction.seek,
+          MediaAction.seekForward,
+          MediaAction.seekBackward,
+        },
         androidCompactActionIndices: const [0, 1, 2],
         processingState: switch (_player.processingState) {
           ProcessingState.idle => AudioProcessingState.idle,
@@ -246,6 +517,12 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       ),
     );
   }
+
+  LoopMode _loopModeOf(YsRepeat mode) => switch (mode) {
+        YsRepeat.off => LoopMode.off,
+        YsRepeat.all => LoopMode.all,
+        YsRepeat.one => LoopMode.one,
+      };
 
   MediaItem _toMediaItem(Track track) => MediaItem(
         id: track.id,

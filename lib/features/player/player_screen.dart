@@ -260,6 +260,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                               ],
                             ),
                             const SizedBox(height: 18),
+                            if (state?.processingState == AudioProcessingState.loading ||
+                                state?.processingState == AudioProcessingState.buffering)
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 10),
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                            if (state?.processingState == AudioProcessingState.error)
+                              _StreamErrorBanner(
+                                onRetry: () => audio.playTrack(track),
+                              ),
                             _LyricsCard(
                               trackId: track.id,
                               hasLyrics: hasLyrics,
@@ -393,6 +407,41 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _StreamErrorBanner extends StatelessWidget {
+  const _StreamErrorBanner({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.surfaceHigh),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_rounded, size: 18, color: AppColors.textSecondary),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Поток недоступен. Попробуйте другое зеркало.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            child: const Text('Повторить'),
+          ),
+        ],
       ),
     );
   }

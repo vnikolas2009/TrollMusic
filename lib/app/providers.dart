@@ -96,3 +96,7 @@ final positionProvider = StreamProvider<Duration>(
 final durationProvider = StreamProvider<Duration?>(
   (ref) => ref.watch(audioHandlerProvider).durationStream,
 );
+
+final audioErrorsProvider = StreamProvider<String>(
+  (ref) => ref.watch(audioHandlerProvider).errors,
+);

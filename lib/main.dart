@@ -38,7 +38,11 @@ Future<void> main() async {
   );
 
   final audio = await AudioService.init(
-    builder: () => YsAudioHandler(library: library),
+    builder: () => YsAudioHandler(
+      library: library,
+      settings: settings,
+      resolveStream: youtube.streamUrl,
+    ),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.ysplayer.audio',
       androidNotificationChannelName: 'YSPlayer',
@@ -47,6 +51,7 @@ Future<void> main() async {
     ),
   );
   await audio.init();
+  await audio.restoreLastPlayed();
 
   final container = ProviderContainer(
     overrides: [

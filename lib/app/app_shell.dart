@@ -32,6 +32,13 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget build(BuildContext context) {
     final track = ref.watch(currentTrackProvider).value;
 
+    ref.listen(audioErrorsProvider, (_, next) {
+      final message = next.value;
+      if (message == null) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    });
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
