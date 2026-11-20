@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/network/piped/youtube_music_client.dart';
@@ -30,14 +31,20 @@ class DownloadService {
 
   final _progress = <String, double>{};
   final _active = <String>{};
+  final _revision = ValueNotifier<int>(0);
+
+  ValueListenable<int> get revision => _revision;
 
   double? progressOf(String trackId) => _progress[trackId];
   bool isDownloading(String trackId) => _active.contains(trackId);
+
+  void _bump() => _revision.value++;
 
   Future<Track> download(Track track, {bool withLyrics = true}) async {
     if (_active.contains(track.id)) return track;
     _active.add(track.id);
     _progress[track.id] = 0;
+    _bump();
 
     try {
       final url = track.streamUrl ?? await _youtube.streamUrl(track.id);
@@ -70,6 +77,7 @@ class DownloadService {
     } finally {
       _progress.remove(track.id);
       _active.remove(track.id);
+      _bump();
     }
   }
 
@@ -107,7 +115,10 @@ class DownloadService {
       deleteOnError: true,
       cancelToken: CancelToken(),
       onReceiveProgress: (received, total) {
-        if (total > 0) _progress[trackId] = received / total;
+        if (total > 0) {
+          _progress[trackId] = received / total;
+          _bump();
+        }
       },
     );
   }

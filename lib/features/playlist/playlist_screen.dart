@@ -210,15 +210,20 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
             itemCount: tracks.length,
             itemBuilder: (context, i) {
               final track = tracks[i];
-              return TrackTile(
-                title: track.title,
-                artist: track.artist,
-                coverUrl: track.thumbnailUrl,
-                coverPath: track.artworkPath,
-                explicit: track.explicit,
-                downloaded: track.localPath != null && track.localPath!.isNotEmpty,
-                onTap: () => audio.playTrack(track, contextQueue: tracks),
-                onMenu: () => _showMenu(track),
+              final downloads = ref.read(downloadProvider);
+              return ValueListenableBuilder<int>(
+                valueListenable: downloads.revision,
+                builder: (context, _, __) => TrackTile(
+                  title: track.title,
+                  artist: track.artist,
+                  coverUrl: track.thumbnailUrl,
+                  coverPath: track.artworkPath,
+                  explicit: track.explicit,
+                  downloaded: track.localPath != null && track.localPath!.isNotEmpty,
+                  downloadProgress: downloads.progressOf(track.id),
+                  onTap: () => audio.playTrack(track, contextQueue: tracks),
+                  onMenu: () => _showMenu(track),
+                ),
               );
             },
           ),

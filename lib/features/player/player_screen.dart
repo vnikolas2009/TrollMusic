@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:palette_generator/palette_generator.dart';
 
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
@@ -22,6 +23,43 @@ class PlayerScreen extends ConsumerStatefulWidget {
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   bool _showQueue = false;
+  Color _dominant = const Color(0xFF282828);
+  String? _colorSourceId;
+
+  Future<void> _resolveDominant(Track track) async {
+    if (_colorSourceId == track.id) return;
+    _colorSourceId = track.id;
+
+    final local = track.artworkPath;
+    if (local != null && local.isNotEmpty && File(local).existsSync()) {
+      try {
+        final palette = await PaletteGenerator.fromImageProvider(
+          FileImage(File(local)),
+          size: const Size(120, 120),
+        );
+        _apply(palette);
+        return;
+      } catch (_) {}
+    }
+
+    final url = track.thumbnailUrl;
+    if (url != null && url.isNotEmpty) {
+      try {
+        final palette = await PaletteGenerator.fromImageProvider(
+          NetworkImage(url),
+          size: const Size(120, 120),
+        );
+        _apply(palette);
+      } catch (_) {}
+    }
+  }
+
+  void _apply(PaletteGenerator palette) {
+    final color = palette.darkMutedColor?.color ??
+        palette.dominantColor?.color ??
+        palette.darkVibrantColor?.color;
+    if (color != null && mounted) setState(() => _dominant = color);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +76,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       );
     }
 
+    _resolveDominant(track);
     final playing = state?.playing ?? false;
     final hasLyrics = ref.watch(libraryProvider).hasLyrics(track.id);
 
@@ -48,8 +87,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [AppColors.surfaceHigh, AppColors.background],
-            stops: const [0, 0.75],
+            colors: [_dominant, AppColors.background],
+            stops: const [0, 0.78],
           ),
         ),
         child: SafeArea(
@@ -78,6 +117,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       _showQueue ? Icons.play_circle_outline : Icons.queue_music_rounded,
                     ),
                     onPressed: () => setState(() => _showQueue = !_showQueue),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.more_vert),
+                    onPressed: () => _showOptions(track),
                   ),
                 ],
               ),
@@ -233,6 +276,122 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showOptions(Track track) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.download_rounded),
+              title: Text(
+                track.localPath != null && track.localPath!.isNotEmpty
+                    ? 'Удалить скачивание'
+                    : 'Скачать трек',
+              ),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                final downloads = ref.read(downloadProvider);
+                if (track.localPath != null && track.localPath!.isNotEmpty) {
+                  await downloads.deleteDownload(track.id);
+                } else {
+                  await downloads.download(track);
+                }
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Готово')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.timer_outlined),
+              title: const Text('Таймер сна'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showSleepTimer();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.tune_rounded),
+              title: const Text('Кроссфейд'),
+              trailing: Text(
+                '${ref.read(audioHandlerProvider).crossfade.value.inSeconds} с',
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showCrossfade();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSleepTimer() {
+    const options = <int>[0, 5, 15, 30, 60];
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Таймер сна', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            for (final minutes in options)
+              ListTile(
+                title: Text(minutes == 0 ? 'Выключить' : '$minutes мин'),
+                onTap: () {
+                  final audio = ref.read(audioHandlerProvider);
+                  if (minutes == 0) {
+                    audio.cancelSleepTimer();
+                  } else {
+                    audio.startSleepTimer(Duration(minutes: minutes));
+                  }
+                  Navigator.pop(sheetContext);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCrossfade() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Кроссфейд', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            for (final seconds in <int>[0, 3, 6, 10, 12])
+              ListTile(
+                title: Text(seconds == 0 ? 'Выключен' : '$seconds с'),
+                onTap: () {
+                  ref
+                      .read(audioHandlerProvider)
+                      .setCrossfade(Duration(seconds: seconds));
+                  Navigator.pop(sheetContext);
+                  setState(() {});
+                },
+              ),
+          ],
         ),
       ),
     );
