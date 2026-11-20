@@ -48,6 +48,7 @@ class HomeScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (daily.isNotEmpty) _DailyPick(tracks: daily),
+              if (tracks.isEmpty) const _TrendingSection(),
               _Stations(tracks: tracks),
               if (tracks.isNotEmpty) _Recent(tracks: tracks),
               _Discoveries(tracks: tracks),
@@ -56,6 +57,127 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TrendingSection extends ConsumerWidget {
+  const _TrendingSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trending = ref.watch(trendingProvider);
+
+    return trending.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.fromLTRB(16, 24, 16, 0),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            SizedBox(width: 10),
+            Text(
+              'Загружаем тренды...',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      ),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (items) {
+        if (items.isEmpty) return const SizedBox.shrink();
+        final limited = items.take(12).toList();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionHeader(
+              title: 'Тренды недели',
+              subtitle: 'Медиатека пуста — начните со знакомого',
+              action: TextButton(
+                onPressed: () => ref
+                    .read(audioHandlerProvider)
+                    .playTrack(limited.first, contextQueue: limited),
+                child: const Text('Слушать'),
+              ),
+            ),
+            SizedBox(
+              height: 186,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: limited.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, i) {
+                  final track = limited[i];
+                  return SizedBox(
+                    width: 132,
+                    child: InkWell(
+                      onTap: () => ref
+                          .read(audioHandlerProvider)
+                          .playTrack(track, contextQueue: limited),
+                      onLongPress: () async {
+                        await ref.read(libraryProvider).saveTrack(track);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Трек добавлен в медиатеку'),
+                          ),
+                        );
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CoverArt(
+                            url: track.thumbnailUrl,
+                            path: track.artworkPath,
+                            size: 132,
+                            radius: 8,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            track.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            track.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Text(
+                'Удерживайте трек, чтобы сохранить его в медиатеку',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary.withValues(alpha: 0.8),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

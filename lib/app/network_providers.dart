@@ -9,6 +9,7 @@ import '../core/network/piped/youtube_music_client.dart';
 import '../core/network/proxy.dart';
 import '../core/network/spotify/spotify_client.dart';
 import '../core/storage/settings.dart';
+import '../data/models/track.dart';
 import '../data/repositories/music_repository.dart';
 
 final dioProvider = Provider((ref) => createDio());
@@ -63,3 +64,9 @@ final musicRepositoryProvider = Provider<MusicRepository>(
     lyrics: ref.watch(lyricsClientProvider),
   ),
 );
+
+/// Тренды для пустой медиатеки. Кэшируются до перезапуска приложения.
+final trendingProvider = FutureProvider<List<Track>>((ref) async {
+  final tracks = await ref.watch(youtubeClientProvider).trending();
+  return tracks;
+});
