@@ -21,6 +21,20 @@ List<Track> buildArtistMix(
   return <Track>[...own, ...rest].take(limit).toList();
 }
 
+/// Все треки, где исполнитель указан в списке артистов трека.
+/// Сравнение без учёта регистра и лишних пробелов.
+List<Track> tracksByArtist(List<Track> tracks, String name) {
+  final needle = name.trim().toLowerCase();
+  if (needle.isEmpty) return const [];
+  return tracks.where((track) {
+    final artists = track.artist
+        .split(RegExp(r'[,&]'))
+        .map((a) => a.trim().toLowerCase())
+        .where((a) => a.isNotEmpty);
+    return artists.contains(needle);
+  }).toList();
+}
+
 /// Подборка дня: стабильна в течение суток, недавно слушанное — в конце.
 List<Track> buildDailyPick(
   List<Track> tracks,

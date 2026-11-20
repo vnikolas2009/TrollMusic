@@ -10,6 +10,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/track.dart';
 import '../../services/audio/audio_handler.dart';
+import '../../shared/widgets/cover_art.dart';
+import '../artist/artist_screen.dart';
 import '../lyrics/lyrics_screen.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
@@ -164,13 +166,24 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                         ),
                                       ),
                                       const SizedBox(height: 4),
-                                      Text(
-                                        track.artist,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          color: AppColors.textSecondary,
+                                      GestureDetector(
+                                        onTap: () => Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                ArtistScreen(name: track.artist),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          track.artist,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: AppColors.textSecondary,
+                                            decoration: TextDecoration.underline,
+                                            decorationColor:
+                                                AppColors.textSecondary,
+                                          ),
                                         ),
                                       ),
                                     ],

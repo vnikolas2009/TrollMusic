@@ -57,8 +57,7 @@ void main() {
     });
   });
 
-  group('buildDailyPick', () {
-    test('is stable for the same date', () {
+  group('buildDailyPick', () {    test('is stable for the same date', () {
       final tracks = List.generate(20, (i) => _track('$i', 'A'));
       final date = DateTime(2026, 5, 4);
 
@@ -89,6 +88,29 @@ void main() {
 
     test('empty library returns empty', () {
       expect(buildDailyPick(const [], const []), isEmpty);
+    });
+  });
+
+  group('tracksByArtist', () {
+    test('matches exact artist case-insensitively', () {
+      final tracks = [
+        _track('1', 'M83'),
+        _track('2', 'M83, Susanne Sundfør'),
+        _track('3', 'Kavinsky'),
+      ];
+
+      final own = tracksByArtist(tracks, 'm83');
+      expect(own.map((t) => t.id), ['1', '2']);
+    });
+
+    test('does not match partial names', () {
+      final tracks = [_track('1', 'M83')];
+      expect(tracksByArtist(tracks, 'M8'), isEmpty);
+    });
+
+    test('empty name returns empty', () {
+      final tracks = [_track('1', 'M83')];
+      expect(tracksByArtist(tracks, '  '), isEmpty);
     });
   });
 }
