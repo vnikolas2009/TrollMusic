@@ -176,6 +176,88 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
     }
   }
 
+  Future<void> _reorderTracks() async {
+    final order = [..._tracks];
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.75,
+          child: StatefulBuilder(
+            builder: (sheetContext, setSheetState) => Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Порядок треков',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(sheetContext, true),
+                        child: const Text('Готово'),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ReorderableListView.builder(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    itemCount: order.length,
+                    onReorder: (oldIndex, newIndex) {
+                      final target = newIndex > oldIndex
+                          ? newIndex - 1
+                          : newIndex;
+                      setSheetState(() {
+                        final moved = order.removeAt(oldIndex);
+                        order.insert(target.clamp(0, order.length), moved);
+                      });
+                    },
+                    itemBuilder: (context, i) {
+                      final track = order[i];
+                      return ListTile(
+                        key: ValueKey(track.id),
+                        leading: const Icon(
+                          Icons.drag_handle,
+                          size: 18,
+                          color: AppColors.textSecondary,
+                        ),
+                        title: Text(
+                          track.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        subtitle: Text(
+                          track.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (saved != true) return;
+    setState(() => _tracks = order);
+    await _persist();
+  }
+
   Future<void> _rename() async {
     final controller = TextEditingController(text: _title);
     final result = await showDialog<String>(
@@ -295,11 +377,14 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
                 icon: const Icon(Icons.more_vert),
                 onSelected: (value) {
                   if (value == 'add') _addTracks();
+                  if (value == 'reorder') _reorderTracks();
                   if (value == 'rename') _rename();
                   if (value == 'delete') _deletePlaylist();
                 },
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'add', child: Text('Добавить треки')),
+                  if (_saved && _tracks.length > 1)
+                    const PopupMenuItem(value: 'reorder', child: Text('Изменить порядок')),
                   if (_saved)
                     const PopupMenuItem(value: 'rename', child: Text('Переименовать')),
                   if (_saved)
@@ -574,6 +659,15 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _removeTrack(track);
+                },
+              ),
+            if (_saved && _tracks.length > 1)
+              ListTile(
+                leading: const Icon(Icons.reorder_rounded),
+                title: const Text('Изменить порядок'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _reorderTracks();
                 },
               ),
           ],
