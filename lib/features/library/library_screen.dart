@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -76,10 +78,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
             controller: _tabs,
             children: [
               _PlaylistsTab(playlists: playlists),
-              _TracksTab(
-                tracks: downloaded,
-                emptyText: 'Нет скачанных треков.\nСкачивайте из плейлиста или плеера.',
-              ),
+              _DownloadedTab(tracks: downloaded),
               _TracksTab(
                 tracks: local,
                 emptyText: 'Нет локальных треков.\nИмпортируйте во вкладке «Создать».',
@@ -152,6 +151,189 @@ class _PlaylistsTab extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _DownloadedTab extends ConsumerStatefulWidget {
+  const _DownloadedTab({required this.tracks});
+
+  final List<Track> tracks;
+
+  @override
+  ConsumerState<_DownloadedTab> createState() => _DownloadedTabState();
+}
+
+class _DownloadedTabState extends ConsumerState<_DownloadedTab> {
+  bool _sortBySize = false;
+
+  Future<void> _deleteAll() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final downloads = ref.read(downloadProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surfaceAlt,
+        title: const Text('Удалить все загрузки?'),
+        content: const Text('Аудиофайлы, обложки и тексты будут удалены с устройства.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await downloads.deleteMany(widget.tracks.map((t) => t.id));
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Загрузки удалены')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tracks = [...widget.tracks];
+    if (_sortBySize) {
+      tracks.sort((a, b) => _sizeOf(b).compareTo(_sizeOf(a)));
+    } else {
+      tracks.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    }
+
+    if (tracks.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Нет скачанных треков.\nСкачивайте из плейлиста или плеера.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary, height: 1.6),
+          ),
+        ),
+      );
+    }
+
+    final totalBytes = tracks.fold<int>(0, (sum, t) => sum + _sizeOf(t));
+    final totalDuration = tracks.fold<Duration>(
+      Duration.zero,
+      (sum, t) => sum + t.duration,
+    );
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${tracks.length} треков · ${formatBytes(totalBytes)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    Text(
+                      formatLongDuration(totalDuration),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<bool>(
+                icon: const Icon(Icons.more_horiz),
+                color: AppColors.surfaceAlt,
+                initialValue: _sortBySize,
+                onSelected: (value) => setState(() => _sortBySize = value),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: false, child: Text('По названию')),
+                  PopupMenuItem(value: true, child: Text('По размеру')),
+                ],
+              ),
+              IconButton(
+                tooltip: 'Слушать всё',
+                onPressed: () => ref
+                    .read(audioHandlerProvider)
+                    .playTrack(tracks.first, contextQueue: tracks),
+                icon: const Icon(Icons.play_arrow_rounded),
+              ),
+              IconButton(
+                tooltip: 'Удалить все',
+                onPressed: _deleteAll,
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(bottom: 8),
+            itemCount: tracks.length,
+            itemBuilder: (context, i) {
+              final track = tracks[i];
+              return TrackTile(
+                title: track.title,
+                artist: track.artist,
+                coverUrl: track.thumbnailUrl,
+                coverPath: track.artworkPath,
+                explicit: track.explicit,
+                downloaded: true,
+                trailing: Text(
+                  formatBytes(_sizeOf(track)),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                onTap: () => ref
+                    .read(audioHandlerProvider)
+                    .playTrack(track, contextQueue: tracks),
+                onMenu: () => _menu(context, track),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _menu(BuildContext context, Track track) {
+    final downloads = ref.read(downloadProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surfaceAlt,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Удалить скачивание'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                await downloads.deleteDownload(track.id);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  int _sizeOf(Track track) {
+    final path = track.localPath;
+    if (path == null || path.isEmpty) return 0;
+    final file = File(path);
+    return file.existsSync() ? file.lengthSync() : 0;
   }
 }
 
