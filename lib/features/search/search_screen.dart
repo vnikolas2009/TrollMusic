@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/network_providers.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../data/models/playlist.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/track_tile.dart';
 import '../playlist/playlist_screen.dart';
@@ -131,10 +132,28 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         else ...[
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Text(
-                'Найдено: ${_results.length}',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Найдено: ${_results.length}',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => ref
+                        .read(audioHandlerProvider)
+                        .playTrack(_results.first, contextQueue: _results),
+                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                    label: const Text('Слушать все'),
+                  ),
+                  IconButton(
+                    tooltip: 'Сохранить в медиатеку',
+                    onPressed: _saveResults,
+                    icon: const Icon(Icons.playlist_add_rounded),
+                  ),
+                ],
               ),
             ),
           ),
@@ -153,10 +172,31 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 onMenu: () => _open(track),
               );
             },
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ),          const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ],
+    );
+  }
+
+  void _saveResults() async {
+    if (_results.isEmpty) return;
+    final library = ref.read(libraryProvider);
+    final query = _controller.text.trim();
+    final title = query.isEmpty ? 'Поиск' : query;
+    final now = DateTime.now();
+    await library.savePlaylist(
+      Playlist(
+        id: 'search:${now.millisecondsSinceEpoch}',
+        title: title,
+        description: 'Результаты поиска',
+        imageUrl: _results.first.thumbnailUrl,
+        tracks: _results,
+      ),
+    );
+    await library.saveTracks(_results);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Сохранено: ${_results.length} треков')),
     );
   }
 

@@ -241,6 +241,48 @@ class YsAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await _player.moveAudioSource(oldIndex, newIndex);
   }
 
+  Future<void> removeFromQueue(int index) async {
+    final items = [...queue.value];
+    if (index < 0 || index >= items.length) return;
+
+    final currentIndex = _player.currentIndex ?? 0;
+    final wasPlaying = _player.playing;
+    final anchorId =
+        currentIndex >= 0 && currentIndex < items.length ? items[currentIndex].id : null;
+
+    items.removeAt(index);
+    if (items.isEmpty) {
+      queue.add(const <MediaItem>[]);
+      mediaItem.add(null);
+      await _player.stop();
+      return;
+    }
+
+    final tracks =
+        items.map((item) => _library.trackById(item.id)).whereType<Track>().toList();
+    final playable = await _prepare(tracks);
+    if (playable.isEmpty) {
+      queue.add(items);
+      return;
+    }
+
+    var target = playable.indexWhere((t) => t.id == anchorId);
+    if (target < 0) target = index.clamp(0, playable.length - 1);
+
+    queue.add(playable.map(_toMediaItem).toList());
+    await _load(playable, target, autoPlay: wasPlaying);
+  }
+
+  Future<void> clearQueue() async {
+    queue.add(const <MediaItem>[]);
+    mediaItem.add(null);
+    await _player.stop();
+    playbackState.add(playbackState.value.copyWith(
+      processingState: AudioProcessingState.idle,
+      playing: false,
+    ));
+  }
+
   @override
   Future<void> play() async {
     if (_player.volume < 1) await _player.setVolume(1);

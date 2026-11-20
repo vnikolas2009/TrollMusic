@@ -152,11 +152,22 @@ class QueueSheet extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Очередь',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Очередь',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
+                    const Spacer(),
+                    if (items.isNotEmpty)
+                      TextButton(
+                        onPressed: () =>
+                            ref.read(audioHandlerProvider).clearQueue(),
+                        child: const Text('Очистить'),
+                      ),
+                  ],
                 ),
               ),
               Flexible(
@@ -176,9 +187,20 @@ class QueueSheet extends ConsumerWidget {
                       key: ValueKey(item.id),
                       title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: Text(item.artist ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
-                      trailing: Text(
-                        formatDuration(duration),
-                        style: const TextStyle(color: AppColors.textSecondary),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            formatDuration(duration),
+                            style: const TextStyle(color: AppColors.textSecondary),
+                          ),
+                          IconButton(
+                            iconSize: 18,
+                            icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                            onPressed: () =>
+                                ref.read(audioHandlerProvider).removeFromQueue(index),
+                          ),
+                        ],
                       ),
                       onTap: () => ref.read(audioHandlerProvider).playAt(index),
                     );

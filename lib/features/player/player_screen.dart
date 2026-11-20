@@ -571,46 +571,100 @@ class QueueView extends ConsumerWidget {
           );
         }
         final current = audio.player.currentIndex ?? 0;
-        return ReorderableListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: items.length,
-          onReorder: (oldIndex, newIndex) {
-            final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
-            audio.reorder(oldIndex, target);
-          },
-          itemBuilder: (context, i) {
-            final item = items[i];
-            final active = i == current;
-            return ListTile(
-              key: ValueKey('${item.id}-$i'),
-              leading: Icon(
-                active ? Icons.graphic_eq_rounded : Icons.drag_handle,
-                color: active ? AppColors.accent : AppColors.textSecondary,
-                size: 18,
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+              child: Row(
+                children: [
+                  Text(
+                    'Далее · ${items.length}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          backgroundColor: AppColors.surfaceAlt,
+                          title: const Text('Очистить очередь?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext, false),
+                              child: const Text('Отмена'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext, true),
+                              child: const Text('Очистить'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) await audio.clearQueue();
+                    },
+                    child: const Text('Очистить'),
+                  ),
+                ],
               ),
-              title: Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-                  color: active ? AppColors.accent : AppColors.textPrimary,
-                ),
+            ),
+            Expanded(
+              child: ReorderableListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: items.length,
+                onReorder: (oldIndex, newIndex) {
+                  final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
+                  audio.reorder(oldIndex, target);
+                },
+                itemBuilder: (context, i) {
+                  final item = items[i];
+                  final active = i == current;
+                  return ListTile(
+                    key: ValueKey('${item.id}-$i'),
+                    leading: Icon(
+                      active ? Icons.graphic_eq_rounded : Icons.drag_handle,
+                      color: active ? AppColors.accent : AppColors.textSecondary,
+                      size: 18,
+                    ),
+                    title: Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+                        color: active ? AppColors.accent : AppColors.textPrimary,
+                      ),
+                    ),
+                    subtitle: Text(
+                      item.artist ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          formatDuration(item.duration ?? Duration.zero),
+                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        ),
+                        IconButton(
+                          iconSize: 18,
+                          icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                          onPressed: () => audio.removeFromQueue(i),
+                        ),
+                      ],
+                    ),
+                    onTap: () => audio.playAt(i),
+                  );
+                },
               ),
-              subtitle: Text(
-                item.artist ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-              ),
-              trailing: Text(
-                formatDuration(item.duration ?? Duration.zero),
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-              ),
-              onTap: () => audio.playAt(i),
-            );
-          },
+            ),
+          ],
         );
       },
     );
