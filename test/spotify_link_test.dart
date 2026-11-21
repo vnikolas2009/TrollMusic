@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ysplayer/core/utils/proxy_address.dart';
-import 'package:ysplayer/core/utils/spotify_link.dart';
+import 'package:trollmusic/core/utils/proxy_address.dart';
+import 'package:trollmusic/core/utils/spotify_link.dart';
 
 void main() {
   const id = '37i9dQZF1DXcBWIGoYBM5M';

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -91,14 +90,13 @@ bool _applyManualProxy(HttpClient client, String raw) {
     }
 
     if (user != null && user.isNotEmpty) {
-      final credentials = base64Encode(
-        utf8.encode('$user:${pass ?? ''}'),
-      );
+      // С Dart 3.9 (Flutter 3.47+) addProxyCredentials принимает объект
+      // HttpClientCredentials, а не готовую строку заголовка.
       client.addProxyCredentials(
         uri.host,
         port,
         'Basic',
-        'Basic $credentials',
+        HttpClientBasicCredentials(user, pass ?? ''),
       );
     }
     client.findProxy = (_) => 'PROXY ${uri.host}:$port';
