@@ -90,7 +90,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         children: [
           Text(
             'Треков: ${tracks.length} · Плейлистов: ${playlists.length}',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 20),
           FilledButton.icon(
@@ -108,7 +108,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.surfaceHigh),
+              side: BorderSide(color: AppColors.surfaceHigh),
               minimumSize: const Size.fromHeight(46),
               shape: const StadiumBorder(),
             ),
@@ -120,7 +120,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.surfaceHigh),
+              side: BorderSide(color: AppColors.surfaceHigh),
               minimumSize: const Size.fromHeight(46),
               shape: const StadiumBorder(),
             ),
@@ -129,7 +129,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
             label: const Text('Скопировать JSON в буфер'),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'Копия содержит треки, плейлисты и тексты песен. '
             'Аудиофайлы и обложки нужно переносить отдельно.',
             style: TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.6),

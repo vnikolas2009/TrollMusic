@@ -63,7 +63,7 @@ class _SplashGateState extends State<SplashGate>
                       color: AppColors.accent.withValues(alpha: 0.24),
                     ),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.graphic_eq_rounded,
                     color: AppColors.accent,
                     size: 34,

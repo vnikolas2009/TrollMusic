@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
 import '../storage/settings.dart';
+import '../utils/async_utils.dart';
+import 'instance_directory.dart';
 import 'proxy.dart';
 
 enum MirrorKind { piped, invidious }
@@ -18,10 +20,17 @@ class MirrorManager {
   final Map<MirrorKind, String?> _sticky = {};
   final Map<String, DateTime> _failed = {};
 
-  List<String> instancesOf(MirrorKind kind) => kind == MirrorKind.piped
-      ? _settings.pipedInstances
-      : _settings.invidiousInstances;
+  /// Список зеркал: свежие из встроенного каталога + запасные из AppConfig.
+  /// Пользовательские списки больше не используются — всё работает без настройки.
+  List<String> instancesOf(MirrorKind kind) =>
+      InstanceDirectory.instance.list(kind);
 
+  static const _waveSize = 3;
+  static const _maxWaves = 3;
+
+  /// Запрашивает зеркала «волнами» по три параллельно: побеждает первое,
+  /// остальные запросы отменяются. Раньше зеркала перебирались по одному
+  /// (до 4 с на каждое), и разрешение трека могло занимать больше минуты.
   Future<Response<dynamic>> get(
     MirrorKind kind,
     String path, {
@@ -36,41 +45,80 @@ class MirrorManager {
       );
     }
 
-    final ordered = _order(kind, instances);
-    Object? lastError;
+    var ordered = _order(kind, instances).where((o) => !_isCoolingDown(o)).toList();
+    if (ordered.isEmpty) {
+      _failed.clear();
+      ordered = _order(kind, instances);
+    }
 
-    // Сначала обычный путь, затем (если указан Worker) — запасной через Worker.
-    final passes = <bool>[false, if (_proxy.hasWorker && !_proxy.enabled) true];
-    for (final viaWorker in passes) {
-      for (final origin in viaWorker ? ordered.take(2) : ordered) {
-        if (!viaWorker && _isCoolingDown(origin)) continue;
-        try {
-          final uri = kind == MirrorKind.piped
-              ? _proxy.piped(origin, path, query, viaWorker)
-              : _proxy.invidious(origin, path, query, viaWorker);
-          final response = await _dio
-              .getUri<dynamic>(uri)
-              .timeout(timeout, onTimeout: () => throw DioException(
-                    requestOptions: RequestOptions(path: uri.toString()),
-                    type: DioExceptionType.connectionTimeout,
-                  ));
-          if (response.statusCode == 200 && response.data != null) {
-            _sticky[kind] = origin;
-            _failed.remove(origin);
-            return response;
-          }
-          lastError = 'HTTP ${response.statusCode}';
-        } catch (error) {
-          lastError = error;
-          if (!viaWorker) _failed[origin] = DateTime.now();
-        }
-      }
+    _lastError = null;
+    for (var wave = 0; wave < _maxWaves; wave++) {
+      final batch = ordered.skip(wave * _waveSize).take(_waveSize).toList();
+      if (batch.isEmpty) break;
+      final cancel = CancelToken();
+      final response = await firstNonEmpty<Response<dynamic>>([
+        for (final origin in batch)
+          () => _attempt(kind, origin, path, query, timeout, cancel, false),
+      ]);
+      cancel.cancel('wave finished');
+      if (response != null) return response;
+    }
+
+    // Запасной путь через пользовательский Worker, если он когда-то был задан.
+    if (_proxy.hasWorker && !_proxy.enabled) {
+      final cancel = CancelToken();
+      final response = await firstNonEmpty<Response<dynamic>>([
+        for (final origin in ordered.take(2))
+          () => _attempt(kind, origin, path, query, timeout, cancel, true),
+      ]);
+      cancel.cancel('worker pass finished');
+      if (response != null) return response;
     }
 
     throw DioException(
       requestOptions: RequestOptions(path: path),
-      message: 'Все зеркала ${kind.name} недоступны: $lastError',
+      message: 'Все зеркала ${kind.name} недоступны: $_lastError',
     );
+  }
+
+  Object? _lastError;
+
+  Future<Response<dynamic>?> _attempt(
+    MirrorKind kind,
+    String origin,
+    String path,
+    Map<String, dynamic>? query,
+    Duration timeout,
+    CancelToken cancel,
+    bool viaWorker,
+  ) async {
+    try {
+      final uri = kind == MirrorKind.piped
+          ? _proxy.piped(origin, path, query, viaWorker)
+          : _proxy.invidious(origin, path, query, viaWorker);
+      final response = await _dio
+          .getUri<dynamic>(uri, cancelToken: cancel)
+          .timeout(
+            timeout,
+            onTimeout: () => throw DioException(
+              requestOptions: RequestOptions(path: uri.toString()),
+              type: DioExceptionType.connectionTimeout,
+            ),
+          );
+      if (response.statusCode == 200 && response.data != null) {
+        _sticky[kind] = origin;
+        _failed.remove(origin);
+        return response;
+      }
+      _lastError = 'HTTP ${response.statusCode}';
+      if (!viaWorker) _failed[origin] = DateTime.now();
+      return null;
+    } catch (error) {
+      if (error is DioException && CancelToken.isCancel(error)) return null;
+      _lastError = error;
+      if (!viaWorker) _failed[origin] = DateTime.now();
+      return null;
+    }
   }
 
   List<String> _order(MirrorKind kind, List<String> instances) {

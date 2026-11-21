@@ -129,7 +129,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                       ),
                       child: Text(
                         '${local.length}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: AppColors.textSecondary,
@@ -257,7 +257,7 @@ class _ActionCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.glassBorder),
+          border: Border.all(color: AppColors.outline),
         ),
         child: Row(
           children: [
@@ -285,7 +285,7 @@ class _ActionCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
                       color: AppColors.textSecondary,
                       height: 1.3,
@@ -301,7 +301,7 @@ class _ActionCard extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             else
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
                 color: AppColors.textTertiary,
                 size: 20,

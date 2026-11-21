@@ -35,7 +35,7 @@ class _RecentQueries extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (queries.isEmpty) {
-      return const SliverFillRemaining(
+      return SliverFillRemaining(
         hasScrollBody: false,
         child: Padding(
           padding: EdgeInsets.fromLTRB(32, 40, 32, 32),
@@ -93,7 +93,7 @@ class _RecentQueries extends StatelessWidget {
                     index: i,
                     offsetY: 0.06,
                     child: ActionChip(
-                      avatar: const Icon(
+                      avatar: Icon(
                         Icons.north_west_rounded,
                         size: 14,
                         color: AppColors.textTertiary,
@@ -228,9 +228,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       : Colors.transparent,
                 ),
                 boxShadow: _focused
-                    ? const [
+                    ? [
                         BoxShadow(
-                          color: AppColors.accentGlow,
+                          color: AppColors.accentTint,
                           blurRadius: 22,
                           offset: Offset(0, 4),
                         ),
@@ -243,7 +243,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 onChanged: _onChanged,
                 onSubmitted: _search,
                 textInputAction: TextInputAction.search,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 14,
                 ),
@@ -302,7 +302,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               child: Text(
                 _error!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: AppColors.textSecondary),
               ),
             ),
           )
@@ -327,7 +327,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   Expanded(
                     child: Text(
                       'Найдено: ${_results.length}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textTertiary,
                       ),

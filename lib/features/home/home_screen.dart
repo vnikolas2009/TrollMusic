@@ -14,6 +14,7 @@ import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/station_card.dart';
 import '../playlist/playlist_screen.dart';
 import '../settings/settings_screen.dart';
+import 'music_sections.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -56,11 +57,11 @@ class HomeScreen extends ConsumerWidget {
             children: [
               if (daily.isNotEmpty)
                 Entrance(index: 0, child: _DailyPick(tracks: daily)),
-              if (tracks.isEmpty)
-                Entrance(index: 1, child: const _TrendingSection()),
-              Entrance(index: 2, child: _Stations(tracks: tracks)),
+              Entrance(index: 1, child: const _TrendingSection()),
               if (tracks.isNotEmpty)
-                Entrance(index: 3, child: _Recent(tracks: tracks)),
+                Entrance(index: 2, child: _Recent(tracks: tracks)),
+              Entrance(index: 3, child: const MoodSection()),
+              Entrance(index: 3, child: _Stations(tracks: tracks)),
               Entrance(index: 4, child: _Discoveries(tracks: tracks)),
               const SizedBox(height: 32),
             ],
@@ -86,7 +87,7 @@ class _BrandMark extends StatelessWidget {
         borderRadius: BorderRadius.circular(9),
         border: Border.all(color: AppColors.accent.withValues(alpha: 0.22)),
       ),
-      child: const Icon(
+      child: Icon(
         Icons.graphic_eq_rounded,
         color: AppColors.accent,
         size: 18,
@@ -107,7 +108,7 @@ class _TrendingSection extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
         child: Row(
           children: [
-            const SizedBox(
+            SizedBox(
               width: 14,
               height: 14,
               child: CircularProgressIndicator(
@@ -117,7 +118,7 @@ class _TrendingSection extends ConsumerWidget {
             ),
             const SizedBox(width: 10),
             Text(
-              'Загружаем тренды...',
+              'Загружаем музыку...',
               style: TextStyle(
                 fontSize: 12,
                 color: AppColors.textSecondary.withValues(alpha: 0.9),
@@ -134,8 +135,8 @@ class _TrendingSection extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SectionHeader(
-              title: 'Тренды недели',
-              subtitle: 'Медиатека пуста — начните со знакомого',
+              title: 'Популярная музыка',
+              subtitle: 'Сейчас слушают',
               action: TextButton(
                 onPressed: () => ref
                     .read(audioHandlerProvider)
@@ -262,7 +263,7 @@ class _TrackCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: AppColors.glassBorder,
+                          color: AppColors.outline,
                         ),
                       ),
                     ),
@@ -286,7 +287,7 @@ class _TrackCard extends StatelessWidget {
               subtitleOverride ?? track.artist,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 color: AppColors.textSecondary,
               ),
@@ -394,7 +395,7 @@ class _DailyPick extends StatelessWidget {
                                   artists,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     color: AppColors.textSecondary,
                                     fontSize: 12,
                                   ),
@@ -403,7 +404,7 @@ class _DailyPick extends StatelessWidget {
                               Container(
                                 width: 40,
                                 height: 40,
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   color: AppColors.textPrimary,
                                   shape: BoxShape.circle,
                                 ),
@@ -460,7 +461,7 @@ class _LiveDotState extends State<_LiveDot>
       child: Container(
         width: 7,
         height: 7,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.accent,
           shape: BoxShape.circle,
         ),
@@ -662,7 +663,7 @@ class _Discoveries extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (tracks.isEmpty) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.fromLTRB(24, 44, 24, 0),
         child: Text(
           'Медиатека пуста.\nИмпортируйте аудио во вкладке «Создать»\nили найдите музыку в «Поиске».',
@@ -719,7 +720,7 @@ class _Discoveries extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
           child: Text(
             _summary(tracks),
-            style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
+            style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
           ),
         ),
       ],

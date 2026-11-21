@@ -153,7 +153,7 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
   @override
   Widget build(BuildContext context) {
     if (widget.tracks.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
@@ -183,7 +183,7 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
               hintText: 'Поиск по медиатеке',
-              hintStyle: const TextStyle(
+              hintStyle: TextStyle(
                 fontSize: 13,
                 color: AppColors.textTertiary,
               ),
@@ -215,7 +215,7 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
                   tracks.isEmpty
                       ? 'Ничего не найдено'
                       : '${tracks.length} треков · ${formatLongDuration(totalDuration)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textTertiary,
                   ),
@@ -383,7 +383,7 @@ class _PlaylistsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (playlists.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
@@ -443,7 +443,7 @@ class _PlaylistsTab extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           '${playlist.tracks.length} треков · ${formatLongDuration(playlist.totalDuration)}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             color: AppColors.textSecondary,
                           ),
@@ -451,7 +451,7 @@ class _PlaylistsTab extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Icon(
+                  Icon(
                     Icons.chevron_right_rounded,
                     color: AppColors.textTertiary,
                     size: 20,
@@ -516,7 +516,7 @@ class _DownloadedTabState extends ConsumerState<_DownloadedTab> {
     }
 
     if (tracks.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
@@ -546,14 +546,14 @@ class _DownloadedTabState extends ConsumerState<_DownloadedTab> {
                   children: [
                     Text(
                       '${tracks.length} треков · ${formatBytes(totalBytes)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
                       ),
                     ),
                     Text(
                       formatLongDuration(totalDuration),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
                       ),
@@ -603,7 +603,7 @@ class _DownloadedTabState extends ConsumerState<_DownloadedTab> {
                 index: i,
                 trailing: Text(
                   formatBytes(_sizeOf(track)),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     color: AppColors.textSecondary,
                   ),
@@ -666,7 +666,7 @@ class _TracksTab extends ConsumerWidget {
           child: Text(
             emptyText,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textSecondary, height: 1.6),
+            style: TextStyle(color: AppColors.textSecondary, height: 1.6),
           ),
         ),
       );
