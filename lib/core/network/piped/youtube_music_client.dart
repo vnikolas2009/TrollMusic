@@ -1,6 +1,8 @@
 import '../../../data/models/track.dart';
 import '../../storage/settings.dart';
 import '../../utils/track_match.dart';
+import '../proxy.dart';
+import '../worker_health.dart';
 import '../youtube/innertube_client.dart';
 import 'invidious_client.dart';
 import 'piped_client.dart';
@@ -10,14 +12,20 @@ class YouTubeMusicClient {
     required PipedClient piped,
     required InvidiousClient invidious,
     required Settings settings,
+    ProxyConfig? proxy,
+    WorkerHealth? health,
   })  : _piped = piped,
         _invidious = invidious,
         _settings = settings,
+        _proxy = proxy,
+        _health = health,
         _innerTube = InnerTubeClient(settings: settings);
 
   final PipedClient _piped;
   final InvidiousClient _invidious;
   final Settings _settings;
+  final ProxyConfig? _proxy;
+  final WorkerHealth? _health;
   final InnerTubeClient _innerTube;
 
   Future<List<Track>> search(String query) async {
@@ -87,7 +95,7 @@ class YouTubeMusicClient {
       }
       final best = pickBestMatch(track, candidates);
       final ordered = <Track>[
-        if (best != null) best,
+        ?best,
         ...candidates.where((c) => c.id != best?.id).take(4),
       ];
       for (final candidate in ordered) {
@@ -102,19 +110,27 @@ class YouTubeMusicClient {
   }
 
   Future<List<String>> _urlsForId(String videoId) async {
+    final urls = <String>[];
     try {
-      final urls = await _piped.resolveStreamUrls(videoId);
-      if (urls.isNotEmpty) return urls;
+      urls.addAll(await _piped.resolveStreamUrls(videoId));
     } catch (_) {}
-    try {
-      final urls = await _invidious.audioUrls(videoId);
-      if (urls.isNotEmpty) return urls;
-    } catch (_) {}
-    try {
-      return await _innerTube.audioUrls(videoId);
-    } catch (_) {
-      return const [];
+    if (urls.isEmpty) {
+      try {
+        urls.addAll(await _invidious.audioUrls(videoId));
+      } catch (_) {}
     }
+    if (urls.isEmpty) {
+      try {
+        urls.addAll(await _innerTube.audioUrls(videoId));
+      } catch (_) {}
+    }
+    // Последний рубеж: Worker сам резолвит трек и отдаёт байты. Помогает,
+    // когда прямые ссылки googlevideo недоступны/троттлятся у провайдера.
+    final proxy = _proxy;
+    if (proxy != null && proxy.hasWorker && (_health?.usable ?? true)) {
+      urls.add(proxy.stream(videoId).toString());
+    }
+    return _dedupe(urls);
   }
 
   Future<String?> streamUrl(String videoId) async {

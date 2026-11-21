@@ -6,6 +6,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../core/network/worker_health.dart';
 import '../../core/storage/settings.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../data/models/lyrics.dart';
@@ -21,12 +22,14 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     required LibraryRepository library,
     Settings? settings,
     this.resolveStreams,
+    this.workerHealth,
   })  : _library = library,
         _settings = settings;
 
   final LibraryRepository _library;
   final Settings? _settings;
   final TrollStreamResolver? resolveStreams;
+  final WorkerHealth? workerHealth;
 
   final AudioPlayer _player = AudioPlayer();
 
@@ -341,6 +344,10 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
         initialPosition: Duration.zero,
       );
       await _player.setVolume(1);
+      final url = _playable[target].streamUrl;
+      if (url != null && (workerHealth?.owns(url) ?? false)) {
+        workerHealth!.reportSuccess();
+      }
       if (autoPlay) {
         unawaited(play());
       }
@@ -547,6 +554,10 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
       }
 
       if (index != null) {
+        final currentUrl = track.streamUrl;
+        if (currentUrl != null && (workerHealth?.owns(currentUrl) ?? false)) {
+          workerHealth!.reportFailure('stream');
+        }
         final recovered = await _tryAlternatives(index);
         if (recovered) return;
       }
@@ -608,8 +619,10 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
         );
         await _player.setVolume(1);
         await play();
+        if (workerHealth?.owns(url) ?? false) workerHealth!.reportSuccess();
         return true;
       } catch (_) {
+        if (workerHealth?.owns(url) ?? false) workerHealth!.reportFailure();
         continue;
       }
     }

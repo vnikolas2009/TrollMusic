@@ -3,18 +3,24 @@ import 'package:dio/dio.dart';
 import '../config/app_config.dart';
 import '../storage/settings.dart';
 import 'proxy.dart';
+import 'worker_health.dart';
 
 enum MirrorKind { piped, invidious }
 
 class MirrorManager {
-  MirrorManager({required Settings settings, required Dio dio})
-      : _settings = settings,
+  MirrorManager({
+    required Settings settings,
+    required Dio dio,
+    WorkerHealth? health,
+  })  : _settings = settings,
         _dio = dio,
-        _proxy = ProxyConfig(settings);
+        _proxy = ProxyConfig(settings),
+        _health = health;
 
   final Settings _settings;
   final Dio _dio;
   final ProxyConfig _proxy;
+  final WorkerHealth? _health;
   final Map<MirrorKind, String?> _sticky = {};
   final Map<String, DateTime> _failed = {};
 
@@ -40,7 +46,11 @@ class MirrorManager {
     Object? lastError;
 
     // Сначала обычный путь, затем (если указан Worker) — запасной через Worker.
-    final passes = <bool>[false, if (_proxy.hasWorker && !_proxy.enabled) true];
+    final workerOk = _health?.usable ?? true;
+    final passes = <bool>[
+      false,
+      if (_proxy.hasWorker && !_proxy.enabled && workerOk) true,
+    ];
     for (final viaWorker in passes) {
       for (final origin in viaWorker ? ordered.take(2) : ordered) {
         if (!viaWorker && _isCoolingDown(origin)) continue;
@@ -62,7 +72,11 @@ class MirrorManager {
           lastError = 'HTTP ${response.statusCode}';
         } catch (error) {
           lastError = error;
-          if (!viaWorker) _failed[origin] = DateTime.now();
+          if (viaWorker) {
+            _health?.reportFailure('mirror ${kind.name}');
+          } else {
+            _failed[origin] = DateTime.now();
+          }
         }
       }
     }

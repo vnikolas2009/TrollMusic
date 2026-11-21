@@ -42,9 +42,32 @@ class ProxyConfig {
           [Map<String, dynamic>? query, bool viaWorker = false]) =>
       _mirror('invidious', origin, path, query, viaWorker);
 
-  Uri passthrough(String url) => Uri.parse('$workerUrl/proxy').replace(
-        queryParameters: {'url': url},
+  Uri passthrough(String url) {
+    if (!hasWorker) return Uri.parse(url);
+    return Uri.parse('$workerUrl/proxy').replace(
+      queryParameters: {'url': url},
+    );
+  }
+
+  /// Worker сам резолвит трек через Piped/Invidious и отдаёт байты аудио.
+  ///
+  /// Нужен, когда googlevideo троттлится у провайдера: соединение идёт только
+  /// до Cloudflare, а CDN запрашивает Worker.
+  Uri stream(String videoId) => Uri.parse('$workerUrl/stream').replace(
+        queryParameters: {'v': videoId},
       );
+
+  /// Кандидаты для аудиопотока.
+  ///
+  /// При наличии Worker всегда добавляется проксированный вариант: если
+  /// прямой URL отдаст 403 или затроттлится, плеер сам переключится на него
+  /// (см. `TrollAudioHandler._tryAlternatives`).
+  List<String> audioVariants(String url, {bool preferWorker = false}) {
+    if (!hasWorker || url.isEmpty) return [url];
+    final proxied = passthrough(url).toString();
+    if (proxied == url) return [url];
+    return preferWorker ? [proxied, url] : [url, proxied];
+  }
 
   /// Заголовки для запросов к публичному веб-плееру Spotify.
   Map<String, String> get webHeaders => {

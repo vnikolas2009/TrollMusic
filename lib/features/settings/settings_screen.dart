@@ -6,6 +6,7 @@ import '../../app/network_providers.dart';
 import '../../app/providers.dart';
 import '../../core/config/app_config.dart';
 import '../../core/network/mirror_manager.dart';
+import '../../core/network/worker_health.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/permission_service.dart';
@@ -18,9 +19,13 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  static const _workerWarn = Color(0xFFFF8A80);
+
   int _cacheBytes = 0;
   bool _loadingCache = true;
   bool _probing = false;
+  bool _checkingWorker = false;
+  WorkerStatus? _workerStatus;
   Map<String, MirrorProbe> _pipedProbes = const {};
   Map<String, MirrorProbe> _invidiousProbes = const {};
 
@@ -41,6 +46,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _pipedProbes = {for (final p in piped) p.origin: p};
       _invidiousProbes = {for (final p in invidious) p.origin: p};
       _probing = false;
+    });
+  }
+
+  Future<void> _checkWorker() async {
+    setState(() => _checkingWorker = true);
+    final status = await ref
+        .read(workerHealthProvider)
+        .check(force: true, deep: true);
+    if (!mounted) return;
+    setState(() {
+      _workerStatus = status;
+      _checkingWorker = false;
     });
   }
 
@@ -108,11 +125,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _TextFieldTile(
             label: 'Cloudflare Worker URL',
             value: settings.workerUrl,
-            hint: 'https://ваш-worker.example.workers.dev',
+            hint: 'https://ваш-worker.example.workers.dev или свой домен',
             onSaved: (v) {
               settings.workerUrl = v;
               ref.read(mirrorManagerProvider).resetHealth();
+              ref.read(workerHealthProvider).reset();
+              setState(() => _workerStatus = null);
             },
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _checkingWorker
+                        ? 'Проверка Worker и зеркал…'
+                        : (_workerStatus?.label ??
+                            'Worker проксирует Spotify, поиск и аудио через /stream'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _workerStatus == null
+                          ? AppColors.textSecondary
+                          : _workerStatus!.ok
+                              ? AppColors.accentSoft
+                              : _workerStatus!.configured
+                                  ? _workerWarn
+                                  : AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: settings.workerUrl.isEmpty || _checkingWorker
+                      ? null
+                      : _checkWorker,
+                  child: const Text('Проверить'),
+                ),
+              ],
+            ),
           ),
           SwitchListTile(
             title: const Text('Всегда идти через Worker'),
@@ -255,8 +305,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onChanged: (v) => setState(() => settings.preferOpus = v),
           ),
           SwitchListTile(
-            title: const Text('Проксировать аудиопоток'),
-            subtitle: const Text('Обход блокировок googlevideo.com'),
+            title: const Text('Всегда проксировать аудио'),
+            subtitle: const Text(
+              'По умолчанию Worker — запасной путь при 403/таймауте; включите, '
+              'чтобы звук всегда шёл через Worker',
+            ),
             value: settings.proxyAudioStreams,
             onChanged: (v) => setState(() => settings.proxyAudioStreams = v),
           ),

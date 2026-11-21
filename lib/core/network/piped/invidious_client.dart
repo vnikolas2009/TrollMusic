@@ -2,17 +2,27 @@ import '../../../data/models/track.dart';
 import '../../network/http_client.dart';
 import '../../network/mirror_manager.dart';
 import '../../network/proxy.dart';
+import '../../network/worker_health.dart';
 import '../../storage/settings.dart';
 
 class InvidiousClient {
-  InvidiousClient({required Settings settings, required ProxyConfig proxy})
-      : _settings = settings,
-        _proxy = proxy {
-    _mirrors = MirrorManager(settings: settings, dio: createDio(settings: settings));
+  InvidiousClient({
+    required Settings settings,
+    required ProxyConfig proxy,
+    WorkerHealth? health,
+  })  : _settings = settings,
+        _proxy = proxy,
+        _health = health {
+    _mirrors = MirrorManager(
+      settings: settings,
+      dio: createDio(settings: settings),
+      health: health,
+    );
   }
 
   final Settings _settings;
   final ProxyConfig _proxy;
+  final WorkerHealth? _health;
   late final MirrorManager _mirrors;
 
   Future<List<Track>> search(String query, {int limit = 30}) async {
@@ -93,9 +103,13 @@ class InvidiousClient {
   String? _pickAudioUrl(Map<String, dynamic> data, String videoId, {int? bitrate}) {
     final urls = _pickAudioUrls(data, videoId, bitrate: bitrate);
     if (urls.isEmpty) return null;
-    return _settings.proxyAudioStreams && _proxy.hasWorker
-        ? _proxy.passthrough(urls.first).toString()
-        : urls.first;
+    final health = _health;
+    if (health != null && !health.usable) return urls.first;
+    final variants = _proxy.audioVariants(
+      urls.first,
+      preferWorker: _settings.proxyAudioStreams,
+    );
+    return variants.isEmpty ? urls.first : variants.first;
   }
 
   List<String> _pickAudioUrls(
@@ -128,8 +142,12 @@ class InvidiousClient {
   }
 
   List<String> _variants(String url) {
-    if (!_settings.proxyAudioStreams || !_proxy.hasWorker) return [url];
-    return [_proxy.passthrough(url).toString(), url];
+    final health = _health;
+    if (health != null && !health.usable) return [url];
+    return _proxy.audioVariants(
+      url,
+      preferWorker: _settings.proxyAudioStreams,
+    );
   }
 
   String _absolute(String url, String videoId) {

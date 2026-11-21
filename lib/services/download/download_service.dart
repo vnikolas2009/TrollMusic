@@ -88,18 +88,35 @@ class DownloadService {
     ));
 
     try {
-      var url = track.streamUrl;
-      if (url == null || url.isEmpty) {
-        final urls = await _youtube.resolveAudioUrls(track);
-        url = urls.isEmpty ? null : urls.first;
-      }
-      if (url == null || url.isEmpty) {
-        throw StateError('Не удалось получить ссылку на аудио');
+      final known = (track.streamUrl ?? '').trim();
+      final attempted = <String>{};
+      Object? lastError;
+
+      Future<(File file, String url)?> attempt(Iterable<String> candidates) async {
+        for (final candidate in candidates) {
+          if (candidate.isEmpty || !attempted.add(candidate)) continue;
+          try {
+            final extension = _extensionOf(candidate);
+            final file = File(p.join(_storage.audioDir.path, '${track.id}.$extension'));
+            await _downloadFile(candidate, file, track.id, token);
+            return (file, candidate);
+          } catch (error) {
+            if (error is DioException && CancelToken.isCancel(error)) rethrow;
+            lastError = error;
+          }
+        }
+        return null;
       }
 
-      final extension = _extensionOf(url);
-      final target = File(p.join(_storage.audioDir.path, '${track.id}.$extension'));
-      await _downloadFile(url, target, track.id, token);
+      // Сначала известный URL (например из результата поиска), затем свежие
+      // кандидаты: Piped/Invidious → InnerTube → Worker (/stream).
+      var result = known.isEmpty ? null : await attempt([known]);
+      result ??= await attempt(await _youtube.resolveAudioUrls(track));
+      if (result == null) {
+        throw lastError ?? StateError('Не удалось скачать аудио');
+      }
+
+      final (target, url) = result;
 
       String? artworkPath;
       if (track.artworkPath == null && (track.thumbnailUrl?.isNotEmpty ?? false)) {
@@ -215,11 +232,16 @@ class DownloadService {
     String trackId,
     CancelToken token,
   ) async {
+    // createDio пропускает любые ответы < 500, но для файла нужен строгий 2xx:
+    // иначе тело ошибки (403/404) сохранится как «аудио».
     await _dio.download(
       url,
       target.path,
       deleteOnError: true,
       cancelToken: token,
+      options: Options(
+        validateStatus: (code) => code != null && code >= 200 && code < 300,
+      ),
       onReceiveProgress: (received, total) {
         _set(
           trackId,

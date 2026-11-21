@@ -57,28 +57,47 @@
    системный прокси) применяется ко всем соединениям приложения. Чтобы звук
    тоже шёл через прокси, включите «Кэшировать аудио при прослушивании».
 
+Для аудио у трека всегда есть несколько кандидатов: прямые ссылки зеркал,
+ссылка InnerTube и — если указан Worker — `/stream?v=<id>`. Если прямой URL
+отдаёт 403 или троттлится, плеер сам переключается на следующий кандидат, а
+скачивание повторяет попытку на следующем URL. Если Worker не отвечает дважды
+подряд, он на 5 минут исключается из кандидатов (circuit breaker в
+`WorkerHealth`).
+
 Публичного Worker нет — разверните свой (адрес `*.workers.dev` в РФ может быть
-недоступен, надёжнее привязать собственный домен).
+недоступен, надёжнее привязать собственный домен на Cloudflare).
+
+### Что выбрать: Worker или VPS
+
+- **Worker** бесплатен и закрывает метаданные, поиск, обложки, LRCLIB и токен
+  Spotify. Аудио через `/stream` работает, но зависит от живости Piped-зеркал,
+  а Cloudflare ограничивает длительный стриминг через Workers.
+- **Свой VPS** вне РФ (Xray VLESS-REALITY или Shadowsocks-2022) надёжнее для
+  звука: весь трафик идёт через один туннель, включая googlevideo. Достаточно
+  указать `socks5://user:pass@host:port` в настройках прокси.
+- Оба варианта можно совмещать: Worker для API и обложек, VPS — для аудио.
 
 ## Worker (`worker.js`)
 
-Задеплойте в Cloudflare Workers. Переменные: `PIPED_ORIGIN`,
-`INVIDIOUS_ORIGIN`, `ALLOWED_HOSTS`, опционально `SPOTIFY_TOKEN`.
+Задеплойте в Cloudflare Workers. Переменные: `PIPED_ORIGINS` (список через
+запятую) или `PIPED_ORIGIN`, `INVIDIOUS_ORIGINS` / `INVIDIOUS_ORIGIN`,
+`ALLOWED_HOSTS`, опционально `SPOTIFY_TOKEN`.
 
 | Маршрут | Куда проксирует |
 |---|---|
-| `/health` | проверка, возвращает `{ok: true}` |
+| `/health[?deep=1]` | проверка; `deep` дополнительно опрашивает первые зеркала |
 | `/token` | анонимный токен веб-плеера Spotify (кэшируется) |
 | `/spotify/*` | `https://api.spotify.com/*` |
 | `/accounts/*` | `https://accounts.spotify.com/*` |
 | `/cdn/*` | `https://i.scdn.co/*` |
 | `/embed/*` | `https://open.spotify.com/*` |
-| `/piped/<host>/*` | Piped-зеркало `<host>` (по умолчанию `PIPED_ORIGIN`) |
-| `/invidious/<host>/*` | Invidious-зеркало `<host>` (по умолчанию `INVIDIOUS_ORIGIN`) |
+| `/piped/<host>/*` | Piped-зеркало `<host>` (по умолчанию первое из `PIPED_ORIGINS`) |
+| `/invidious/<host>/*` | Invidious-зеркало `<host>` |
+| `/stream?v=<videoId>[&host=<mirror>]` | Worker сам резолвит аудио через Piped/Invidious и отдаёт байты с поддержкой `Range`/206 и фейловером по кандидатам |
 | `/proxy?url=...` | белый список хостов: обложки Spotify, `lrclib.net`, `googlevideo.com`, `ytimg.com`, Piped proxy + `ALLOWED_HOSTS` |
 
-В настройках приложения укажите URL Worker'а и при необходимости включите
-«Всегда идти через Worker».
+В настройках приложения укажите URL Worker'а, нажмите «Проверить» (кнопка рядом
+с полем) и при необходимости включите «Всегда идти через Worker».
 
 ## Стек
 

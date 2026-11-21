@@ -14,6 +14,7 @@ import 'core/network/piped/invidious_client.dart';
 import 'core/network/piped/piped_client.dart';
 import 'core/network/piped/youtube_music_client.dart';
 import 'core/network/proxy.dart';
+import 'core/network/worker_health.dart';
 import 'core/storage/settings.dart';
 import 'data/repositories/library_repository.dart';
 import 'services/audio/audio_handler.dart';
@@ -29,13 +30,17 @@ Future<void> main() async {
   final library = await LibraryRepository.open();
 
   final proxy = ProxyConfig(settings);
+  final health = WorkerHealth(settings: settings, proxy: proxy);
   final lyrics = LyricsClient();
-  final piped = PipedClient(settings: settings, proxy: proxy);
-  final invidious = InvidiousClient(settings: settings, proxy: proxy);
+  final piped = PipedClient(settings: settings, proxy: proxy, health: health);
+  final invidious =
+      InvidiousClient(settings: settings, proxy: proxy, health: health);
   final youtube = YouTubeMusicClient(
     piped: piped,
     invidious: invidious,
     settings: settings,
+    proxy: proxy,
+    health: health,
   );
 
   final storage = await StorageService.open(library: library, lyrics: lyrics);
@@ -51,6 +56,7 @@ Future<void> main() async {
       library: library,
       settings: settings,
       resolveStreams: youtube.resolveAudioUrls,
+      workerHealth: health,
     ),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.trollmusic.audio',
@@ -65,6 +71,7 @@ Future<void> main() async {
   final container = ProviderContainer(
     overrides: [
       settingsProvider.overrideWithValue(settings),
+      workerHealthProvider.overrideWithValue(health),
       pipedClientProvider.overrideWithValue(piped),
       invidiousClientProvider.overrideWithValue(invidious),
       youtubeClientProvider.overrideWithValue(youtube),

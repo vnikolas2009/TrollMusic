@@ -8,6 +8,7 @@ import '../core/network/piped/piped_client.dart';
 import '../core/network/piped/youtube_music_client.dart';
 import '../core/network/proxy.dart';
 import '../core/network/spotify/spotify_client.dart';
+import '../core/network/worker_health.dart';
 import '../core/storage/settings.dart';
 import '../data/models/track.dart';
 import '../data/repositories/music_repository.dart';
@@ -22,10 +23,18 @@ final proxyProvider = Provider<ProxyConfig>(
   (ref) => ProxyConfig(ref.watch(settingsProvider)),
 );
 
+final workerHealthProvider = Provider<WorkerHealth>(
+  (ref) => WorkerHealth(
+    settings: ref.watch(settingsProvider),
+    proxy: ref.watch(proxyProvider),
+  ),
+);
+
 final mirrorManagerProvider = Provider<MirrorManager>(
   (ref) => MirrorManager(
     settings: ref.watch(settingsProvider),
     dio: ref.watch(dioProvider),
+    health: ref.watch(workerHealthProvider),
   ),
 );
 
@@ -33,6 +42,7 @@ final pipedClientProvider = Provider<PipedClient>(
   (ref) => PipedClient(
     settings: ref.watch(settingsProvider),
     proxy: ref.watch(proxyProvider),
+    health: ref.watch(workerHealthProvider),
   ),
 );
 
@@ -40,6 +50,7 @@ final invidiousClientProvider = Provider<InvidiousClient>(
   (ref) => InvidiousClient(
     settings: ref.watch(settingsProvider),
     proxy: ref.watch(proxyProvider),
+    health: ref.watch(workerHealthProvider),
   ),
 );
 
@@ -48,6 +59,8 @@ final youtubeClientProvider = Provider<YouTubeMusicClient>(
     piped: ref.watch(pipedClientProvider),
     invidious: ref.watch(invidiousClientProvider),
     settings: ref.watch(settingsProvider),
+    proxy: ref.watch(proxyProvider),
+    health: ref.watch(workerHealthProvider),
   ),
 );
 
