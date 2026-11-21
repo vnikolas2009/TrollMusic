@@ -2,17 +2,27 @@ import '../../../data/models/track.dart';
 import '../../network/http_client.dart';
 import '../../network/mirror_manager.dart';
 import '../../network/proxy.dart';
+import '../../network/worker_health.dart';
 import '../../storage/settings.dart';
 
 class PipedClient {
-  PipedClient({required Settings settings, required ProxyConfig proxy})
-      : _settings = settings,
-        _proxy = proxy {
-    _mirrors = MirrorManager(settings: settings, dio: createDio(settings: settings));
+  PipedClient({
+    required Settings settings,
+    required ProxyConfig proxy,
+    WorkerHealth? health,
+  })  : _settings = settings,
+        _proxy = proxy,
+        _health = health {
+    _mirrors = MirrorManager(
+      settings: settings,
+      dio: createDio(settings: settings),
+      health: health,
+    );
   }
 
   final Settings _settings;
   final ProxyConfig _proxy;
+  final WorkerHealth? _health;
   late final MirrorManager _mirrors;
 
   Future<List<Track>> search(String query, {int limit = 30}) async {
@@ -139,13 +149,22 @@ class PipedClient {
   }
 
   List<String> _variants(String url) {
-    if (!_settings.proxyAudioStreams || !_proxy.hasWorker) return [url];
-    return [_proxy.passthrough(url).toString(), url];
+    final health = _health;
+    if (health != null && !health.usable) return [url];
+    return _proxy.audioVariants(
+      url,
+      preferWorker: _settings.proxyAudioStreams,
+    );
   }
 
   String _proxied(String url) {
-    if (!_settings.proxyAudioStreams || !_proxy.hasWorker) return url;
-    return _proxy.passthrough(url).toString();
+    final health = _health;
+    if (health != null && !health.usable) return url;
+    final variants = _proxy.audioVariants(
+      url,
+      preferWorker: _settings.proxyAudioStreams,
+    );
+    return variants.isEmpty ? url : variants.first;
   }
 
   int _kbps(Map<String, dynamic> json) {

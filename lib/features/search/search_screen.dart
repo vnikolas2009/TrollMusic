@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/network_providers.dart';
+import '../../app/source_provider.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
@@ -123,20 +124,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   List<Track> _results = const [];
   bool _loading = false;
   String? _error;
-  TrackSource? _source;
   bool _focused = false;
 
-  List<Track> get _filtered => _source == null
-      ? _results
-      : _results.where((t) => t.source == _source).toList();
-
-  List<({String label, TrackSource? source})> get _sourceFilters => [
-        (label: 'Все', source: null),
-        if (_results.any((t) => t.source == TrackSource.youtube))
-          (label: 'YouTube', source: TrackSource.youtube),
-        if (_results.any((t) => t.source == TrackSource.spotify))
-          (label: 'Spotify', source: TrackSource.spotify),
-      ];
+  List<Track> get _filtered => _results;
 
   @override
   void initState() {
@@ -183,7 +173,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
     try {
       final repo = ref.read(musicRepositoryProvider);
-      final results = await repo.searchAll(trimmed);
+      final results = ref.read(musicSourceProvider) == MusicSource.spotify
+          ? await repo.searchSpotify(trimmed)
+          : await repo.searchYouTube(trimmed);
       if (!mounted) return;
       setState(() {
         _results = results;
@@ -192,7 +184,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Не удалось выполнить поиск. Проверьте зеркала в настройках.';
+        _error = 'Не удалось выполнить поиск. Проверьте интернет и повторите.';
         _loading = false;
       });
     }
@@ -200,8 +192,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filters = _sourceFilters;
-    final filterIndex = filters.indexWhere((f) => f.source == _source);
+    final source = ref.watch(musicSourceProvider);
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
@@ -213,6 +204,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           backgroundColor: AppColors.background.withValues(alpha: 0.92),
           surfaceTintColor: Colors.transparent,
           title: const Text('Поиск'),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: PillToggle(
+                labels: [for (final s in MusicSource.values) s.label],
+                index: source.index,
+                onChanged: (i) {
+                  ref
+                      .read(musicSourceProvider.notifier)
+                      .select(MusicSource.values[i]);
+                  final q = _controller.text.trim();
+                  if (q.isNotEmpty) _search(q);
+                },
+              ),
+            ),
+          ),
         ),
         SliverToBoxAdapter(
           child: Padding(
@@ -351,21 +361,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ),
           ),
-          if (filters.length > 2)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: PillToggle(
-                    labels: [for (final f in filters) f.label],
-                    index: filterIndex < 0 ? 0 : filterIndex,
-                    onChanged: (i) =>
-                        setState(() => _source = filters[i].source),
-                  ),
-                ),
-              ),
-            ),
           SliverList.builder(
             itemCount: _filtered.length,
             itemBuilder: (context, i) {

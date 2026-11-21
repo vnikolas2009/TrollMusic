@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/network_providers.dart';
+import '../../app/source_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/press_scale.dart';
@@ -45,18 +46,24 @@ const moodMixes = <MoodMix>[
       ['classical music best', 'piano classical', 'orchestra masterpieces']),
 ];
 
+/// Ключ — `youtube:chill` / `spotify:chill`.
 final moodTracksProvider =
-    FutureProvider.family<List<Track>, String>((ref, id) async {
-  final mood = moodMixes.firstWhere((m) => m.id == id);
+    FutureProvider.family<List<Track>, String>((ref, key) async {
+  final parts = key.split(':');
+  final mood = moodMixes.firstWhere((m) => m.id == parts.last);
+  if (parts.first == MusicSource.spotify.name) {
+    return ref.watch(musicRepositoryProvider).spotifyMix(mood.queries, limit: 30);
+  }
   return ref.watch(youtubeClientProvider).mix(mood.queries, limit: 30);
 });
 
 /// Горизонтальная лента «Настроение и жанры».
-class MoodSection extends StatelessWidget {
+class MoodSection extends ConsumerWidget {
   const MoodSection({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final source = ref.watch(musicSourceProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -76,7 +83,9 @@ class MoodSection extends StatelessWidget {
               final mood = moodMixes[i];
               return PressScale(
                 onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => MoodScreen(mood: mood)),
+                  MaterialPageRoute(
+                    builder: (_) => MoodScreen(mood: mood, source: source),
+                  ),
                 ),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -112,20 +121,23 @@ class MoodSection extends StatelessWidget {
 
 /// Экран подборки: загружает треки и открывает обычный экран плейлиста.
 class MoodScreen extends ConsumerWidget {
-  const MoodScreen({super.key, required this.mood});
+  const MoodScreen({super.key, required this.mood, required this.source});
 
   final MoodMix mood;
+  final MusicSource source;
+
+  String get _key => '${source.name}:${mood.id}';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tracks = ref.watch(moodTracksProvider(mood.id));
+    final tracks = ref.watch(moodTracksProvider(_key));
     return tracks.when(
       data: (items) {
-        if (items.isEmpty) return _Message(mood: mood, retry: ref, error: true);
+        if (items.isEmpty) return _Message(mood: mood, retry: ref, keyName: _key);
         return PlaylistScreen(
-          id: 'mood:${mood.id}',
+          id: 'mood:${source.name}:${mood.id}',
           title: mood.title,
-          subtitle: 'Подборка · ${items.length} треков',
+          subtitle: '${source.label} · ${items.length} треков',
           tracks: items,
         );
       },
@@ -133,17 +145,17 @@ class MoodScreen extends ConsumerWidget {
         appBar: AppBar(title: Text(mood.title)),
         body: const Center(child: CircularProgressIndicator()),
       ),
-      error: (_, __) => _Message(mood: mood, retry: ref, error: true),
+      error: (_, __) => _Message(mood: mood, retry: ref, keyName: _key),
     );
   }
 }
 
 class _Message extends StatelessWidget {
-  const _Message({required this.mood, required this.retry, required this.error});
+  const _Message({required this.mood, required this.retry, required this.keyName});
 
   final MoodMix mood;
   final WidgetRef retry;
-  final bool error;
+  final String keyName;
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +171,7 @@ class _Message extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             FilledButton(
-              onPressed: () => retry.invalidate(moodTracksProvider(mood.id)),
+              onPressed: () => retry.invalidate(moodTracksProvider(keyName)),
               child: const Text('Повторить'),
             ),
           ],

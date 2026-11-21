@@ -76,6 +76,10 @@ test/                        # flutter test: чистые утилиты, мод
 - Spotify: ссылки/запросы сопоставляются с YouTube (`pickBestMatch`), соответствие запоминается в `Settings.matchedVideo/rememberMatch`.
 - Качество: `AudioQuality{low=64,medium=128,high=max,auto}`, `rankFormats` (`core/utils/audio_pick.dart`); `auto` = high по Wi‑Fi (`isOnWifi`), иначе 128; на iOS только AAC.
 
+**Worker (встроенный):** `worker.js` + `wrangler.toml` деплоятся job'ом `worker` в `build_release.yml` при наличии секретов `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`; полученный `*.workers.dev` URL передаётся в сборку как `--dart-define=WORKER_URL` (`AppConfig.defaultWorkerUrl`). Клиент добавляет `/stream` Worker'а последним кандидатом (`WorkerHealth` — circuit breaker). Без секретов приложение работает без Worker.
+
+**Источники:** `MusicSource` (YouTube Music / Spotify, `app/source_provider.dart`, хранится в `Settings.musicSourceIndex`) — раздельные вкладки на Главной и в Поиске; Spotify даёт метаданные, воспроизведение — через сопоставление с YouTube.
+
 ## 5. Воспроизведение (сквозной сценарий)
 
 1. UI вызывает `audioHandler.playTrack(track, contextQueue:)` / `setLibraryQueue(...)`.

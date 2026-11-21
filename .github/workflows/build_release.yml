@@ -35,9 +35,43 @@ jobs:
           echo "tag=v$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "Building $VERSION_NAME+${{ github.run_number }}"
 
+  worker:
+    name: Deploy Worker
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.out.outputs.url }}
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Cloudflare secrets
+        id: cf
+        run: |
+          if [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID не заданы — Worker не деплоится, приложение работает без него"
+          fi
+
+      - name: Deploy to Cloudflare Workers
+        id: deploy
+        if: steps.cf.outputs.ready == 'true'
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      - id: out
+        run: echo "url=${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_OUTPUT"
+
   android:
     name: Android APK
-    needs: version
+    needs: [version, worker]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,6 +106,7 @@ jobs:
       - name: Build APK
         run: |
           flutter build apk --release \
+            --dart-define=WORKER_URL=${{ needs.worker.outputs.url }} \
             --build-name=${{ needs.version.outputs.name }} \
             --build-number=${{ needs.version.outputs.code }}
 
@@ -89,7 +124,7 @@ jobs:
 
   ios:
     name: iOS IPA (unsigned)
-    needs: version
+    needs: [version, worker]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -110,6 +145,7 @@ jobs:
       - name: Build iOS
         run: |
           flutter build ios --release --no-codesign \
+            --dart-define=WORKER_URL=${{ needs.worker.outputs.url }} \
             --build-name=${{ needs.version.outputs.name }} \
             --build-number=${{ needs.version.outputs.code }}
 

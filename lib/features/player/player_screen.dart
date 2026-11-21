@@ -750,7 +750,7 @@ class _StreamErrorBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Поток недоступен. Попробуйте другое зеркало.',
+              'Поток недоступен. Повторите попытку или выберите другой трек.',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
           ),

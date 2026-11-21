@@ -6,6 +6,8 @@ import '../../storage/settings.dart';
 import '../../utils/async_utils.dart';
 import '../../utils/network_kind.dart';
 import '../../utils/track_match.dart';
+import '../proxy.dart';
+import '../worker_health.dart';
 import '../youtube/innertube_client.dart';
 import '../youtube/stream_candidate.dart';
 import 'invidious_client.dart';
@@ -20,14 +22,20 @@ class YouTubeMusicClient {
     required PipedClient piped,
     required InvidiousClient invidious,
     required Settings settings,
+    ProxyConfig? proxy,
+    WorkerHealth? health,
   })  : _piped = piped,
         _invidious = invidious,
         _settings = settings,
+        _proxy = proxy,
+        _health = health,
         _innerTube = InnerTubeClient(settings: settings);
 
   final PipedClient _piped;
   final InvidiousClient _invidious;
   final Settings _settings;
+  final ProxyConfig? _proxy;
+  final WorkerHealth? _health;
   final InnerTubeClient _innerTube;
 
   static const _streamTtl = Duration(minutes: 25);
@@ -145,6 +153,7 @@ class YouTubeMusicClient {
           ),
       () => _pipedCandidates(videoId),
       () => _invidiousCandidates(videoId),
+      () => _workerCandidates(videoId),
     ];
 
     List<StreamCandidate> list;
@@ -186,6 +195,21 @@ class YouTubeMusicClient {
     return [
       for (final url in urls)
         StreamCandidate(url: url, userAgent: AppConfig.genericAudioUserAgent),
+    ];
+  }
+
+  /// Встроенный Worker: сам резолвит трек и отдаёт байты (последний рубеж,
+  /// когда прямые ссылки googlevideo недоступны у провайдера).
+  Future<List<StreamCandidate>> _workerCandidates(String videoId) async {
+    final proxy = _proxy;
+    if (proxy == null || !proxy.hasWorker || !(_health?.usable ?? true)) {
+      return const [];
+    }
+    return [
+      StreamCandidate(
+        url: proxy.stream(videoId).toString(),
+        userAgent: AppConfig.genericAudioUserAgent,
+      ),
     ];
   }
 

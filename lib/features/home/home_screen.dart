@@ -14,6 +14,9 @@ import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/station_card.dart';
 import '../playlist/playlist_screen.dart';
 import '../settings/settings_screen.dart';
+import '../../app/source_provider.dart';
+import '../../core/utils/spotify_link.dart';
+import '../../shared/widgets/pill_toggle.dart';
 import 'music_sections.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -24,6 +27,7 @@ class HomeScreen extends ConsumerWidget {
     final tracks = ref.watch(tracksProvider).value ?? const <Track>[];
     final settings = ref.watch(settingsProvider);
     final daily = buildDailyPick(tracks, settings.recentIds);
+    final source = ref.watch(musicSourceProvider);
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
@@ -55,14 +59,42 @@ class HomeScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (daily.isNotEmpty)
-                Entrance(index: 0, child: _DailyPick(tracks: daily)),
-              Entrance(index: 1, child: const _TrendingSection()),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: PillToggle(
+                    labels: [for (final s in MusicSource.values) s.label],
+                    index: source.index,
+                    onChanged: (i) => ref
+                        .read(musicSourceProvider.notifier)
+                        .select(MusicSource.values[i]),
+                  ),
+                ),
+              ),
+              if (source == MusicSource.spotify) ...[
+                const _SpotifyLinkField(),
+                _TrendingSection(
+                  provider: spotifyTrendingProvider,
+                  title: 'Популярное в Spotify',
+                  subtitle: 'Чарты и хиты',
+                ),
+              ] else ...[
+                if (daily.isNotEmpty)
+                  Entrance(index: 0, child: _DailyPick(tracks: daily)),
+                _TrendingSection(
+                  provider: trendingProvider,
+                  title: 'Популярная музыка',
+                  subtitle: 'YouTube Music · сейчас слушают',
+                ),
+              ],
               if (tracks.isNotEmpty)
                 Entrance(index: 2, child: _Recent(tracks: tracks)),
               Entrance(index: 3, child: const MoodSection()),
-              Entrance(index: 3, child: _Stations(tracks: tracks)),
-              Entrance(index: 4, child: _Discoveries(tracks: tracks)),
+              if (source == MusicSource.youtube)
+                Entrance(index: 3, child: _Stations(tracks: tracks)),
+              if (source == MusicSource.youtube)
+                Entrance(index: 4, child: _Discoveries(tracks: tracks)),
               const SizedBox(height: 32),
             ],
           ),
@@ -97,11 +129,19 @@ class _BrandMark extends StatelessWidget {
 }
 
 class _TrendingSection extends ConsumerWidget {
-  const _TrendingSection();
+  const _TrendingSection({
+    required this.provider,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final FutureProvider<List<Track>> provider;
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final trending = ref.watch(trendingProvider);
+    final trending = ref.watch(provider);
 
     return trending.when(
       loading: () => Padding(
@@ -127,16 +167,18 @@ class _TrendingSection extends ConsumerWidget {
           ],
         ),
       ),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, __) => _LoadFailed(onRetry: () => ref.invalidate(provider)),
       data: (items) {
-        if (items.isEmpty) return const SizedBox.shrink();
+        if (items.isEmpty) {
+          return _LoadFailed(onRetry: () => ref.invalidate(provider));
+        }
         final limited = items.take(12).toList();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SectionHeader(
-              title: 'Популярная музыка',
-              subtitle: 'Сейчас слушают',
+              title: title,
+              subtitle: subtitle,
               action: TextButton(
                 onPressed: () => ref
                     .read(audioHandlerProvider)
@@ -184,6 +226,130 @@ class _TrendingSection extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _LoadFailed extends StatelessWidget {
+  const _LoadFailed({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.outline),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.wifi_off_rounded, color: AppColors.textSecondary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Не удалось загрузить музыку',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ),
+            TextButton(onPressed: onRetry, child: const Text('Повторить')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Вставка ссылки на плейлист/альбом Spotify.
+class _SpotifyLinkField extends ConsumerStatefulWidget {
+  const _SpotifyLinkField();
+
+  @override
+  ConsumerState<_SpotifyLinkField> createState() => _SpotifyLinkFieldState();
+}
+
+class _SpotifyLinkFieldState extends ConsumerState<_SpotifyLinkField> {
+  final _controller = TextEditingController();
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _open() async {
+    final text = _controller.text.trim();
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
+    final link = parseSpotifyLink(text);
+    if (link == null || link.kind == SpotifyKind.track) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Вставьте ссылку на плейлист или альбом Spotify')),
+      );
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final playlist = await ref.read(musicRepositoryProvider).spotifyPlaylist(text);
+      if (!mounted || playlist == null || playlist.tracks.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Не удалось открыть подборку')),
+        );
+        return;
+      }
+      _controller.clear();
+      await nav.push(
+        MaterialPageRoute(
+          builder: (_) => PlaylistScreen(
+            id: 'sp:${playlist.id}',
+            title: playlist.title,
+            subtitle: 'Spotify · ${playlist.tracks.length} треков',
+            tracks: playlist.tracks,
+            coverUrl: playlist.imageUrl,
+          ),
+        ),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Не удалось открыть подборку')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: TextField(
+        controller: _controller,
+        onSubmitted: (_) => _open(),
+        textInputAction: TextInputAction.go,
+        style: const TextStyle(fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Ссылка на плейлист или альбом Spotify',
+          prefixIcon: const Icon(Icons.link_rounded, size: 20),
+          suffixIcon: _busy
+              ? const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 20),
+                  onPressed: _open,
+                ),
+        ),
+      ),
     );
   }
 }

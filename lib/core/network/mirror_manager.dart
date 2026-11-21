@@ -5,18 +5,24 @@ import '../storage/settings.dart';
 import '../utils/async_utils.dart';
 import 'instance_directory.dart';
 import 'proxy.dart';
+import 'worker_health.dart';
 
 enum MirrorKind { piped, invidious }
 
 class MirrorManager {
-  MirrorManager({required Settings settings, required Dio dio})
-      : _settings = settings,
+  MirrorManager({
+    required Settings settings,
+    required Dio dio,
+    WorkerHealth? health,
+  })  : _settings = settings,
         _dio = dio,
+        _health = health,
         _proxy = ProxyConfig(settings);
 
   final Settings _settings;
   final Dio _dio;
   final ProxyConfig _proxy;
+  final WorkerHealth? _health;
   final Map<MirrorKind, String?> _sticky = {};
   final Map<String, DateTime> _failed = {};
 
@@ -65,7 +71,7 @@ class MirrorManager {
     }
 
     // Запасной путь через пользовательский Worker, если он когда-то был задан.
-    if (_proxy.hasWorker && !_proxy.enabled) {
+    if (_proxy.hasWorker && !_proxy.enabled && (_health?.usable ?? true)) {
       final cancel = CancelToken();
       final response = await firstNonEmpty<Response<dynamic>>([
         for (final origin in ordered.take(2))

@@ -2,7 +2,8 @@ abstract final class AppConfig {
   static const appName = 'TrollMusic';
   static const appVersion = '1.1.0';
   /// Публичного Worker нет: пользователь разворачивает свой (см. README).
-  static const defaultWorkerUrl = '';
+  /// Адрес встроенного Worker подставляется при сборке (`--dart-define=WORKER_URL=...`).
+  static const defaultWorkerUrl = String.fromEnvironment('WORKER_URL');
   static const mirrorTimeout = Duration(seconds: 4);
   static const requestTimeout = Duration(seconds: 20);
   static const playbackTimeout = Duration(seconds: 12);
@@ -59,6 +60,14 @@ abstract final class AppConfig {
   static const genericAudioUserAgent =
       'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
+
+  /// Запросы для блока «Популярное в Spotify».
+  static const spotifyQueries = <String>[
+    'Top 50 Global',
+    'Today\'s Top Hits',
+    'Russian Top Hits',
+    'RapCaviar',
+  ];
 
   /// Запросы для блока «Популярная музыка» на главной (только музыка).
   static const trendingQueries = <String>[

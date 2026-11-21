@@ -179,6 +179,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               },
             ),
           ),
+          ListTile(
+            title: const Text('Свой цвет'),
+            subtitle: Text(
+              'Выберите любой оттенок акцента',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            trailing: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: theme.accent,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.outline),
+              ),
+            ),
+            onTap: () async {
+              final picked = await showDialog<Color>(
+                context: context,
+                builder: (_) => _ColorDialog(initial: theme.accent),
+              );
+              if (picked != null) themeCtl.setAccent(picked);
+            },
+          ),
           SwitchListTile(
             title: const Text('Градиентный фон'),
             subtitle: const Text('Едва заметный градиент от акцентного цвета'),
@@ -286,6 +309,86 @@ class _Section extends StatelessWidget {
           color: AppColors.textTertiary,
         ),
       ),
+    );
+  }
+}
+
+/// Простой выбор цвета: оттенок, насыщенность и яркость.
+class _ColorDialog extends StatefulWidget {
+  const _ColorDialog({required this.initial});
+
+  final Color initial;
+
+  @override
+  State<_ColorDialog> createState() => _ColorDialogState();
+}
+
+class _ColorDialogState extends State<_ColorDialog> {
+  late HSVColor _hsv = HSVColor.fromColor(widget.initial);
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _hsv.toColor();
+    return AlertDialog(
+      title: const Text('Свой цвет'),
+      content: SliderTheme(
+        data: SliderTheme.of(context).copyWith(
+          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+          activeTrackColor: color,
+          thumbColor: color,
+        ),
+        child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 56,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.outline),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _slider('Оттенок', _hsv.hue, 360, (v) => _hsv = _hsv.withHue(v)),
+          _slider('Насыщенность', _hsv.saturation, 1,
+              (v) => _hsv = _hsv.withSaturation(v)),
+          _slider('Яркость', _hsv.value, 1, (v) => _hsv = _hsv.withValue(v)),
+        ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, color),
+          child: const Text('Готово'),
+        ),
+      ],
+    );
+  }
+
+  Widget _slider(
+    String label,
+    double value,
+    double max,
+    HSVColor Function(double) update,
+  ) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 96,
+          child: Text(label, style: const TextStyle(fontSize: 12)),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.clamp(0.0, max),
+            max: max,
+            onChanged: (v) => setState(() => update(v)),
+          ),
+        ),
+      ],
     );
   }
 }
