@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ysplayer/core/utils/lrc_parser.dart';
-import 'package:ysplayer/data/models/track.dart';
+import 'package:trollmusic/core/utils/lrc_parser.dart';
+import 'package:trollmusic/data/models/track.dart';
 
 void main() {
   group('Track', () {

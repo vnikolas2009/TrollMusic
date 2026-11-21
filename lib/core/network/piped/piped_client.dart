@@ -8,7 +8,7 @@ class PipedClient {
   PipedClient({required Settings settings, required ProxyConfig proxy})
       : _settings = settings,
         _proxy = proxy {
-    _mirrors = MirrorManager(settings: settings, dio: createDio());
+    _mirrors = MirrorManager(settings: settings, dio: createDio(settings: settings));
   }
 
   final Settings _settings;
@@ -47,8 +47,21 @@ class PipedClient {
   }
 
   Future<String?> resolveStreamUrl(String videoId, {int? bitrate}) async {
+    final urls = await resolveStreamUrls(videoId, bitrate: bitrate);
+    return urls.isEmpty ? null : urls.first;
+  }
+
+  /// Несколько кандидатов: проксированный и прямой варианты.
+  Future<List<String>> resolveStreamUrls(String videoId, {int? bitrate}) async {
     final data = await _json(MirrorKind.piped, '/streams/$videoId', const {});
-    return _pickAudioUrl(data, bitrate: bitrate ?? _settings.bitrate);
+    final raw = _pickAudioUrls(data, bitrate: bitrate ?? _settings.bitrate);
+    final out = <String>[];
+    for (final url in raw) {
+      for (final candidate in _variants(url)) {
+        if (!out.contains(candidate)) out.add(candidate);
+      }
+    }
+    return out;
   }
 
   Future<List<Track>> trending({int limit = 30}) async {
@@ -92,18 +105,24 @@ class PipedClient {
   }
 
   String? _pickAudioUrl(Map<String, dynamic> data, {int? bitrate}) {
+    final urls = _pickAudioUrls(data, bitrate: bitrate);
+    return urls.isEmpty ? null : _proxied(urls.first);
+  }
+
+  List<String> _pickAudioUrls(Map<String, dynamic> data, {int? bitrate}) {
     final streams = (data['audioStreams'] as List?) ?? const [];
     final candidates = streams.whereType<Map<String, dynamic>>().toList();
     if (candidates.isEmpty) {
       final single = data['audioStreams'] is List ? null : data['audioStream'];
-      if (single is String) return _proxied(single);
-      return null;
+      if (single is String) return [single];
+      return const [];
     }
 
-    Map<String, dynamic>? best;
-    var bestScore = -1 << 30;
     final target = bitrate ?? _settings.bitrate;
+    final scored = <({int score, String url})>[];
     for (final s in candidates) {
+      final url = s['url'] as String?;
+      if (url == null || url.isEmpty) continue;
       final codec = '${s['codec'] ?? ''}'.toLowerCase();
       final mime = '${s['mimeType'] ?? ''}'.toLowerCase();
       final isOpus = codec.contains('opus') || mime.contains('opus');
@@ -113,14 +132,15 @@ class PipedClient {
       if (isOpus && _settings.preferOpus) score += 60;
       if (mime.contains('mp4') || codec.contains('mp4a')) score += 20;
       score -= (streamBitrate - target).abs() ~/ 2;
-      if (score > bestScore) {
-        bestScore = score;
-        best = s;
-      }
+      scored.add((score: score, url: url));
     }
+    scored.sort((a, b) => b.score.compareTo(a.score));
+    return [for (final item in scored.take(3)) item.url];
+  }
 
-    final url = best?['url'] as String?;
-    return url == null ? null : _proxied(url);
+  List<String> _variants(String url) {
+    if (!_settings.proxyAudioStreams || !_proxy.hasWorker) return [url];
+    return [_proxy.passthrough(url).toString(), url];
   }
 
   String _proxied(String url) {

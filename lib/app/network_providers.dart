@@ -12,7 +12,9 @@ import '../core/storage/settings.dart';
 import '../data/models/track.dart';
 import '../data/repositories/music_repository.dart';
 
-final dioProvider = Provider((ref) => createDio());
+final dioProvider = Provider(
+  (ref) => createDio(settings: ref.watch(settingsProvider)),
+);
 
 final settingsProvider = Provider<Settings>((ref) => throw UnimplementedError());
 
@@ -45,6 +47,7 @@ final youtubeClientProvider = Provider<YouTubeMusicClient>(
   (ref) => YouTubeMusicClient(
     piped: ref.watch(pipedClientProvider),
     invidious: ref.watch(invidiousClientProvider),
+    settings: ref.watch(settingsProvider),
   ),
 );
 

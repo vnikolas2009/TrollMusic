@@ -1,7 +1,6 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../config/app_config.dart';
-import '../utils/proxy_address.dart';
 
 class Settings {
   Settings(this._box);
@@ -22,8 +21,8 @@ class Settings {
 
   set workerUrl(String value) => _box.put('workerUrl', value.trim());
 
-  /// HTTP-прокси `host:port` для всех соединений приложения (пусто — напрямую).
-  String get httpProxy => normalizeProxyAddress(_box.get('httpProxy') as String? ?? '');
+  /// HTTP/SOCKS5-прокси для всех соединений приложения (пусто — напрямую).
+  String get httpProxy => (_box.get('httpProxy') as String? ?? '').trim();
 
   set httpProxy(String value) => _box.put('httpProxy', value.trim());
 
@@ -35,6 +34,42 @@ class Settings {
   bool get useWorkerProxy => _box.get('useWorkerProxy', defaultValue: false) as bool;
 
   set useWorkerProxy(bool value) => _box.put('useWorkerProxy', value);
+
+  /// Использовать системные настройки прокси (переменные окружения / ОС).
+  bool get useSystemProxy =>
+      _box.get('useSystemProxy', defaultValue: true) as bool;
+
+  set useSystemProxy(bool value) => _box.put('useSystemProxy', value);
+
+  /// Дополнительные заголовки, по одному на строку: `Name: value`.
+  String get customHeaders => _box.get('customHeaders') as String? ?? '';
+
+  set customHeaders(String value) => _box.put('customHeaders', value);
+
+  Map<String, String> get requestHeaders {
+    final headers = <String, String>{};
+    for (final line in customHeaders.split('\n')) {
+      final idx = line.indexOf(':');
+      if (idx <= 0) continue;
+      final name = line.substring(0, idx).trim();
+      final value = line.substring(idx + 1).trim();
+      if (name.isNotEmpty && value.isNotEmpty) headers[name] = value;
+    }
+    return headers;
+  }
+
+  /// Гостевой режим Spotify: анонимный веб-токен + публичные метаданные.
+  bool get spotifyGuestMode =>
+      _box.get('spotifyGuestMode', defaultValue: true) as bool;
+
+  set spotifyGuestMode(bool value) => _box.put('spotifyGuestMode', value);
+
+  /// Пользовательский Bearer-токен Spotify (необязательно).
+  String get spotifyAccessToken =>
+      _box.get('spotifyAccessToken') as String? ?? '';
+
+  set spotifyAccessToken(String value) =>
+      _box.put('spotifyAccessToken', value.trim());
 
   List<String> get pipedInstances =>
       (_box.get('pipedInstances') as List?)?.cast<String>().toList() ??

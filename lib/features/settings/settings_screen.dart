@@ -121,10 +121,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             activeThumbColor: AppColors.accent,
             onChanged: (v) => setState(() => settings.useWorkerProxy = v),
           ),
+          SwitchListTile(
+            title: const Text('Системный прокси'),
+            subtitle: const Text('Использовать настройки ОС / переменные окружения'),
+            value: settings.useSystemProxy,
+            activeThumbColor: AppColors.accent,
+            onChanged: (v) => setState(() => settings.useSystemProxy = v),
+          ),
           _TextFieldTile(
-            label: 'HTTP-прокси (host:port)',
+            label: 'HTTP / SOCKS5 прокси',
             value: settings.httpProxy,
-            hint: '127.0.0.1:8080 — например, локальный прокси VPN-клиента',
+            hint: '127.0.0.1:8080, socks5://127.0.0.1:1080 или http://user:pass@host:8080',
             onSaved: (v) {
               settings.httpProxy = v;
               ref.read(mirrorManagerProvider).resetHealth();
@@ -137,7 +144,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             activeThumbColor: AppColors.accent,
             onChanged: (v) => setState(() => settings.audioCache = v),
           ),
-          _Section('Spotify (ключи не нужны)'),
+          _TextFieldTile(
+            label: 'Дополнительные заголовки',
+            value: settings.customHeaders,
+            hint: 'User-Agent: ...\nX-Forwarded-For: ...',
+            maxLines: 3,
+            onSaved: (v) => setState(() => settings.customHeaders = v),
+          ),
+          _Section('Spotify (без OAuth)'),
+          SwitchListTile(
+            title: const Text('Гостевой режим Spotify'),
+            subtitle: const Text(
+              'Анонимный веб-токен и публичные метаданные: поиск работает '
+              'без client id/secret',
+            ),
+            value: settings.spotifyGuestMode,
+            activeThumbColor: AppColors.accent,
+            onChanged: (v) => setState(() => settings.spotifyGuestMode = v),
+          ),
           _TextFieldTile(
             label: 'Client ID',
             value: settings.spotifyClientId,
@@ -366,12 +390,14 @@ class _TextFieldTile extends StatefulWidget {
     required this.onSaved,
     this.hint,
     this.obscure = false,
+    this.maxLines = 1,
   });
 
   final String label;
   final String value;
   final String? hint;
   final bool obscure;
+  final int maxLines;
   final ValueChanged<String> onSaved;
 
   @override
@@ -395,6 +421,8 @@ class _TextFieldTileState extends State<_TextFieldTile> {
       child: TextField(
         controller: _controller,
         obscureText: widget.obscure,
+        maxLines: widget.obscure ? 1 : widget.maxLines,
+        minLines: 1,
         onSubmitted: widget.onSaved,
         onTapOutside: (_) {
           FocusScope.of(context).unfocus();

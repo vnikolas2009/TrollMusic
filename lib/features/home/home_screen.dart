@@ -31,7 +31,7 @@ class HomeScreen extends ConsumerWidget {
             children: [
               Icon(Icons.graphic_eq_rounded, color: AppColors.accent, size: 22),
               SizedBox(width: 8),
-              Text('YSPlayer'),
+              Text('TrollMusic'),
             ],
           ),
           actions: [

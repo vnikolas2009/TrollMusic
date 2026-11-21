@@ -9,7 +9,7 @@ import '../features/library/library_screen.dart';
 import '../features/player/player_screen.dart';
 import '../features/search/search_screen.dart';
 import '../shared/widgets/mini_player.dart';
-import '../shared/widgets/ys_bottom_nav.dart';
+import '../shared/widgets/troll_bottom_nav.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
@@ -62,7 +62,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ),
               ),
             ),
-          YsBottomNav(
+          TrollBottomNav(
             index: _index,
             onChanged: (i) => setState(() => _index = i),
           ),

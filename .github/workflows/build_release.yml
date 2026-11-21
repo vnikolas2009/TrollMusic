@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 env:
-  APP_NAME: YSPlayer
+  APP_NAME: TrollMusic
   FLUTTER_VERSION: 3.50.1
 
 jobs:

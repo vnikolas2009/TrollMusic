@@ -8,7 +8,7 @@ class InvidiousClient {
   InvidiousClient({required Settings settings, required ProxyConfig proxy})
       : _settings = settings,
         _proxy = proxy {
-    _mirrors = MirrorManager(settings: settings, dio: createDio());
+    _mirrors = MirrorManager(settings: settings, dio: createDio(settings: settings));
   }
 
   final Settings _settings;
@@ -41,8 +41,20 @@ class InvidiousClient {
   }
 
   Future<String?> audioUrl(String videoId, {int? bitrate}) async {
+    final urls = await audioUrls(videoId, bitrate: bitrate);
+    return urls.isEmpty ? null : urls.first;
+  }
+
+  Future<List<String>> audioUrls(String videoId, {int? bitrate}) async {
     final data = await _one('/api/v1/videos/$videoId');
-    return _pickAudioUrl(data, videoId, bitrate: bitrate ?? _settings.bitrate);
+    final raw = _pickAudioUrls(data, videoId, bitrate: bitrate ?? _settings.bitrate);
+    final out = <String>[];
+    for (final url in raw) {
+      for (final candidate in _variants(url)) {
+        if (!out.contains(candidate)) out.add(candidate);
+      }
+    }
+    return out;
   }
 
   Future<List<Map<String, dynamic>>> _json(
@@ -79,35 +91,45 @@ class InvidiousClient {
   }
 
   String? _pickAudioUrl(Map<String, dynamic> data, String videoId, {int? bitrate}) {
+    final urls = _pickAudioUrls(data, videoId, bitrate: bitrate);
+    if (urls.isEmpty) return null;
+    return _settings.proxyAudioStreams && _proxy.hasWorker
+        ? _proxy.passthrough(urls.first).toString()
+        : urls.first;
+  }
+
+  List<String> _pickAudioUrls(
+    Map<String, dynamic> data,
+    String videoId,
+    {int? bitrate}
+  ) {
     final formats = (data['adaptiveFormats'] as List?) ?? const [];
     final audio = formats
         .whereType<Map<String, dynamic>>()
         .where((f) => '${f['type'] ?? ''}'.startsWith('audio/'))
         .toList();
-    if (audio.isEmpty) return null;
+    if (audio.isEmpty) return const [];
 
     final target = bitrate ?? _settings.bitrate;
-    Map<String, dynamic>? best;
-    var bestScore = -1 << 30;
+    final scored = <({int score, String url})>[];
     for (final f in audio) {
+      final raw = f['url'] as String?;
+      if (raw == null || raw.isEmpty) continue;
       final type = '${f['type'] ?? ''}'.toLowerCase();
       final isOpus = type.contains('opus') || type.contains('webm');
       final kbps = _kbps(f);
       var score = kbps - (kbps - target).abs() ~/ 2;
       if (isOpus && _settings.preferOpus) score += 60;
       if (isOpus && !_settings.preferOpus) score -= 40;
-      if (score > bestScore) {
-        bestScore = score;
-        best = f;
-      }
+      scored.add((score: score, url: _absolute(raw, videoId)));
     }
+    scored.sort((a, b) => b.score.compareTo(a.score));
+    return [for (final item in scored.take(3)) item.url];
+  }
 
-    final raw = best?['url'] as String?;
-    if (raw == null) return null;
-    final absolute = _absolute(raw, videoId);
-    return (_settings.proxyAudioStreams && _proxy.hasWorker)
-        ? _proxy.passthrough(absolute).toString()
-        : absolute;
+  List<String> _variants(String url) {
+    if (!_settings.proxyAudioStreams || !_proxy.hasWorker) return [url];
+    return [_proxy.passthrough(url).toString(), url];
   }
 
   String _absolute(String url, String videoId) {

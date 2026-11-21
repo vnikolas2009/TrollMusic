@@ -5,7 +5,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../../core/network/http_client.dart';
 import '../../core/network/piped/youtube_music_client.dart';
+import '../../core/storage/settings.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../data/models/track.dart';
 import '../../data/repositories/library_repository.dart';
@@ -37,14 +39,15 @@ class DownloadService {
     required LibraryRepository library,
     required StorageService storage,
     required YouTubeMusicClient youtube,
+    required Settings settings,
   })  : _library = library,
         _storage = storage,
         _youtube = youtube,
-        _dio = Dio(BaseOptions(
+        _dio = createDio(
+          settings: settings,
           connectTimeout: const Duration(seconds: 15),
           receiveTimeout: const Duration(days: 2),
-          followRedirects: true,
-        ));
+        )..options.followRedirects = true;
 
   final LibraryRepository _library;
   final StorageService _storage;
@@ -85,7 +88,11 @@ class DownloadService {
     ));
 
     try {
-      final url = track.streamUrl ?? await _youtube.streamUrlForTrack(track);
+      var url = track.streamUrl;
+      if (url == null || url.isEmpty) {
+        final urls = await _youtube.resolveAudioUrls(track);
+        url = urls.isEmpty ? null : urls.first;
+      }
       if (url == null || url.isEmpty) {
         throw StateError('Не удалось получить ссылку на аудио');
       }

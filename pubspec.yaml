@@ -1,5 +1,5 @@
-name: ysplayer
-description: "YSPlayer - cross-platform music player with offline mode."
+name: trollmusic
+description: "TrollMusic - cross-platform music player with offline mode."
 publish_to: "none"
 version: 1.0.0+1
 
@@ -30,6 +30,7 @@ dependencies:
   flutter_riverpod: ^3.5.0
   uuid: ^4.6.0
   intl: ^0.20.3
+  socks5_proxy: ^2.1.2
 
 dev_dependencies:
   flutter_test:

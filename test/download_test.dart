@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ysplayer/services/download/download_service.dart';
+import 'package:trollmusic/services/download/download_service.dart';
 
 void main() {
   group('DownloadProgress', () {
@@ -42,3 +42,4 @@ void main() {
     });
   });
 }
+

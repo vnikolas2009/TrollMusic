@@ -20,7 +20,7 @@ class AppServices {
   final LibraryRepository library;
   final StorageService storage;
   final DownloadService downloads;
-  final YsAudioHandler audio;
+  final TrollAudioHandler audio;
 }
 
 final servicesProvider = Provider<AppServices>((ref) => throw UnimplementedError());
@@ -44,7 +44,7 @@ final importProvider = Provider<ImportService>(
   ),
 );
 
-final audioHandlerProvider = Provider<YsAudioHandler>(
+final audioHandlerProvider = Provider<TrollAudioHandler>(
   (ref) => ref.watch(servicesProvider).audio,
 );
 

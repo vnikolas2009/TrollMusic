@@ -270,12 +270,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                 IconButton(
                                   icon: Icon(
                                     switch (audio.repeat.value) {
-                                      YsRepeat.one => Icons.repeat_one_rounded,
-                                      YsRepeat.all => Icons.repeat_rounded,
-                                      YsRepeat.off => Icons.repeat_rounded,
+                                      TrollRepeat.one => Icons.repeat_one_rounded,
+                                      TrollRepeat.all => Icons.repeat_rounded,
+                                      TrollRepeat.off => Icons.repeat_rounded,
                                     },
                                   ),
-                                  color: audio.repeat.value == YsRepeat.off
+                                  color: audio.repeat.value == TrollRepeat.off
                                       ? AppColors.textSecondary
                                       : AppColors.accent,
                                   onPressed: () async {

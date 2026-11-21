@@ -31,7 +31,7 @@ class StorageService {
     required LyricsClient lyrics,
   }) async {
     final base = await getApplicationSupportDirectory();
-    final root = Directory(p.join(base.path, 'ysplayer'));
+    final root = Directory(p.join(base.path, 'trollmusic'));
     for (final sub in ['audio', 'artwork', 'lyrics', 'imports']) {
       await Directory(p.join(root.path, sub)).create(recursive: true);
     }

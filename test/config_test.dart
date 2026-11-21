@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ysplayer/core/config/app_config.dart';
+import 'package:trollmusic/core/config/app_config.dart';
 
 void main() {
   group('AppConfig', () {
@@ -26,3 +26,4 @@ void main() {
     });
   });
 }
+

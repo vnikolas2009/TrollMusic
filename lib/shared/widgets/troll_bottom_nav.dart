@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 
-class YsBottomNav extends StatelessWidget {
-  const YsBottomNav({super.key, required this.index, required this.onChanged});
+class TrollBottomNav extends StatelessWidget {
+  const TrollBottomNav({super.key, required this.index, required this.onChanged});
 
   final int index;
   final ValueChanged<int> onChanged;

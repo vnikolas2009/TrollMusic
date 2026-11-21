@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ysplayer/core/utils/formatters.dart';
-import 'package:ysplayer/core/utils/lrc_parser.dart';
+import 'package:trollmusic/core/utils/formatters.dart';
+import 'package:trollmusic/core/utils/lrc_parser.dart';
 
 void main() {
   test('formats duration', () {
@@ -17,3 +17,4 @@ void main() {
     expect(lyrics.indexAt(const Duration(seconds: 4)), 1);
   });
 }
+

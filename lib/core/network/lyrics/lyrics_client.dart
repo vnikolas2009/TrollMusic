@@ -86,7 +86,7 @@ class LyricsClient {
         options: Options(
           headers: {
             'accept': 'application/json',
-            'user-agent': 'YSPlayer/1.0 (+https://github.com/vnikolas2009/YSPlayer)',
+            'user-agent': 'TrollMusic/1.0 (+https://github.com/vnikolas2009/TrollMusic)',
           },
         ),
       );

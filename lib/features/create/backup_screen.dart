@@ -26,7 +26,7 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
       final data = ref.read(libraryProvider).exportJson();
       final encoded = const JsonEncoder.withIndent('  ').convert(data);
       await FilePicker.saveFile(
-        fileName: 'ysplayer-backup.json',
+        fileName: 'trollmusic-backup.json',
         bytes: Uint8List.fromList(utf8.encode(encoded)),
         mimeType: 'application/json',
         dialogTitle: 'Сохранить резервную копию',

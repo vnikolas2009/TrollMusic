@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ysplayer/core/utils/track_groups.dart';
-import 'package:ysplayer/data/models/track.dart';
+import 'package:trollmusic/core/utils/track_groups.dart';
+import 'package:trollmusic/data/models/track.dart';
 
 Track _track(String id, String artist) => Track(
       id: id,

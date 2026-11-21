@@ -20,7 +20,7 @@ class MusicRepository {
   Future<List<Track>> searchAll(String query) async {
     final responses = await Future.wait([
       _safeList(youtube.search(query)),
-      if (spotify.hasCredentials) _safeList(spotify.search(query)),
+      _safeList(spotify.search(query)),
     ]);
 
     final seen = <String>{};

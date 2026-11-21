@@ -135,7 +135,7 @@ class LibraryRepository {
   Future<void> clearLyrics(String trackId) => _lyrics.delete(trackId);
 
   Map<String, dynamic> exportJson() => {
-        'app': 'YSPlayer',
+        'app': 'TrollMusic',
         'version': 1,
         'tracks': tracks.map((t) => t.toJson()).toList(),
         'liked': _likedIds.toList(),

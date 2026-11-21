@@ -32,24 +32,29 @@ Future<void> main() async {
   final lyrics = LyricsClient();
   final piped = PipedClient(settings: settings, proxy: proxy);
   final invidious = InvidiousClient(settings: settings, proxy: proxy);
-  final youtube = YouTubeMusicClient(piped: piped, invidious: invidious);
+  final youtube = YouTubeMusicClient(
+    piped: piped,
+    invidious: invidious,
+    settings: settings,
+  );
 
   final storage = await StorageService.open(library: library, lyrics: lyrics);
   final downloads = DownloadService(
     library: library,
     storage: storage,
     youtube: youtube,
+    settings: settings,
   );
 
   final audio = await AudioService.init(
-    builder: () => YsAudioHandler(
+    builder: () => TrollAudioHandler(
       library: library,
       settings: settings,
-      resolveStream: youtube.streamUrlForTrack,
+      resolveStreams: youtube.resolveAudioUrls,
     ),
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.ysplayer.audio',
-      androidNotificationChannelName: 'YSPlayer',
+      androidNotificationChannelId: 'com.trollmusic.audio',
+      androidNotificationChannelName: 'TrollMusic',
       androidNotificationOngoing: true,
       androidStopForegroundOnPause: true,
     ),
@@ -78,7 +83,7 @@ Future<void> main() async {
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: const YSPlayerApp(),
+      child: const TrollMusicApp(),
     ),
   );
 }

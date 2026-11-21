@@ -134,9 +134,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
     try {
       final repo = ref.read(musicRepositoryProvider);
-      final results = repo.spotify.hasCredentials
-          ? await repo.searchAll(trimmed)
-          : await repo.searchYouTube(trimmed);
+      final results = await repo.searchAll(trimmed);
       if (!mounted) return;
       setState(() {
         _results = results;

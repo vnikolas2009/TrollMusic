@@ -33,7 +33,7 @@ class _SplashGateState extends State<SplashGate> {
             Icon(Icons.graphic_eq_rounded, color: AppColors.accent, size: 42),
             SizedBox(height: 12),
             Text(
-              'YSPlayer',
+              'TrollMusic',
               style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w800,

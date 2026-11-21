@@ -1,24 +1,44 @@
 abstract final class AppConfig {
-  static const appName = 'YSPlayer';
+  static const appName = 'TrollMusic';
+  static const appVersion = '1.1.0';
   /// Публичного Worker нет: пользователь разворачивает свой (см. README).
   static const defaultWorkerUrl = '';
-  static const mirrorTimeout = Duration(seconds: 3);
-  static const requestTimeout = Duration(seconds: 15);
+  static const mirrorTimeout = Duration(seconds: 4);
+  static const requestTimeout = Duration(seconds: 20);
+  static const playbackTimeout = Duration(seconds: 12);
+
+  /// Заголовки, максимально похожие на обычный клиент. Помогают обходить
+  /// часть гео/бот-ограничений без пользовательского OAuth.
+  static const defaultHeaders = <String, String>{
+    'user-agent':
+        'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 '
+            '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    'accept': 'application/json, text/plain, */*',
+    'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+  };
+
+  static const spotifyWebUserAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
   static const defaultPipedInstances = <String>[
-    'https://pipedapi.kavin.rocks',
     'https://pipedapi.adminforge.de',
-    'https://api.piped.private.coffee',
+    'https://pipedapi.reallyaweso.me',
+    'https://pipedapi.ducks.party',
+    'https://pipedapi.kavin.rocks',
     'https://pipedapi.leptons.xyz',
-    'https://pipedapi.drgns.space',
+    'https://api.piped.private.coffee',
+    'https://pipedapi.nosebs.ru',
   ];
 
   static const defaultInvidiousInstances = <String>[
     'https://inv.nadeko.net',
     'https://invidious.nerdvpn.de',
     'https://yewtu.be',
+    'https://inv.tux.pizza',
+    'https://invidious.privacyredirect.com',
+    'https://iv.ggtyler.dev',
     'https://invidious.f5.si',
-    'https://vid.puffyan.us',
   ];
 
   static const audioBitrates = <int>[128, 192, 256, 320];
