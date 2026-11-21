@@ -8,8 +8,10 @@ import '../../core/utils/formatters.dart';
 import '../../core/utils/track_groups.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/cover_art.dart';
-import '../../shared/widgets/station_card.dart';
+import '../../shared/widgets/entrance.dart';
+import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/section_header.dart';
+import '../../shared/widgets/station_card.dart';
 import '../playlist/playlist_screen.dart';
 import '../settings/settings_screen.dart';
 
@@ -23,14 +25,18 @@ class HomeScreen extends ConsumerWidget {
     final daily = buildDailyPick(tracks, settings.recentIds);
 
     return CustomScrollView(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       slivers: [
         SliverAppBar(
           pinned: true,
-          backgroundColor: AppColors.background,
+          backgroundColor: AppColors.background.withValues(alpha: 0.92),
+          surfaceTintColor: Colors.transparent,
           title: const Row(
             children: [
-              Icon(Icons.graphic_eq_rounded, color: AppColors.accent, size: 22),
-              SizedBox(width: 8),
+              _BrandMark(),
+              SizedBox(width: 10),
               Text('TrollMusic'),
             ],
           ),
@@ -41,22 +47,50 @@ class HomeScreen extends ConsumerWidget {
               ),
               icon: const Icon(Icons.settings_outlined),
             ),
+            const SizedBox(width: 4),
           ],
         ),
         SliverToBoxAdapter(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (daily.isNotEmpty) _DailyPick(tracks: daily),
-              if (tracks.isEmpty) const _TrendingSection(),
-              _Stations(tracks: tracks),
-              if (tracks.isNotEmpty) _Recent(tracks: tracks),
-              _Discoveries(tracks: tracks),
-              const SizedBox(height: 28),
+              if (daily.isNotEmpty)
+                Entrance(index: 0, child: _DailyPick(tracks: daily)),
+              if (tracks.isEmpty)
+                Entrance(index: 1, child: const _TrendingSection()),
+              Entrance(index: 2, child: _Stations(tracks: tracks)),
+              if (tracks.isNotEmpty)
+                Entrance(index: 3, child: _Recent(tracks: tracks)),
+              Entrance(index: 4, child: _Discoveries(tracks: tracks)),
+              const SizedBox(height: 32),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Логотип-«эквалайзер» с мягким свечением акцента.
+class _BrandMark extends StatelessWidget {
+  const _BrandMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 28,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.22)),
+      ),
+      child: const Icon(
+        Icons.graphic_eq_rounded,
+        color: AppColors.accent,
+        size: 18,
+      ),
     );
   }
 }
@@ -69,22 +103,25 @@ class _TrendingSection extends ConsumerWidget {
     final trending = ref.watch(trendingProvider);
 
     return trending.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.fromLTRB(16, 24, 16, 0),
+      loading: () => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
         child: Row(
           children: [
-            SizedBox(
-              width: 16,
-              height: 16,
+            const SizedBox(
+              width: 14,
+              height: 14,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
                 color: AppColors.textSecondary,
               ),
             ),
-            SizedBox(width: 10),
+            const SizedBox(width: 10),
             Text(
               'Загружаем тренды...',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary.withValues(alpha: 0.9),
+              ),
             ),
           ],
         ),
@@ -106,78 +143,157 @@ class _TrendingSection extends ConsumerWidget {
                 child: const Text('Слушать'),
               ),
             ),
-            SizedBox(
-              height: 186,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: limited.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder: (context, i) {
-                  final track = limited[i];
-                  return SizedBox(
-                    width: 132,
-                    child: InkWell(
-                      onTap: () => ref
-                          .read(audioHandlerProvider)
-                          .playTrack(track, contextQueue: limited),
-                      onLongPress: () async {
-                        await ref.read(libraryProvider).saveTrack(track);
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Трек добавлен в медиатеку'),
-                          ),
-                        );
-                      },
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CoverArt(
-                            url: track.thumbnailUrl,
-                            path: track.artworkPath,
-                            size: 132,
-                            radius: 8,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            track.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            track.artist,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
+            _HorizontalRail(
+              height: 190,
+              itemCount: limited.length,
+              itemBuilder: (context, i) {
+                final track = limited[i];
+                return SizedBox(
+                  width: 136,
+                  child: _TrackCard(
+                    index: i,
+                    track: track,
+                    size: 136,
+                    onTap: () => ref
+                        .read(audioHandlerProvider)
+                        .playTrack(track, contextQueue: limited),
+                    onLongPress: () async {
+                      await ref.read(libraryProvider).saveTrack(track);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Трек добавлен в медиатеку'),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Text(
                 'Удерживайте трек, чтобы сохранить его в медиатеку',
                 style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.textSecondary.withValues(alpha: 0.8),
+                  color: AppColors.textTertiary,
                 ),
               ),
             ),
           ],
         );
       },
+    );
+  }
+}
+
+/// Горизонтальная лента с «мягкими» краями прокрутки.
+class _HorizontalRail extends StatelessWidget {
+  const _HorizontalRail({
+    required this.height,
+    required this.itemCount,
+    required this.itemBuilder,
+  });
+
+  final double height;
+  final int itemCount;
+  final Widget Function(BuildContext, int) itemBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: itemCount,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: itemBuilder,
+      ),
+    );
+  }
+}
+
+/// Карточка трека: нажатие сжимает обложку, поверх — лёгкий градиент.
+class _TrackCard extends StatelessWidget {
+  const _TrackCard({
+    required this.track,
+    required this.size,
+    this.index = 0,
+    this.titleOverride,
+    this.subtitleOverride,
+    this.onTap,
+    this.onLongPress,
+  });
+
+  final Track track;
+  final double size;
+  final int index;
+  final String? titleOverride;
+  final String? subtitleOverride;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Entrance(
+      index: index,
+      offsetY: 0.08,
+      child: PressScale(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        scale: 0.95,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              children: [
+                CoverArt(
+                  url: track.thumbnailUrl,
+                  path: track.artworkPath,
+                  size: size,
+                  radius: 14,
+                ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: AppColors.glassBorder,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 9),
+            Text(
+              titleOverride ?? track.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.1,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              subtitleOverride ?? track.artist,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -193,16 +309,28 @@ class _DailyPick extends StatelessWidget {
     final artists = tracks.map((t) => t.artist).toSet().take(3).join(' · ');
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Подборка дня',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.6),
+          const Row(
+            children: [
+              Text(
+                'Подборка дня',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.9,
+                  height: 1.1,
+                ),
+              ),
+              SizedBox(width: 8),
+              _LiveDot(),
+            ],
           ),
-          const SizedBox(height: 12),
-          GestureDetector(
+          const SizedBox(height: 14),
+          PressScale(
+            scale: 0.975,
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => PlaylistScreen(
@@ -214,17 +342,21 @@ class _DailyPick extends StatelessWidget {
               ),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(22),
               child: AspectRatio(
-                aspectRatio: 2.1,
+                aspectRatio: 2.0,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
                     CoverArt(
                       url: lead.thumbnailUrl,
                       path: lead.artworkPath,
-                      size: 400,
+                      size: 480,
                       radius: 0,
+                      animate: false,
+                    ),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(gradient: AppColors.coverScrim),
                     ),
                     DecoratedBox(
                       decoration: BoxDecoration(
@@ -232,14 +364,14 @@ class _DailyPick extends StatelessWidget {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            Colors.black.withValues(alpha: 0.25),
-                            Colors.black.withValues(alpha: 0.9),
+                            AppColors.accent.withValues(alpha: 0.22),
+                            Colors.transparent,
                           ],
                         ),
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(18),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.end,
@@ -247,22 +379,41 @@ class _DailyPick extends StatelessWidget {
                           Text(
                             'ТВОЙ\nМИКС',
                             style: TextStyle(
-                              color: AppColors.accent,
-                              fontSize: 30,
-                              height: 0.95,
+                              color: AppColors.accentSoft,
+                              fontSize: 34,
+                              height: 0.9,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: -1.2,
+                              letterSpacing: -1.6,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            artists,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                            ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  artists,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.textPrimary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.black,
+                                  size: 26,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -273,6 +424,46 @@ class _DailyPick extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Пульсирующая точка «в эфире».
+class _LiveDot extends StatefulWidget {
+  const _LiveDot();
+
+  @override
+  State<_LiveDot> createState() => _LiveDotState();
+}
+
+class _LiveDotState extends State<_LiveDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: TweenSequence<double>([
+        TweenSequenceItem(tween: Tween<double>(begin: 0.35, end: 1), weight: 50),
+        TweenSequenceItem(tween: Tween<double>(begin: 1, end: 0.35), weight: 50),
+      ]).animate(_controller),
+      child: Container(
+        width: 7,
+        height: 7,
+        decoration: const BoxDecoration(
+          color: AppColors.accent,
+          shape: BoxShape.circle,
+        ),
       ),
     );
   }
@@ -336,52 +527,29 @@ class _RecentState extends ConsumerState<_Recent> {
           ),
         ),
         SizedBox(
-          height: 150,
+          height: 156,
           child: ListView.separated(
             key: ValueKey(_revision),
             scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: recent.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
             itemBuilder: (context, i) {
               final track = recent[i];
               final plays = settings.playCounts[track.id] ?? 0;
               return SizedBox(
-                width: 104,
-                child: InkWell(
+                width: 108,
+                child: _TrackCard(
+                  index: i,
+                  track: track,
+                  subtitleOverride: plays > 1
+                      ? '${track.artist} · $plays раз'
+                      : null,
+                  size: 108,
                   onTap: () => ref
                       .read(audioHandlerProvider)
                       .playTrack(track, contextQueue: recent),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CoverArt(
-                        url: track.thumbnailUrl,
-                        path: track.artworkPath,
-                        size: 104,
-                        radius: 8,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        track.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        plays > 1 ? '${track.artist} · $plays раз' : track.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               );
             },
@@ -432,40 +600,48 @@ class _Stations extends ConsumerWidget {
                 ),
         ),
         SizedBox(
-          height: 160,
+          height: 168,
           child: groups.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     'Добавьте треки — появятся станции по артистам',
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: AppColors.textTertiary,
                     ),
                   ),
                 )
               : ListView.separated(
                   scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: groups.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  separatorBuilder: (_, __) => const SizedBox(width: 14),
                   itemBuilder: (context, i) {
                     final name = groups[i].key;
                     final own = groups[i].value;
                     // Станция артиста: его треки первыми, остальное — вперемешку.
                     final station = buildArtistMix(own, tracks);
-                    return StationCard(
-                      title: name,
-                      background: _palette[i % _palette.length],
-                      centerUrl: own.isNotEmpty ? own.first.thumbnailUrl : null,
-                      leftUrl: station.length > 1 ? station[1].thumbnailUrl : null,
-                      rightUrl: station.length > 2 ? station[2].thumbnailUrl : null,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => PlaylistScreen(
-                            id: 'station:$name',
-                            title: '$name: радио',
-                            isRadio: true,
-                            tracks: station,
+                    return Entrance(
+                      index: i,
+                      child: StationCard(
+                        title: name,
+                        background: _palette[i % _palette.length],
+                        centerUrl:
+                            own.isNotEmpty ? own.first.thumbnailUrl : null,
+                        leftUrl:
+                            station.length > 1 ? station[1].thumbnailUrl : null,
+                        rightUrl:
+                            station.length > 2 ? station[2].thumbnailUrl : null,
+                        size: 168,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => PlaylistScreen(
+                              id: 'station:$name',
+                              title: '$name: радио',
+                              isRadio: true,
+                              tracks: station,
+                            ),
                           ),
                         ),
                       ),
@@ -487,7 +663,7 @@ class _Discoveries extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (tracks.isEmpty) {
       return const Padding(
-        padding: EdgeInsets.fromLTRB(24, 40, 24, 0),
+        padding: EdgeInsets.fromLTRB(24, 44, 24, 0),
         child: Text(
           'Медиатека пуста.\nИмпортируйте аудио во вкладке «Создать»\nили найдите музыку в «Поиске».',
           textAlign: TextAlign.center,
@@ -502,71 +678,48 @@ class _Discoveries extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(
-          title: 'Еще больше открытий',
+          title: 'Ещё больше открытий',
           avatarUrl: items.first.value.first.thumbnailUrl,
         ),
-        SizedBox(
-          height: 186,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, i) {
-              final name = items[i].key;
-              final own = items[i].value;
-              final lead = own.first;
-              final mix = buildArtistMix(own, tracks, limit: 20);
-              return SizedBox(
-                width: 132,
-                child: InkWell(
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => PlaylistScreen(
-                        id: 'mix:$name',
-                        title: '$name: микст',
-                        subtitle: '${mix.length} треков',
-                        tracks: mix,
-                      ),
+        _HorizontalRail(
+          height: 190,
+          itemCount: items.length,
+          itemBuilder: (context, i) {
+            final name = items[i].key;
+            final own = items[i].value;
+            final lead = own.first;
+            final mix = buildArtistMix(own, tracks, limit: 20);
+            return SizedBox(
+              width: 136,
+              child: _TrackCard(
+                index: i,
+                track: lead,
+                titleOverride: name,
+                subtitleOverride:
+                    own.length == 1 ? '1 трек' : '${own.length} треков',
+                size: 136,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => PlaylistScreen(
+                      id: 'mix:$name',
+                      title: '$name: микст',
+                      subtitle: '${mix.length} треков',
+                      tracks: mix,
                     ),
                   ),
-                  onLongPress: () => ref
-                      .read(audioHandlerProvider)
-                      .playTrack(lead, contextQueue: mix),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CoverArt(
-                        url: lead.thumbnailUrl,
-                        path: lead.artworkPath,
-                        size: 132,
-                        radius: 8,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        own.length == 1 ? '1 трек' : '${own.length} треков',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
                 ),
-              );
-            },
-          ),
+                onLongPress: () => ref
+                    .read(audioHandlerProvider)
+                    .playTrack(lead, contextQueue: mix),
+              ),
+            );
+          },
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
           child: Text(
             _summary(tracks),
-            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
           ),
         ),
       ],

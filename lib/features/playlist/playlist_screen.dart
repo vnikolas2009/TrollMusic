@@ -9,6 +9,7 @@ import '../../data/models/playlist.dart';
 import '../../data/models/track.dart';
 import '../../services/download/download_service.dart';
 import '../../shared/widgets/circle_collage.dart';
+import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/track_tile.dart';
 
 class PlaylistScreen extends ConsumerStatefulWidget {
@@ -362,13 +363,17 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 380,
+            expandedHeight: 396,
             backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
+              icon: const Icon(Icons.arrow_back_rounded),
               onPressed: () => Navigator.of(context).pop(),
             ),
             actions: [
@@ -393,171 +398,195 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [_dominant, AppColors.background],
-                    stops: const [0, 0.85],
+              titlePadding: EdgeInsets.zero,
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [_dominant, AppColors.background],
+                        stops: const [0, 0.88],
+                      ),
+                    ),
                   ),
-                ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        CircleCollage(
-                          centerUrl: lead?.thumbnailUrl,
-                          centerPath: lead?.artworkPath,
-                          leftUrl: tracks.length > 1 ? tracks[1].thumbnailUrl : null,
-                          rightUrl: tracks.length > 2 ? tracks[2].thumbnailUrl : null,
-                          size: 150,
-                          background: _dominant,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _title,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.6,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _subtitle ??
-                              '${widget.isRadio ? 'Радио' : 'Плейлист'} · '
-                                  '${tracks.length} треков · ${formatLongDuration(total)}',
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _RoundButton(
-                              icon: Icons.shuffle_rounded,
-                              onTap: () async {
-                                await audio.setShuffle(true);
-                                if (tracks.isNotEmpty) await audio.playTrack(tracks.first, contextQueue: tracks);
-                              },
+                  SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          PressScale(
+                            scale: 0.96,
+                            child: CircleCollage(
+                              centerUrl: lead?.thumbnailUrl,
+                              centerPath: lead?.artworkPath,
+                              leftUrl:
+                                  tracks.length > 1 ? tracks[1].thumbnailUrl : null,
+                              rightUrl:
+                                  tracks.length > 2 ? tracks[2].thumbnailUrl : null,
+                              size: 156,
+                              background: _dominant,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 3,
-                              child: SizedBox(
-                                height: 46,
-                                child: FilledButton.icon(
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: AppColors.textPrimary,
-                                    foregroundColor: Colors.black,
-                                    shape: const StadiumBorder(),
-                                  ),
-                                  onPressed: tracks.isEmpty
-                                      ? null
-                                      : () => audio.playTrack(tracks.first, contextQueue: tracks),
-                                  icon: const Icon(Icons.play_arrow_rounded),
-                                  label: const Text(
-                                    'Слушать',
-                                    style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _title,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 25,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.7,
+                              height: 1.15,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _subtitle ??
+                                '${widget.isRadio ? 'Радио' : 'Плейлист'} · '
+                                    '${tracks.length} треков · ${formatLongDuration(total)}',
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _RoundButton(
+                                icon: Icons.shuffle_rounded,
+                                onTap: () async {
+                                  await audio.setShuffle(true);
+                                  if (tracks.isNotEmpty) {
+                                    await audio.playTrack(
+                                      tracks.first,
+                                      contextQueue: tracks,
+                                    );
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 3,
+                                child: SizedBox(
+                                  height: 46,
+                                  child: FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppColors.textPrimary,
+                                      foregroundColor: Colors.black,
+                                      shape: const StadiumBorder(),
+                                    ),
+                                    onPressed: tracks.isEmpty
+                                        ? null
+                                        : () => audio.playTrack(
+                                              tracks.first,
+                                              contextQueue: tracks,
+                                            ),
+                                    icon: const Icon(Icons.play_arrow_rounded),
+                                    label: const Text(
+                                      'Слушать',
+                                      style: TextStyle(fontWeight: FontWeight.w700),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            _RoundButton(
-                              icon: _saved ? Icons.edit_outlined : Icons.add,
-                              onTap: () async {
-                                final library = ref.read(libraryProvider);
-                                final existing = library.playlistById(widget.id);
-                                await library.savePlaylist(
-                                  Playlist(
-                                    id: widget.id,
-                                    title: _title,
-                                    description: _subtitle ?? '',
-                                    imageUrl: widget.coverUrl ?? lead?.thumbnailUrl,
-                                    tracks: _tracks,
-                                    isRadio: widget.isRadio,
-                                    colorValue: _dominant.value,
-                                  ),
-                                );
-                                if (!mounted) return;
-                                setState(() => _saved = true);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(existing == null
-                                        ? 'Добавлено в медиатеку'
-                                        : 'Плейлист обновлён'),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            _RoundButton(
-                              icon: Icons.download_rounded,
-                              onTap: () async {
-                                final downloads = ref.read(downloadProvider);
-                                final pending = tracks
-                                    .where((t) => !downloads.isDownloading(t.id))
-                                    .where((t) =>
-                                        t.localPath == null ||
-                                        t.localPath!.isEmpty)
-                                    .toList();
-                                if (pending.isEmpty) {
+                              const SizedBox(width: 12),
+                              _RoundButton(
+                                icon: _saved ? Icons.edit_outlined : Icons.add,
+                                onTap: () async {
+                                  final library = ref.read(libraryProvider);
+                                  final existing =
+                                      library.playlistById(widget.id);
+                                  await library.savePlaylist(
+                                    Playlist(
+                                      id: widget.id,
+                                      title: _title,
+                                      description: _subtitle ?? '',
+                                      imageUrl:
+                                          widget.coverUrl ?? lead?.thumbnailUrl,
+                                      tracks: _tracks,
+                                      isRadio: widget.isRadio,
+                                      colorValue: _dominant.value,
+                                    ),
+                                  );
+                                  if (!mounted) return;
+                                  setState(() => _saved = true);
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Все треки уже скачаны'),
+                                    SnackBar(
+                                      content: Text(existing == null
+                                          ? 'Добавлено в медиатеку'
+                                          : 'Плейлист обновлён'),
                                     ),
                                   );
-                                  return;
-                                }
-                                final messenger = ScaffoldMessenger.of(context);
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Скачиваю 0 из ${pending.length}...',
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              _RoundButton(
+                                icon: Icons.download_rounded,
+                                onTap: () async {
+                                  final downloads = ref.read(downloadProvider);
+                                  final pending = tracks
+                                      .where((t) =>
+                                          !downloads.isDownloading(t.id))
+                                      .where((t) =>
+                                          t.localPath == null ||
+                                          t.localPath!.isEmpty)
+                                      .toList();
+                                  if (pending.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Все треки уже скачаны'),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  final messenger =
+                                      ScaffoldMessenger.of(context);
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Скачиваю 0 из ${pending.length}...',
+                                      ),
                                     ),
-                                  ),
-                                );
-                                await downloads.downloadAll(
-                                  pending,
-                                  onProgress: (done, total) {
-                                    messenger
-                                      ..hideCurrentSnackBar()
-                                      ..showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Скачиваю $done из $total...',
+                                  );
+                                  await downloads.downloadAll(
+                                    pending,
+                                    onProgress: (done, total) {
+                                      messenger
+                                        ..hideCurrentSnackBar()
+                                        ..showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Скачиваю $done из $total...',
+                                            ),
                                           ),
-                                        ),
-                                      );
-                                  },
-                                );
-                                messenger
-                                  ..hideCurrentSnackBar()
-                                  ..showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Скачивание завершено'),
-                                    ),
+                                        );
+                                    },
                                   );
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
+                                  messenger
+                                    ..hideCurrentSnackBar()
+                                    ..showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Скачивание завершено'),
+                                      ),
+                                    );
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -576,8 +605,10 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
                     coverUrl: track.thumbnailUrl,
                     coverPath: track.artworkPath,
                     explicit: track.explicit,
-                    downloaded: track.localPath != null && track.localPath!.isNotEmpty,
+                    downloaded:
+                        track.localPath != null && track.localPath!.isNotEmpty,
                     downloadProgress: progress?.fraction,
+                    index: i,
                     onTap: () => audio.playTrack(track, contextQueue: tracks),
                     onMenu: () => _showMenu(track, progress),
                   );
@@ -585,7 +616,7 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
               );
             },
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 40)),
+          const SliverToBoxAdapter(child: SizedBox(height: 44)),
         ],
       ),
     );

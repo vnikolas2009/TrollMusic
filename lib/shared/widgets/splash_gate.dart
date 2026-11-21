@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_shell.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
 
 class SplashGate extends StatefulWidget {
   const SplashGate({super.key});
@@ -10,37 +11,85 @@ class SplashGate extends StatefulWidget {
   State<SplashGate> createState() => _SplashGateState();
 }
 
-class _SplashGateState extends State<SplashGate> {
+class _SplashGateState extends State<SplashGate>
+    with SingleTickerProviderStateMixin {
   bool _ready = false;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..forward();
+
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _controller,
+    curve: AppMotion.enter,
+  );
 
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(const Duration(milliseconds: 250), () {
+    Future<void>.delayed(const Duration(milliseconds: 420), () {
       if (mounted) setState(() => _ready = true);
     });
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (_ready) return const AppShell();
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.graphic_eq_rounded, color: AppColors.accent, size: 42),
-            SizedBox(height: 12),
-            Text(
-              'TrollMusic',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.6,
-              ),
+        child: FadeTransition(
+          opacity: _fade,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.94, end: 1.0).animate(_fade),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.accent.withValues(alpha: 0.24),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.graphic_eq_rounded,
+                    color: AppColors.accent,
+                    size: 34,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'TrollMusic',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.8,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'музыка без границ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    letterSpacing: 1.2,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

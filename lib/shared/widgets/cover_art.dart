@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
 
+/// Обложка с мягким появлением и плейсхолдером, который не «прыгает».
 class CoverArt extends StatelessWidget {
   const CoverArt({
     super.key,
@@ -14,6 +16,8 @@ class CoverArt extends StatelessWidget {
     this.circle = false,
     this.placeholderColor,
     this.placeholderIcon = Icons.music_note_rounded,
+    this.fit = BoxFit.cover,
+    this.animate = true,
   });
 
   final String? url;
@@ -23,6 +27,8 @@ class CoverArt extends StatelessWidget {
   final bool circle;
   final Color? placeholderColor;
   final IconData placeholderIcon;
+  final BoxFit fit;
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
@@ -42,23 +48,40 @@ class CoverArt extends StatelessWidget {
     if (path != null && path!.isNotEmpty) {
       final file = File(path!);
       if (file.existsSync()) {
-        return Image.file(
-          file,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _placeholder(fallback),
+        return _image(
+          Image.file(
+            file,
+            fit: fit,
+            errorBuilder: (_, __, ___) => _placeholder(fallback),
+          ),
         );
       }
     }
     if (url != null && url!.isNotEmpty) {
-      return Image.network(
-        url!,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _placeholder(fallback),
-        loadingBuilder: (context, child, progress) =>
-            progress == null ? child : _placeholder(fallback),
+      return _image(
+        Image.network(
+          url!,
+          fit: fit,
+          errorBuilder: (_, __, ___) => _placeholder(fallback),
+          loadingBuilder: (context, child, progress) =>
+              progress == null ? child : _placeholder(fallback),
+        ),
       );
     }
     return _placeholder(fallback);
+  }
+
+  Widget _image(Widget child) {
+    if (!animate) return child;
+    return AnimatedSwitcher(
+      duration: AppMotion.base,
+      switchInCurve: AppMotion.enter,
+      layoutBuilder: (current, previous) => Stack(
+        fit: StackFit.expand,
+        children: [...previous, if (current != null) current],
+      ),
+      child: child,
+    );
   }
 
   Widget _placeholder(Color fallback) => Container(

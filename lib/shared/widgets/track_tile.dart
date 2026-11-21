@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
 import 'explicit_badge.dart';
 
-class TrackTile extends StatelessWidget {
+/// Строка трека: при нажатии подсвечивается фоном, а не «прыгает».
+class TrackTile extends StatefulWidget {
   const TrackTile({
     super.key,
     required this.title,
@@ -20,6 +23,8 @@ class TrackTile extends StatelessWidget {
     this.trailing,
     this.leading,
     this.showCover = true,
+    this.active = false,
+    this.index,
   });
 
   final String title;
@@ -34,88 +39,186 @@ class TrackTile extends StatelessWidget {
   final Widget? trailing;
   final Widget? leading;
   final bool showCover;
+  final bool active;
+
+  /// Позиция в списке: используется для каскадного появления.
+  final int? index;
+
+  @override
+  State<TrackTile> createState() => _TrackTileState();
+}
+
+class _TrackTileState extends State<TrackTile> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        child: Row(
-          children: [
-            if (leading != null)
-              leading!
-            else if (showCover) ...[
-              _Cover(url: coverUrl, path: coverPath),
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
+    final index = widget.index;
+    final highlighted = _pressed || widget.active;
+
+    final row = AnimatedContainer(
+      duration: AppMotion.fast,
+      curve: AppMotion.emphasized,
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+      decoration: BoxDecoration(
+        color: highlighted
+            ? AppColors.surfaceAlt
+            : AppColors.surfaceAlt.withValues(alpha: 0),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          if (widget.leading != null)
+            widget.leading!
+          else if (widget.showCover) ...[
+            _Cover(url: widget.coverUrl, path: widget.coverPath),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: widget.active
+                        ? AppColors.accent
+                        : AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: -0.1,
                   ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      if (explicit) ...[
-                        const ExplicitBadge(),
-                        const SizedBox(width: 6),
-                      ],
-                      Flexible(
-                        child: Text(
-                          artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                          ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    if (widget.explicit) ...[
+                      const ExplicitBadge(),
+                      const SizedBox(width: 6),
+                    ],
+                    Flexible(
+                      child: Text(
+                        widget.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (widget.downloadProgress != null)
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                value: widget.downloadProgress,
+                strokeWidth: 2,
+              ),
+            )
+          else if (widget.downloaded)
+            const Padding(
+              padding: EdgeInsets.only(right: 4),
+              child: Icon(
+                Icons.download_done_rounded,
+                size: 16,
+                color: AppColors.accent,
               ),
             ),
-            if (downloadProgress != null)
-              SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  value: downloadProgress,
-                  strokeWidth: 2,
-                ),
-              )
-            else if (downloaded)
-              const Padding(
-                padding: EdgeInsets.only(right: 4),
-                child: Icon(
-                  Icons.download_done_rounded,
-                  size: 16,
-                  color: AppColors.accent,
-                ),
-              ),
-            if (trailing != null)
-              trailing!
-            else
-              IconButton(
-                onPressed: onMenu,
-                icon: const Icon(Icons.more_horiz),
-                color: AppColors.textSecondary,
-                visualDensity: VisualDensity.compact,
-              ),
-          ],
-        ),
+          if (widget.trailing != null)
+            widget.trailing!
+          else
+            IconButton(
+              onPressed: widget.onMenu,
+              icon: const Icon(Icons.more_horiz),
+              color: AppColors.textTertiary,
+              visualDensity: VisualDensity.compact,
+            ),
+        ],
+      ),
+    );
+
+    final interactive = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onTapDown: (_) => _setPressed(true),
+      onTapUp: (_) => _setPressed(false),
+      onTapCancel: () => _setPressed(false),
+      child: row,
+    );
+
+    if (index == null) return interactive;
+    return _TileEntrance(index: index, child: interactive);
+  }
+}
+
+/// Появление строки списка с короткой задержкой по индексу.
+class _TileEntrance extends StatefulWidget {
+  const _TileEntrance({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<_TileEntrance> createState() => _TileEntranceState();
+}
+
+class _TileEntranceState extends State<_TileEntrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.base,
+  );
+  late final Animation<double> _curve = CurvedAnimation(
+    parent: _controller,
+    curve: AppMotion.enter,
+  );
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    final delay = widget.index.clamp(0, AppMotion.staggerMaxIndex).toInt() *
+        AppMotion.staggerStep.inMilliseconds;
+    _timer = Timer(Duration(milliseconds: delay), () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+      return widget.child;
+    }
+    return FadeTransition(
+      opacity: _curve,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.06),
+          end: Offset.zero,
+        ).animate(_curve),
+        child: widget.child,
       ),
     );
   }
@@ -130,7 +233,7 @@ class _Cover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(8),
       child: SizedBox(
         width: 48,
         height: 48,

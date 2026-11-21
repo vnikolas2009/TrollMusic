@@ -7,6 +7,7 @@ import '../../core/utils/formatters.dart';
 import '../../core/utils/track_groups.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/cover_art.dart';
+import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/track_tile.dart';
 
 class ArtistScreen extends ConsumerWidget {
@@ -30,13 +31,17 @@ class ArtistScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 300,
-            backgroundColor: AppColors.surface,
+            expandedHeight: 316,
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
+              icon: const Icon(Icons.arrow_back_rounded),
               onPressed: () => Navigator.of(context).pop(),
             ),
             flexibleSpace: FlexibleSpaceBar(
@@ -51,26 +56,34 @@ class ArtistScreen extends ConsumerWidget {
                 bottom: 14,
                 end: 16,
               ),
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [AppColors.surfaceHigh, AppColors.background],
-                  ),
-                ),
-                child: SafeArea(
-                  child: Center(
-                    child: CoverArt(
-                      url: lead?.thumbnailUrl,
-                      path: lead?.artworkPath,
-                      size: 148,
-                      radius: 16,
-                      circle: true,
-                      placeholderIcon: Icons.person_rounded,
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [AppColors.surfaceHigh, AppColors.background],
+                      ),
                     ),
                   ),
-                ),
+                  SafeArea(
+                    child: Center(
+                      child: PressScale(
+                        scale: 0.97,
+                        child: CoverArt(
+                          url: lead?.thumbnailUrl,
+                          path: lead?.artworkPath,
+                          size: 152,
+                          radius: 999,
+                          circle: true,
+                          placeholderIcon: Icons.person_rounded,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -91,7 +104,7 @@ class ArtistScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
                     child: Text(
                       albums.isEmpty
                           ? 'Исполнитель'
@@ -105,19 +118,19 @@ class ArtistScreen extends ConsumerWidget {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
                     child: Text(
                       '${own.length} треков · ${formatLongDuration(total)}',
                       style: const TextStyle(
                         fontSize: 12,
-                        color: AppColors.textSecondary,
+                        color: AppColors.textTertiary,
                       ),
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
                     child: SizedBox(
-                      height: 44,
+                      height: 46,
                       width: double.infinity,
                       child: FilledButton.icon(
                         style: FilledButton.styleFrom(
@@ -150,11 +163,12 @@ class ArtistScreen extends ConsumerWidget {
                   explicit: track.explicit,
                   downloaded:
                       track.localPath != null && track.localPath!.isNotEmpty,
+                  index: i,
                   onTap: () => audio.playTrack(track, contextQueue: own),
                 );
               },
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
           ],
         ],
       ),

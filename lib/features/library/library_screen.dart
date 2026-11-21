@@ -11,6 +11,8 @@ import '../../data/models/playlist.dart';
 import '../../data/models/track.dart';
 import '../../services/download/download_service.dart';
 import '../../shared/widgets/cover_art.dart';
+import '../../shared/widgets/entrance.dart';
+import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/track_tile.dart';
 import '../create/track_edit_sheet.dart';
 import '../playlist/playlist_screen.dart';
@@ -52,13 +54,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+          padding: const EdgeInsets.fromLTRB(20, 10, 8, 10),
           child: Row(
             children: [
               const Expanded(
                 child: Text(
                   'Медиатека',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.6),
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.9,
+                    height: 1.1,
+                  ),
                 ),
               ),
               IconButton(
@@ -88,12 +95,19 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           isScrollable: true,
           tabAlignment: TabAlignment.start,
           dividerColor: Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           indicatorColor: AppColors.textPrimary,
           labelColor: AppColors.textPrimary,
           unselectedLabelColor: AppColors.textSecondary,
           labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 13,
+          ),
+          indicatorSize: TabBarIndicatorSize.label,
           tabs: _labels.map((l) => Tab(text: l)).toList(),
         ),
+        const SizedBox(height: 2),
         Expanded(
           child: TabBarView(
             controller: _tabs,
@@ -171,24 +185,22 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
               hintText: 'Поиск по медиатеке',
               hintStyle: const TextStyle(
                 fontSize: 13,
-                color: AppColors.textSecondary,
+                color: AppColors.textTertiary,
               ),
               prefixIcon: const Icon(Icons.search, size: 18),
               suffixIcon: _query.isEmpty
                   ? null
                   : IconButton(
-                      icon: const Icon(Icons.close, size: 18),
+                      icon: const Icon(Icons.close_rounded, size: 18),
                       onPressed: () {
                         _controller.clear();
                         setState(() => _query = '');
                       },
                     ),
-              filled: true,
-              fillColor: AppColors.surfaceAlt,
               isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide.none,
               ),
             ),
@@ -205,7 +217,7 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
                       : '${tracks.length} треков · ${formatLongDuration(totalDuration)}',
                   style: const TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: AppColors.textTertiary,
                   ),
                 ),
               ),
@@ -222,6 +234,7 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
         ),
         Expanded(
           child: ListView.builder(
+            physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.only(bottom: 8),
             itemCount: tracks.length,
             itemBuilder: (context, i) {
@@ -240,6 +253,7 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
                     downloaded:
                         track.localPath != null && track.localPath!.isNotEmpty,
                     downloadProgress: progress?.fraction,
+                    index: i,
                     onTap: () => ref
                         .read(audioHandlerProvider)
                         .playTrack(track, contextQueue: tracks),
@@ -382,35 +396,67 @@ class _PlaylistsTab extends StatelessWidget {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
       itemCount: playlists.length,
       itemBuilder: (context, i) {
         final playlist = playlists[i];
-        return ListTile(
-          leading: CoverArt(
-            url: playlist.imageUrl,
-            size: 52,
-            radius: 4,
-          ),
-          title: Text(
-            playlist.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          subtitle: Text(
-            '${playlist.tracks.length} треков · ${formatLongDuration(playlist.totalDuration)}',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => PlaylistScreen(
-                id: playlist.id,
-                title: playlist.title,
-                subtitle: playlist.description,
-                tracks: playlist.tracks,
-                isRadio: playlist.isRadio,
-                coverUrl: playlist.imageUrl,
+        return Entrance(
+          index: i,
+          child: PressScale(
+            scale: 0.98,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => PlaylistScreen(
+                  id: playlist.id,
+                  title: playlist.title,
+                  subtitle: playlist.description,
+                  tracks: playlist.tracks,
+                  isRadio: playlist.isRadio,
+                  coverUrl: playlist.imageUrl,
+                ),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  CoverArt(
+                    url: playlist.imageUrl,
+                    size: 56,
+                    radius: 12,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          playlist.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${playlist.tracks.length} треков · ${formatLongDuration(playlist.totalDuration)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textTertiary,
+                    size: 20,
+                  ),
+                ],
               ),
             ),
           ),
@@ -542,6 +588,7 @@ class _DownloadedTabState extends ConsumerState<_DownloadedTab> {
         ),
         Expanded(
           child: ListView.builder(
+            physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.only(bottom: 8),
             itemCount: tracks.length,
             itemBuilder: (context, i) {
@@ -553,6 +600,7 @@ class _DownloadedTabState extends ConsumerState<_DownloadedTab> {
                 coverPath: track.artworkPath,
                 explicit: track.explicit,
                 downloaded: true,
+                index: i,
                 trailing: Text(
                   formatBytes(_sizeOf(track)),
                   style: const TextStyle(
@@ -625,7 +673,8 @@ class _TracksTab extends ConsumerWidget {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.only(bottom: 8),
       itemCount: tracks.length,
       itemBuilder: (context, i) {
         final track = tracks[i];
@@ -642,6 +691,7 @@ class _TracksTab extends ConsumerWidget {
               explicit: track.explicit,
               downloaded: track.localPath != null && track.localPath!.isNotEmpty,
               downloadProgress: progress?.fraction,
+              index: i,
               onTap: () => ref
                   .read(audioHandlerProvider)
                   .playTrack(track, contextQueue: tracks),

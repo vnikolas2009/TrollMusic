@@ -118,14 +118,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: const Text('Всегда идти через Worker'),
             subtitle: const Text('Выкл — напрямую, а Worker подключается сам, если зеркало недоступно'),
             value: settings.useWorkerProxy,
-            activeThumbColor: AppColors.accent,
             onChanged: (v) => setState(() => settings.useWorkerProxy = v),
           ),
           SwitchListTile(
             title: const Text('Системный прокси'),
             subtitle: const Text('Использовать настройки ОС / переменные окружения'),
             value: settings.useSystemProxy,
-            activeThumbColor: AppColors.accent,
             onChanged: (v) => setState(() => settings.useSystemProxy = v),
           ),
           _TextFieldTile(
@@ -141,7 +139,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: const Text('Кэшировать аудио при прослушивании'),
             subtitle: const Text('Повтор без сети; нужен, чтобы звук шёл через HTTP-прокси'),
             value: settings.audioCache,
-            activeThumbColor: AppColors.accent,
             onChanged: (v) => setState(() => settings.audioCache = v),
           ),
           _TextFieldTile(
@@ -159,7 +156,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               'без client id/secret',
             ),
             value: settings.spotifyGuestMode,
-            activeThumbColor: AppColors.accent,
             onChanged: (v) => setState(() => settings.spotifyGuestMode = v),
           ),
           _TextFieldTile(
@@ -245,12 +241,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ChoiceChip(
                         label: Text('$rate kbps'),
                         selected: settings.bitrate == rate,
-                        selectedColor: AppColors.textPrimary,
-                        labelStyle: TextStyle(
-                          color: settings.bitrate == rate ? Colors.black : AppColors.textPrimary,
-                          fontSize: 12,
-                        ),
-                        backgroundColor: AppColors.surfaceAlt,
                         onSelected: (_) => setState(() => settings.bitrate = rate),
                       ),
                   ],
@@ -262,14 +252,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: const Text('Предпочитать Opus'),
             subtitle: const Text('Экономия трафика на мобильной сети'),
             value: settings.preferOpus,
-            activeThumbColor: AppColors.accent,
             onChanged: (v) => setState(() => settings.preferOpus = v),
           ),
           SwitchListTile(
             title: const Text('Проксировать аудиопоток'),
             subtitle: const Text('Обход блокировок googlevideo.com'),
             value: settings.proxyAudioStreams,
-            activeThumbColor: AppColors.accent,
             onChanged: (v) => setState(() => settings.proxyAudioStreams = v),
           ),
           Padding(
@@ -286,14 +274,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ChoiceChip(
                         label: Text(seconds == 0 ? 'Выкл' : '$seconds с'),
                         selected: settings.crossfadeSeconds == seconds,
-                        selectedColor: AppColors.textPrimary,
-                        labelStyle: TextStyle(
-                          color: settings.crossfadeSeconds == seconds
-                              ? Colors.black
-                              : AppColors.textPrimary,
-                          fontSize: 12,
-                        ),
-                        backgroundColor: AppColors.surfaceAlt,
                         onSelected: (_) {
                           settings.crossfadeSeconds = seconds;
                           ref.read(audioHandlerProvider).setCrossfade(
@@ -369,14 +349,14 @@ class _Section extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 6),
+      padding: const EdgeInsets.fromLTRB(20, 26, 20, 8),
       child: Text(
         title.toUpperCase(),
         style: const TextStyle(
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.w800,
-          letterSpacing: 1.1,
-          color: AppColors.textSecondary,
+          letterSpacing: 1.3,
+          color: AppColors.textTertiary,
         ),
       ),
     );

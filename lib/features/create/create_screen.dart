@@ -6,6 +6,8 @@ import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/permission_service.dart';
 import '../../data/models/track.dart';
+import '../../shared/widgets/entrance.dart';
+import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/track_tile.dart';
 import 'backup_screen.dart';
 import 'track_edit_sheet.dart';
@@ -48,10 +50,14 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
     final local = ref.watch(localTracksProvider).value ?? const <Track>[];
 
     return CustomScrollView(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       slivers: [
         SliverAppBar(
           pinned: true,
-          backgroundColor: AppColors.background,
+          backgroundColor: AppColors.background.withValues(alpha: 0.92),
+          surfaceTintColor: Colors.transparent,
           title: const Text('Создать'),
           actions: [
             IconButton(
@@ -60,6 +66,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
               ),
               icon: const Icon(Icons.settings_outlined),
             ),
+            const SizedBox(width: 4),
           ],
         ),
         SliverToBoxAdapter(
@@ -68,31 +75,68 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _ActionCard(
-                  icon: Icons.upload_file_rounded,
-                  title: 'Импортировать аудио',
-                  subtitle: 'MP3, M4A, FLAC, WAV с памяти устройства',
-                  onTap: _busy ? null : _import,
-                  busy: _busy,
+                Entrance(
+                  index: 0,
+                  child: _ActionCard(
+                    icon: Icons.upload_file_rounded,
+                    title: 'Импортировать аудио',
+                    subtitle: 'MP3, M4A, FLAC, WAV с памяти устройства',
+                    onTap: _busy ? null : _import,
+                    busy: _busy,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                _ActionCard(
-                  icon: Icons.cloud_download_outlined,
-                  title: 'Импорт плейлиста Spotify',
-                  subtitle: 'Вставьте ссылку — треки появятся в медиатеке',
-                  onTap: () => _importSpotify(context),
+                Entrance(
+                  index: 1,
+                  child: _ActionCard(
+                    icon: Icons.cloud_download_outlined,
+                    title: 'Импорт плейлиста Spotify',
+                    subtitle: 'Вставьте ссылку — треки появятся в медиатеке',
+                    onTap: () => _importSpotify(context),
+                  ),
                 ),
                 const SizedBox(height: 12),
-                _ActionCard(
-                  icon: Icons.swap_vert_rounded,
-                  title: 'Экспорт / импорт медиатеки',
-                  subtitle: 'JSON-резервная копия всей библиотеки',
-                  onTap: () => _openBackup(context),
+                Entrance(
+                  index: 2,
+                  child: _ActionCard(
+                    icon: Icons.swap_vert_rounded,
+                    title: 'Экспорт / импорт медиатеки',
+                    subtitle: 'JSON-резервная копия всей библиотеки',
+                    onTap: () => _openBackup(context),
+                  ),
                 ),
-                const SizedBox(height: 26),
-                Text(
-                  'Локальные треки · ${local.length}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                const SizedBox(height: 28),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Локальные треки',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceAlt,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${local.length}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
               ],
@@ -108,15 +152,21 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
               artist: track.artist,
               coverUrl: track.thumbnailUrl,
               coverPath: track.artworkPath,
-              downloaded: track.localPath != null && track.localPath!.isNotEmpty,
-              onTap: () => ref.read(audioHandlerProvider).playTrack(track, contextQueue: local),
+              downloaded:
+                  track.localPath != null && track.localPath!.isNotEmpty,
+              index: i,
+              onTap: () => ref
+                  .read(audioHandlerProvider)
+                  .playTrack(track, contextQueue: local),
               onMenu: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => TrackEditSheet(trackId: track.id)),
+                MaterialPageRoute(
+                  builder: (_) => TrackEditSheet(trackId: track.id),
+                ),
               ),
             );
           },
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 40)),
+        const SliverToBoxAdapter(child: SizedBox(height: 44)),
       ],
     );
   }
@@ -131,7 +181,9 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'https://open.spotify.com/playlist/...'),
+          decoration: const InputDecoration(
+            hintText: 'https://open.spotify.com/playlist/...',
+          ),
         ),
         actions: [
           TextButton(
@@ -197,52 +249,64 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surfaceAlt,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceHigh,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, size: 20),
+    return PressScale(
+      onTap: busy ? null : onTap,
+      scale: 0.98,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.glassBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(13),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              child: Icon(icon, size: 21, color: AppColors.accent),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                      height: 1.3,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              if (busy)
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-            ],
-          ),
+            ),
+            if (busy)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textTertiary,
+                size: 20,
+              ),
+          ],
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app/providers.dart';
 import '../core/theme/app_colors.dart';
+import '../core/theme/app_motion.dart';
 import '../features/create/create_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/library/library_screen.dart';
@@ -28,6 +29,33 @@ class _AppShellState extends ConsumerState<AppShell> {
     CreateScreen(),
   ];
 
+  void _openPlayer(BuildContext context) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        transitionDuration: AppMotion.slower,
+        reverseTransitionDuration: AppMotion.base,
+        pageBuilder: (_, __, ___) => const PlayerScreen(),
+        transitionsBuilder: (_, animation, __, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: AppMotion.emphasized,
+            reverseCurve: AppMotion.exit,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 1),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final track = ref.watch(currentTrackProvider).value;
@@ -43,28 +71,21 @@ class _AppShellState extends ConsumerState<AppShell> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
+        // IndexedStack сохраняет состояние вкладок и рисует только активную.
         child: IndexedStack(index: _index, children: _tabs),
       ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (track != null)
-            MiniPlayer(
-              onTap: () => Navigator.of(context).push(
-                PageRouteBuilder(
-                  pageBuilder: (_, __, ___) => PlayerScreen(initialTrack: track),
-                  transitionsBuilder: (_, animation, __, child) => SlideTransition(
-                    position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(
-                      CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-                    ),
-                    child: child,
-                  ),
-                ),
-              ),
-            ),
+          MiniPlayer(
+            onTap: track == null ? null : () => _openPlayer(context),
+          ),
           TrollBottomNav(
             index: _index,
-            onChanged: (i) => setState(() => _index = i),
+            onChanged: (i) {
+              if (i == _index) return;
+              setState(() => _index = i);
+            },
           ),
         ],
       ),
