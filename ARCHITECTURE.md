@@ -67,31 +67,35 @@ test/                        # flutter test: чистые утилиты, мод
 
 **Файлы** (`StorageService`): локальные треки, обложки, `.lrc`, загрузки (`.m4a/.opus`) в каталоге приложения; `clearCache()` чистит кэш скачанного.
 
-## 4. Сеть и обход блокировок
+## 4. Сеть и обход блокировок (без настроек пользователя)
 
-Порядок попыток (YouTube-зеркала и Spotify embed):
-1. **Напрямую** (`ProxyConfig.enabled == false`, по умолчанию) — `ProxyConfig._mirror/_build` строят прямые URL.
-2. **Запасной проход через Worker**, если задан `workerUrl` и прямой не сработал (`viaWorker=true`; в `MirrorManager.get` и `SpotifyClient.playlistViaEmbed`). Переключатель `useWorkerProxy` делает Worker основным путём.
-3. **HTTP-прокси** `httpProxy` применяется ко всем Dart-соединениям через `HttpOverrides` (dio, `LockCachingAudioSource`). Нативный плеер (ExoPlayer/AVPlayer) прокси Dart не видит → при заданном прокси или `audioCache` сетевые URL играются через `LockCachingAudioSource` (`YsAudioHandler._source`). SOCKS не поддерживается (ограничение dart:io).
+Пользовательских полей для Piped/Invidious/Worker/прокси/токенов в UI больше нет; ключи `Settings` сохранены только для совместимости.
+- `YouTubeMusicClient` опрашивает **параллельно** (`firstNonEmpty`, `core/utils/async_utils.dart`): InnerTube (`InnerTubeClient`: поиск WEB_REMIX `music.youtube.com`, потоки клиентами ANDROID_VR и ANDROID без PO-токена, UA/заголовки привязаны к клиенту через `StreamCandidate.headers`), Piped, Invidious.
+- Зеркала: `InstanceDirectory` раз в 24 ч сам обновляет списки из публичных каталогов (piped-instances.kavin.rocks, api.invidious.io), кэш в Hive, объединяет со встроенными. `MirrorManager.get` — волны по 3 зеркала параллельно с отменой; недоступные «остывают»; Worker (если задан старым `workerUrl`) — последний рубеж.
+- Версии клиентов InnerTube — `AppConfig.androidVrVersion/androidSdklessVersion/ytMusicClientVersion`: при отказе YouTube обновить значения.
+- Spotify: ссылки/запросы сопоставляются с YouTube (`pickBestMatch`), соответствие запоминается в `Settings.matchedVideo/rememberMatch`.
+- Качество: `AudioQuality{low=64,medium=128,high=max,auto}`, `rankFormats` (`core/utils/audio_pick.dart`); `auto` = high по Wi‑Fi (`isOnWifi`), иначе 128; на iOS только AAC.
 
-`proxyAudioStreams` оборачивает аудио-URL в `/proxy?url=` Worker'а (только если Worker задан). Публичного Worker нет — пользователь деплоит `worker.js` сам. Маршруты Worker — в README.
+**Worker (встроенный):** `worker.js` + `wrangler.toml` деплоятся job'ом `worker` в `build_release.yml` при наличии секретов `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`; полученный `*.workers.dev` URL передаётся в сборку как `--dart-define=WORKER_URL` (`AppConfig.defaultWorkerUrl`). Клиент добавляет `/stream` Worker'а последним кандидатом (`WorkerHealth` — circuit breaker). Без секретов приложение работает без Worker.
+
+**Источники:** `MusicSource` (YouTube Music / Spotify, `app/source_provider.dart`, хранится в `Settings.musicSourceIndex`) — раздельные вкладки на Главной и в Поиске; Spotify даёт метаданные, воспроизведение — через сопоставление с YouTube.
 
 ## 5. Воспроизведение (сквозной сценарий)
 
 1. UI вызывает `audioHandler.playTrack(track, contextQueue:)` / `setLibraryQueue(...)`.
-2. `_prepare()` для треков без `localPath/streamUrl` параллельно (до 4 воркеров, общий таймаут 8 с, «якорный» трек первым) вызывает `resolveStream(track)` = `YouTubeMusicClient.streamUrlForTrack`.
-3. **Spotify-трек** (`sp:`): `streamUrlForTrack` ищет на YouTube `«артист название»`, выбирает лучший результат `pickBestMatch` (длительность ±10 с, название, исполнитель, штраф за live/remix), кэширует `spotifyId→videoId` на сессию, затем берёт поток. YouTube-трек: `Piped /streams/<id>` → фолбэк Invidious.
-4. `_load()` собирает `AudioSource` (`_source`: файл/сеть/кэширующий), `setAudioSources`, кроссфейд, таймер сна, скорость, shuffle/repeat — всё внутри `YsAudioHandler`. UI читает состояние через `currentTrackProvider`/`playbackStateProvider`/`positionProvider`.
-5. Ошибка потока → `errors` stream, попытка перерезолвить URL (`needsFresh`, ~стр. 460) → следующий трек.
-6. Загрузка: `DownloadService.download(track)` → `streamUrlForTrack` → файл + обложка + `.lrc`; трек получает `localPath`, `source=downloaded`.
+2. `_prepare()` собирает источники **лениво**: сетевой трек = `ResolvedStreamSource` (`StreamAudioSource`), URL запрашивается в момент воспроизведения через `YouTubeMusicClient.resolveCandidates` (кэш 25 мин). Сохранённые `streamUrl` не используются — они протухают (причина прежнего «Download required»).
+3. `ResolvedStreamSource.request` по Range-запросам Dio пробует кандидатов по кругу, 2 раунда (второй — `fresh`, все провайдеры); заголовки — под выдавший клиент.
+4. `_load()` сразу запускает `play()`, таймаут 30 с; ошибка → `_recoverFromError` → один повтор со свежими ссылками (`_retryWithFreshLinks`) → следующий трек. Буферизация — `AudioLoadConfiguration`.
+5. Gapless = прогрев следующего трека (`_warmNext`, флаг `gaplessEnabled`); кроссфейд — `_fadeLevel`; нормализация — `loudnessDb` → `loudnessGain` (`normalizeVolume`, `refreshNormalization()`).
+6. Загрузка: `DownloadService.download` → `resolveCandidates(fresh)` → файл + обложка + `.lrc`.
 
 ## 6. Тексты
 
-`LyricsClient` (LRCLIB) → `StorageService.fetchLyricsFromLrclib` → `LibraryRepository.saveLyrics` → `LrcParser.parse` → `Lyrics{lines[time,text], synced, indexAt()}`. Экран `lyrics_screen.dart`: фон `AuroraBackground` (цвет обложки через `PaletteGenerator`), активная строка заливается по времени, соседние размыты (`ImageFiltered`), тап — `seek`; сдвиг синхронизации хранится по треку (`lyricsOffsetMs`).
+`LyricsClient` (LRCLIB) → `StorageService.fetchLyricsFromLrclib` → `LibraryRepository.saveLyrics` → `LrcParser.parse` → `Lyrics{lines[time,text], synced, indexAt()}`. Экран `lyrics_screen.dart`: фон `AuroraBackground` (цвет обложки через `PaletteGenerator`), активная строка заливается по времени, соседние строки гаснут по прозрачности (без blur), фон — статичный тёмный градиент с ограниченной яркостью (белый текст читается в любой теме), тап — `seek`; сдвиг синхронизации хранится по треку (`lyricsOffsetMs`).
 
 ## 7. UI
 
-Вкладки в `AppShell` (IndexedStack): Главная, Поиск, Медиатека, Создать; настройки — отдельный экран (`SettingsScreen`), открывается из Главной, Медиатеки и «Создать». Палитра `AppColors` (#000/#121212/#181818/#282828, акцент #1ED760 — **константа**, динамической темы нет). Главная: `_DailyPick`, `_Stations`, `_Recent`, `_Discoveries`, `_TrendingSection` (тренды при пустой медиатеке). Плейлист — `ReorderableListView` (порядок сохраняется). Экран артиста строится по `groupTracksByArtist`.
+Вкладки в `AppShell` (IndexedStack): Главная, Поиск, Медиатека, Создать; настройки — отдельный экран (`SettingsScreen`), открывается из Главной, Медиатеки и «Создать». Тема: `AppPalette` (dark/light, акцент, AMOLED, градиент) + статические геттеры `AppColors` (читают `AppPalette.current`); `ThemeController` (`lib/app/theme_controller.dart`) хранит выбор в `Settings`, `TrollMusicApp` выставляет палитру и после смены глубоко пересобирает дерево. Поверхности сплошные (`surface #121212`, `surfaceAlt #1E1E1E`, прозрачность 0.9–0.95, рамка 1 px `outline`), без blur/«стекла». Главная: `_DailyPick`, `_TrendingSection` («Популярная музыка», только музыка), `_Recent`, `MoodSection` (`music_sections.dart`: подборки настроений/жанров → `MoodScreen`), `_Stations`, `_Discoveries`. Настройки: Качество звука, Тема, Воспроизведение, Кэш и хранилище. Плейлист — `ReorderableListView` (порядок сохраняется). Экран артиста строится по `groupTracksByArtist`.
 
 ## 8. CI и релизы
 

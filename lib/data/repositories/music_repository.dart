@@ -33,6 +33,28 @@ class MusicRepository {
 
   Future<List<Track>> searchYouTube(String query) => youtube.search(query);
 
+  Future<List<Track>> searchSpotify(String query) => spotify.search(query);
+
+  /// Подборка Spotify по нескольким запросам (круговое перемешивание, без дублей).
+  Future<List<Track>> spotifyMix(List<String> queries, {int limit = 30}) async {
+    final results = await Future.wait([
+      for (final q in queries) _safeList(spotify.search(q, limit: 15)),
+    ]);
+    final out = <Track>[];
+    final seen = <String>{};
+    for (var round = 0; out.length < limit; round++) {
+      var any = false;
+      for (final list in results) {
+        if (round >= list.length || out.length >= limit) continue;
+        any = true;
+        final t = list[round];
+        if (seen.add('${t.artist}|${t.title}'.toLowerCase())) out.add(t);
+      }
+      if (!any) break;
+    }
+    return out;
+  }
+
   Future<Playlist?> spotifyPlaylist(String url) async {
     final link = parseSpotifyLink(url);
     if (link == null || link.kind == SpotifyKind.track) return null;

@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/network_providers.dart';
 import '../../app/providers.dart';
-import '../../core/config/app_config.dart';
-import '../../core/network/mirror_manager.dart';
-import '../../core/network/worker_health.dart';
+import '../../app/theme_controller.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/audio_pick.dart';
 import '../../core/utils/formatters.dart';
-import '../../core/utils/permission_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -19,47 +16,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  static const _workerWarn = Color(0xFFFF8A80);
-
   int _cacheBytes = 0;
   bool _loadingCache = true;
-  bool _probing = false;
-  bool _checkingWorker = false;
-  WorkerStatus? _workerStatus;
-  Map<String, MirrorProbe> _pipedProbes = const {};
-  Map<String, MirrorProbe> _invidiousProbes = const {};
-
-  String get _probeSummary {
-    final all = <String, MirrorProbe>{..._pipedProbes, ..._invidiousProbes};
-    if (all.isEmpty) return 'Проверка доступности зеркал';
-    final ok = all.values.where((p) => p.ok).length;
-    return 'Доступно $ok из ${all.length}';
-  }
-
-  Future<void> _probeMirrors() async {
-    setState(() => _probing = true);
-    final manager = ref.read(mirrorManagerProvider);
-    final piped = await manager.probeAll(MirrorKind.piped);
-    final invidious = await manager.probeAll(MirrorKind.invidious);
-    if (!mounted) return;
-    setState(() {
-      _pipedProbes = {for (final p in piped) p.origin: p};
-      _invidiousProbes = {for (final p in invidious) p.origin: p};
-      _probing = false;
-    });
-  }
-
-  Future<void> _checkWorker() async {
-    setState(() => _checkingWorker = true);
-    final status = await ref
-        .read(workerHealthProvider)
-        .check(force: true, deep: true);
-    if (!mounted) return;
-    setState(() {
-      _workerStatus = status;
-      _checkingWorker = false;
-    });
-  }
 
   @override
   void initState() {
@@ -78,16 +36,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _confirmClearCache() async {
     final downloads = ref.read(downloadProvider);
-    if (downloads.activeCount > 0) {
-      downloads.cancelAll();
-    }
+    if (downloads.activeCount > 0) downloads.cancelAll();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surfaceAlt,
-        title: const Text('Очистить скачанное?'),
+        title: const Text('Очистить кэш?'),
         content: const Text(
-          'Будут удалены аудиофайлы, обложки и тексты скачанных треков. '
+          'Будут удалены скачанные аудиофайлы, обложки и тексты. '
           'Импортированные локальные файлы останутся.',
         ),
         actions: [
@@ -111,214 +66,167 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         .showSnackBar(const SnackBar(content: Text('Кэш очищен')));
   }
 
+  static const _qualityLabels = {
+    AudioQuality.low: 'Низкое',
+    AudioQuality.medium: 'Среднее',
+    AudioQuality.high: 'Высокое',
+    AudioQuality.auto: 'Авто',
+  };
+
+  static const _qualityHints = {
+    AudioQuality.low: '≈ 64 кбит/с — минимум трафика',
+    AudioQuality.medium: '≈ 128 кбит/с — баланс',
+    AudioQuality.high: 'Максимум, что отдаёт источник',
+    AudioQuality.auto: 'Высокое по Wi‑Fi, среднее по мобильной сети',
+  };
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
+    final theme = ref.watch(themeControllerProvider);
+    final themeCtl = ref.read(themeControllerProvider.notifier);
+    final audio = ref.read(audioHandlerProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Настройки')),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
-          _Section('Сеть и прокси'),
-          _TextFieldTile(
-            label: 'Cloudflare Worker URL',
-            value: settings.workerUrl,
-            hint: 'https://ваш-worker.example.workers.dev или свой домен',
-            onSaved: (v) {
-              settings.workerUrl = v;
-              ref.read(mirrorManagerProvider).resetHealth();
-              ref.read(workerHealthProvider).reset();
-              setState(() => _workerStatus = null);
-            },
-          ),
+          const _Section('Качество звука'),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _checkingWorker
-                        ? 'Проверка Worker и зеркал…'
-                        : (_workerStatus?.label ??
-                            'Worker проксирует Spotify, поиск и аудио через /stream'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _workerStatus == null
-                          ? AppColors.textSecondary
-                          : _workerStatus!.ok
-                              ? AppColors.accentSoft
-                              : _workerStatus!.configured
-                                  ? _workerWarn
-                                  : AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: settings.workerUrl.isEmpty || _checkingWorker
-                      ? null
-                      : _checkWorker,
-                  child: const Text('Проверить'),
-                ),
-              ],
-            ),
-          ),
-          SwitchListTile(
-            title: const Text('Всегда идти через Worker'),
-            subtitle: const Text('Выкл — напрямую, а Worker подключается сам, если зеркало недоступно'),
-            value: settings.useWorkerProxy,
-            onChanged: (v) => setState(() => settings.useWorkerProxy = v),
-          ),
-          SwitchListTile(
-            title: const Text('Системный прокси'),
-            subtitle: const Text('Использовать настройки ОС / переменные окружения'),
-            value: settings.useSystemProxy,
-            onChanged: (v) => setState(() => settings.useSystemProxy = v),
-          ),
-          _TextFieldTile(
-            label: 'HTTP / SOCKS5 прокси',
-            value: settings.httpProxy,
-            hint: '127.0.0.1:8080, socks5://127.0.0.1:1080 или http://user:pass@host:8080',
-            onSaved: (v) {
-              settings.httpProxy = v;
-              ref.read(mirrorManagerProvider).resetHealth();
-            },
-          ),
-          SwitchListTile(
-            title: const Text('Кэшировать аудио при прослушивании'),
-            subtitle: const Text('Повтор без сети; нужен, чтобы звук шёл через HTTP-прокси'),
-            value: settings.audioCache,
-            onChanged: (v) => setState(() => settings.audioCache = v),
-          ),
-          _TextFieldTile(
-            label: 'Дополнительные заголовки',
-            value: settings.customHeaders,
-            hint: 'User-Agent: ...\nX-Forwarded-For: ...',
-            maxLines: 3,
-            onSaved: (v) => setState(() => settings.customHeaders = v),
-          ),
-          _Section('Spotify (без OAuth)'),
-          SwitchListTile(
-            title: const Text('Гостевой режим Spotify'),
-            subtitle: const Text(
-              'Анонимный веб-токен и публичные метаданные: поиск работает '
-              'без client id/secret',
-            ),
-            value: settings.spotifyGuestMode,
-            onChanged: (v) => setState(() => settings.spotifyGuestMode = v),
-          ),
-          _TextFieldTile(
-            label: 'Client ID',
-            value: settings.spotifyClientId,
-            hint: 'не обязательно: без ключей работает embed',
-            onSaved: (v) => settings.spotifyClientId = v,
-          ),
-          _TextFieldTile(
-            label: 'Client Secret',
-            value: settings.spotifyClientSecret,
-            hint: '••••••••',
-            obscure: true,
-            onSaved: (v) => settings.spotifyClientSecret = v,
-          ),
-          _Section('Зеркала YouTube (Piped / Invidious)'),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _probing ? 'Проверка зеркал...' : _probeSummary,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: _probing ? null : _probeMirrors,
-                  child: const Text('Проверить'),
-                ),
-              ],
-            ),
-          ),
-          for (var i = 0; i < settings.pipedInstances.length; i++)
-            _MirrorTile(
-              origin: settings.pipedInstances[i],
-              probe: _pipedProbes[settings.pipedInstances[i]],
-              onDelete: () {
-                final list = [...settings.pipedInstances]..removeAt(i);
-                setState(() => settings.pipedInstances = list);
-                ref.read(mirrorManagerProvider).resetHealth();
-              },
-            ),
-          _AddMirrorButton(
-            label: 'Добавить Piped-инстанс',
-            onAdd: (value) {
-              setState(() => settings.pipedInstances = [...settings.pipedInstances, value]);
-              ref.read(mirrorManagerProvider).resetHealth();
-            },
-          ),
-          for (var i = 0; i < settings.invidiousInstances.length; i++)
-            _MirrorTile(
-              origin: settings.invidiousInstances[i],
-              probe: _invidiousProbes[settings.invidiousInstances[i]],
-              onDelete: () {
-                final list = [...settings.invidiousInstances]..removeAt(i);
-                setState(() => settings.invidiousInstances = list);
-                ref.read(mirrorManagerProvider).resetHealth();
-              },
-            ),
-          _AddMirrorButton(
-            label: 'Добавить Invidious-инстанс',
-            onAdd: (value) {
-              setState(() => settings.invidiousInstances = [...settings.invidiousInstances, value]);
-              ref.read(mirrorManagerProvider).resetHealth();
-            },
-          ),
-          _Section('Качество и воспроизведение'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Битрейт аудио', style: TextStyle(fontSize: 13)),
-                const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    for (final rate in AppConfig.audioBitrates)
+                    for (final q in AudioQuality.values)
                       ChoiceChip(
-                        label: Text('$rate kbps'),
-                        selected: settings.bitrate == rate,
-                        onSelected: (_) => setState(() => settings.bitrate = rate),
+                        label: Text(_qualityLabels[q]!),
+                        selected: settings.audioQuality == q,
+                        onSelected: (_) =>
+                            setState(() => settings.audioQuality = q),
                       ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  _qualityHints[settings.audioQuality]!,
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
               ],
             ),
           ),
-          SwitchListTile(
-            title: const Text('Предпочитать Opus'),
-            subtitle: const Text('Экономия трафика на мобильной сети'),
-            value: settings.preferOpus,
-            onChanged: (v) => setState(() => settings.preferOpus = v),
+          const _Section('Тема'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: SegmentedButton<ThemeMode>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: ThemeMode.dark, label: Text('Тёмная')),
+                ButtonSegment(value: ThemeMode.light, label: Text('Светлая')),
+                ButtonSegment(value: ThemeMode.system, label: Text('Система')),
+              ],
+              selected: {theme.mode},
+              onSelectionChanged: (v) => themeCtl.setMode(v.first),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: Text(
+              'Акцентный цвет',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ),
+          SizedBox(
+            height: 52,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              itemCount: kAccentChoices.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, i) {
+                final color = kAccentChoices[i];
+                final selected = color.toARGB32() == theme.accent.toARGB32();
+                return GestureDetector(
+                  onTap: () => themeCtl.setAccent(color),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: selected
+                            ? AppColors.textPrimary
+                            : AppColors.outline,
+                        width: selected ? 2.5 : 1,
+                      ),
+                    ),
+                    child: selected
+                        ? Icon(
+                            Icons.check,
+                            size: 18,
+                            color: color.computeLuminance() > 0.45
+                                ? Colors.black
+                                : Colors.white,
+                          )
+                        : null,
+                  ),
+                );
+              },
+            ),
+          ),
+          ListTile(
+            title: const Text('Свой цвет'),
+            subtitle: Text(
+              'Выберите любой оттенок акцента',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            trailing: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: theme.accent,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.outline),
+              ),
+            ),
+            onTap: () async {
+              final picked = await showDialog<Color>(
+                context: context,
+                builder: (_) => _ColorDialog(initial: theme.accent),
+              );
+              if (picked != null) themeCtl.setAccent(picked);
+            },
           ),
           SwitchListTile(
-            title: const Text('Всегда проксировать аудио'),
-            subtitle: const Text(
-              'По умолчанию Worker — запасной путь при 403/таймауте; включите, '
-              'чтобы звук всегда шёл через Worker',
-            ),
-            value: settings.proxyAudioStreams,
-            onChanged: (v) => setState(() => settings.proxyAudioStreams = v),
+            title: const Text('Градиентный фон'),
+            subtitle: const Text('Едва заметный градиент от акцентного цвета'),
+            value: theme.gradient,
+            onChanged: themeCtl.setGradient,
+          ),
+          SwitchListTile(
+            title: const Text('Чёрный AMOLED'),
+            subtitle: const Text('Чисто чёрный фон в тёмной теме'),
+            value: theme.amoled,
+            onChanged: themeCtl.setAmoled,
+          ),
+          const _Section('Воспроизведение'),
+          SwitchListTile(
+            title: const Text('Без пауз (gapless)'),
+            subtitle: const Text('Следующий трек подготавливается заранее'),
+            value: settings.gaplessEnabled,
+            onChanged: (v) => setState(() => settings.gaplessEnabled = v),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Кроссфейд', style: TextStyle(fontSize: 13)),
+                const Text('Кроссфейд', style: TextStyle(fontSize: 14)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -329,9 +237,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         selected: settings.crossfadeSeconds == seconds,
                         onSelected: (_) {
                           settings.crossfadeSeconds = seconds;
-                          ref.read(audioHandlerProvider).setCrossfade(
-                                Duration(seconds: seconds),
-                              );
+                          audio.setCrossfade(Duration(seconds: seconds));
                           setState(() {});
                         },
                       ),
@@ -340,28 +246,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
-          _Section('Кэш и офлайн'),
+          SwitchListTile(
+            title: const Text('Нормализация громкости'),
+            subtitle: const Text('Выравнивает громкость разных треков'),
+            value: settings.normalizeVolume,
+            onChanged: (v) {
+              settings.normalizeVolume = v;
+              audio.refreshNormalization();
+              setState(() {});
+            },
+          ),
+          const _Section('Кэш и хранилище'),
           ListTile(
             title: const Text('Занято на устройстве'),
             subtitle: Text(
               _loadingCache ? 'Подсчёт...' : formatBytes(_cacheBytes),
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
             trailing: TextButton(
               onPressed: _confirmClearCache,
-              child: const Text('Очистить'),
+              child: const Text('Очистить кэш'),
             ),
           ),
-          _Section('История прослушивания'),
           ListTile(
-            title: const Text('Очистить историю'),
+            title: const Text('История прослушивания'),
             subtitle: Text(
-              '${settings.recentIds.length} треков в истории',
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              '${settings.recentIds.length} треков',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
             trailing: TextButton(
               onPressed: () {
-                ref.read(settingsProvider).clearHistory();
+                settings.clearHistory();
                 setState(() {});
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('История очищена')),
@@ -369,24 +284,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               },
               child: const Text('Очистить'),
             ),
-          ),
-          _Section('Разрешения'),          ListTile(
-            title: const Text('Уведомления'),
-            subtitle: const Text('Экран блокировки и фоновое воспроизведение'),
-            trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-            onTap: () => PermissionService.requestNotifications(),
-          ),
-          ListTile(
-            title: const Text('Доступ к аудиофайлам'),
-            subtitle: const Text('Импорт локальных треков'),
-            trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-            onTap: () => PermissionService.requestAudioFiles(),
-          ),
-          ListTile(
-            title: const Text('Системные настройки'),
-            subtitle: const Text('Открыть разрешения приложения'),
-            trailing: const Icon(Icons.open_in_new, size: 16, color: AppColors.textSecondary),
-            onTap: openAppSettings,
           ),
         ],
       ),
@@ -405,7 +302,7 @@ class _Section extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 26, 20, 8),
       child: Text(
         title.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w800,
           letterSpacing: 1.3,
@@ -416,159 +313,82 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _TextFieldTile extends StatefulWidget {
-  const _TextFieldTile({
-    required this.label,
-    required this.value,
-    required this.onSaved,
-    this.hint,
-    this.obscure = false,
-    this.maxLines = 1,
-  });
+/// Простой выбор цвета: оттенок, насыщенность и яркость.
+class _ColorDialog extends StatefulWidget {
+  const _ColorDialog({required this.initial});
 
-  final String label;
-  final String value;
-  final String? hint;
-  final bool obscure;
-  final int maxLines;
-  final ValueChanged<String> onSaved;
+  final Color initial;
 
   @override
-  State<_TextFieldTile> createState() => _TextFieldTileState();
+  State<_ColorDialog> createState() => _ColorDialogState();
 }
 
-class _TextFieldTileState extends State<_TextFieldTile> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.value);
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+class _ColorDialogState extends State<_ColorDialog> {
+  late HSVColor _hsv = HSVColor.fromColor(widget.initial);
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-      child: TextField(
-        controller: _controller,
-        obscureText: widget.obscure,
-        maxLines: widget.obscure ? 1 : widget.maxLines,
-        minLines: 1,
-        onSubmitted: widget.onSaved,
-        onTapOutside: (_) {
-          FocusScope.of(context).unfocus();
-          widget.onSaved(_controller.text);
-        },
-        style: const TextStyle(fontSize: 13),
-        decoration: InputDecoration(
-          labelText: widget.label,
-          hintText: widget.hint,
-          hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-          labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-          filled: true,
-          fillColor: AppColors.surfaceAlt,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide.none,
+    final color = _hsv.toColor();
+    return AlertDialog(
+      title: const Text('Свой цвет'),
+      content: SliderTheme(
+        data: SliderTheme.of(context).copyWith(
+          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+          activeTrackColor: color,
+          thumbColor: color,
+        ),
+        child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 56,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.outline),
+            ),
           ),
-          suffixIcon: IconButton(
-            icon: const Icon(Icons.check, size: 18),
-            color: AppColors.accent,
-            onPressed: () => widget.onSaved(_controller.text),
-          ),
+          const SizedBox(height: 12),
+          _slider('Оттенок', _hsv.hue, 360, (v) => _hsv = _hsv.withHue(v)),
+          _slider('Насыщенность', _hsv.saturation, 1,
+              (v) => _hsv = _hsv.withSaturation(v)),
+          _slider('Яркость', _hsv.value, 1, (v) => _hsv = _hsv.withValue(v)),
+        ],
         ),
       ),
-    );
-  }
-}
-
-class _MirrorTile extends StatelessWidget {
-  const _MirrorTile({
-    required this.origin,
-    required this.onDelete,
-    this.probe,
-  });
-
-  final String origin;
-  final VoidCallback onDelete;
-  final MirrorProbe? probe;
-
-  @override
-  Widget build(BuildContext context) {
-    final probe = this.probe;
-    return ListTile(
-      dense: true,
-      title: Text(origin, style: const TextStyle(fontSize: 12)),
-      subtitle: probe == null
-          ? null
-          : Text(
-              probe.ok
-                  ? 'Работает · ${probe.latency} мс'
-                  : 'Недоступно · ${probe.detail ?? 'ошибка'}',
-              style: TextStyle(
-                fontSize: 11,
-                color: probe.ok ? AppColors.accent : AppColors.textSecondary,
-              ),
-            ),
-      trailing: IconButton(
-        icon: const Icon(Icons.close, size: 16),
-        color: AppColors.textSecondary,
-        onPressed: onDelete,
-      ),
-    );
-  }
-}
-
-class _AddMirrorButton extends StatelessWidget {
-  const _AddMirrorButton({required this.label, required this.onAdd});
-
-  final String label;
-  final ValueChanged<String> onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textPrimary,
-          side: const BorderSide(color: AppColors.surfaceHigh),
-          minimumSize: const Size.fromHeight(40),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
         ),
-        onPressed: () async {
-          final controller = TextEditingController();
-          final value = await showDialog<String>(
-            context: context,
-            builder: (dialogContext) => AlertDialog(
-              backgroundColor: AppColors.surfaceAlt,
-              title: Text(label),
-              content: TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: const InputDecoration(hintText: 'https://api.example.com'),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Отмена'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(dialogContext, controller.text),
-                  child: const Text('Добавить'),
-                ),
-              ],
-            ),
-          );
-          final trimmed = value?.trim();
-          if (trimmed != null && trimmed.startsWith('http')) onAdd(trimmed);
-          controller.dispose();
-        },
-        icon: const Icon(Icons.add, size: 18),
-        label: Text(label, style: const TextStyle(fontSize: 12)),
-      ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, color),
+          child: const Text('Готово'),
+        ),
+      ],
+    );
+  }
+
+  Widget _slider(
+    String label,
+    double value,
+    double max,
+    HSVColor Function(double) update,
+  ) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 96,
+          child: Text(label, style: const TextStyle(fontSize: 12)),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.clamp(0.0, max),
+            max: max,
+            onChanged: (v) => setState(() => update(v)),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -110,7 +110,7 @@ class _TrackTileState extends State<TrackTile> {
                         widget.artist,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
                         ),
@@ -131,7 +131,7 @@ class _TrackTileState extends State<TrackTile> {
               ),
             )
           else if (widget.downloaded)
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(right: 4),
               child: Icon(
                 Icons.download_done_rounded,
@@ -270,7 +270,7 @@ class CoverImage extends StatelessWidget {
     );
   }
 
-  Widget _fallback() => const Icon(
+  Widget _fallback() => Icon(
         Icons.music_note_rounded,
         color: AppColors.textSecondary,
         size: 20,

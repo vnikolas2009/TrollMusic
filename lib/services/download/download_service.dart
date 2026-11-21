@@ -88,35 +88,32 @@ class DownloadService {
     ));
 
     try {
-      final known = (track.streamUrl ?? '').trim();
-      final attempted = <String>{};
-      Object? lastError;
-
-      Future<(File file, String url)?> attempt(Iterable<String> candidates) async {
-        for (final candidate in candidates) {
-          if (candidate.isEmpty || !attempted.add(candidate)) continue;
-          try {
-            final extension = _extensionOf(candidate);
-            final file = File(p.join(_storage.audioDir.path, '${track.id}.$extension'));
-            await _downloadFile(candidate, file, track.id, token);
-            return (file, candidate);
-          } catch (error) {
-            if (error is DioException && CancelToken.isCancel(error)) rethrow;
-            lastError = error;
-          }
-        }
-        return null;
+      // Сохранённые ссылки протухают, поэтому всегда запрашиваем свежие.
+      final candidates = await _youtube.resolveCandidates(track, fresh: true);
+      if (candidates.isEmpty) {
+        throw StateError('Не удалось получить ссылку на аудио');
       }
 
-      // Сначала известный URL (например из результата поиска), затем свежие
-      // кандидаты: Piped/Invidious → InnerTube → Worker (/stream).
-      var result = known.isEmpty ? null : await attempt([known]);
-      result ??= await attempt(await _youtube.resolveAudioUrls(track));
-      if (result == null) {
+      File? target;
+      Object? lastError;
+      for (final candidate in candidates) {
+        final file = File(
+          p.join(_storage.audioDir.path, '${track.id}.${candidate.extension}'),
+        );
+        try {
+          await _downloadFile(candidate.url, file, track.id, token, candidate.headers);
+          target = file;
+          break;
+        } on DioException catch (error) {
+          if (CancelToken.isCancel(error)) rethrow;
+          lastError = error;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      if (target == null) {
         throw lastError ?? StateError('Не удалось скачать аудио');
       }
-
-      final (target, url) = result;
 
       String? artworkPath;
       if (track.artworkPath == null && (track.thumbnailUrl?.isNotEmpty ?? false)) {
@@ -132,7 +129,6 @@ class DownloadService {
         localPath: target.path,
         artworkPath: artworkPath,
         lyricsPath: lyricsPath,
-        streamUrl: url,
       );
       await _library.saveTrack(saved);
       return saved;
@@ -231,17 +227,14 @@ class DownloadService {
     File target,
     String trackId,
     CancelToken token,
+    Map<String, String> headers,
   ) async {
-    // createDio пропускает любые ответы < 500, но для файла нужен строгий 2xx:
-    // иначе тело ошибки (403/404) сохранится как «аудио».
-    await _dio.download(
+    final response = await _dio.download(
       url,
       target.path,
       deleteOnError: true,
       cancelToken: token,
-      options: Options(
-        validateStatus: (code) => code != null && code >= 200 && code < 300,
-      ),
+      options: Options(headers: headers),
       onReceiveProgress: (received, total) {
         _set(
           trackId,
@@ -253,6 +246,11 @@ class DownloadService {
         );
       },
     );
+    final code = response.statusCode ?? 0;
+    if (code != 200 && code != 206) {
+      if (await target.exists()) await target.delete();
+      throw HttpException('HTTP $code');
+    }
   }
 
   Future<String?> _downloadArtwork(Track track) async {
@@ -296,21 +294,6 @@ class DownloadService {
     } catch (_) {
       return null;
     }
-  }
-
-  String _extensionOf(String url) {
-    final uri = Uri.tryParse(url);
-    final mime = uri?.queryParameters['mime'] ?? uri?.queryParameters['mimeType'];
-    if (mime != null) {
-      if (mime.contains('webm') || mime.contains('opus')) return 'opus';
-      if (mime.contains('mp4') || mime.contains('m4a')) return 'm4a';
-    }
-    final segment = uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : '';
-    final ext = p.extension(segment).replaceFirst('.', '').toLowerCase();
-    if (['m4a', 'mp4', 'opus', 'webm', 'mp3'].contains(ext)) {
-      return ext == 'webm' ? 'opus' : ext;
-    }
-    return 'm4a';
   }
 }
 

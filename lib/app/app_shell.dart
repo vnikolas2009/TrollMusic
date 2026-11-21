@@ -69,10 +69,13 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        bottom: false,
-        // IndexedStack сохраняет состояние вкладок и рисует только активную.
-        child: IndexedStack(index: _index, children: _tabs),
+      body: DecoratedBox(
+        decoration: AppColors.backdrop,
+        child: SafeArea(
+          bottom: false,
+          // IndexedStack сохраняет состояние вкладок и рисует только активную.
+          child: IndexedStack(index: _index, children: _tabs),
+        ),
       ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,

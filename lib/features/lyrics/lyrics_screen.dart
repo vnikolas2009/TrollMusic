@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -80,6 +79,8 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
         scrolledUnderElevation: 0,
         title: Column(
@@ -89,7 +90,11 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
               track?.title ?? 'Текст песни',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
             if (track != null)
               Text(
@@ -135,7 +140,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                   ),
                 ),
                 if (shift == _offsetMs)
-                  const Icon(Icons.check, size: 16, color: AppColors.accent),
+                  Icon(Icons.check, size: 16, color: AppColors.accent),
               ],
             ),
           ),
@@ -276,18 +281,13 @@ class _LyricLine extends StatelessWidget {
         child: Text(label, style: _style),
       );
     } else {
+      // Без blur: удалённые строки просто плавно гаснут, но остаются читаемыми.
       final dist = distance.abs();
+      final alpha = (0.62 - dist * 0.05).clamp(0.34, 0.62).toDouble();
       child = Text(
         label,
-        style: _style.copyWith(color: Colors.white.withValues(alpha: dist > 6 ? 0.22 : 0.36)),
+        style: _style.copyWith(color: Colors.white.withValues(alpha: alpha)),
       );
-      if (dist <= 6) {
-        final sigma = (dist * 1.3).clamp(0.0, 5.0).toDouble();
-        child = ImageFiltered(
-          imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-          child: child,
-        );
-      }
     }
 
     return Padding(

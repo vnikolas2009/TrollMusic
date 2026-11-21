@@ -32,7 +32,7 @@ class SectionHeader extends StatelessWidget {
                 child: Image.network(
                   avatar,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const DecoratedBox(
+                  errorBuilder: (_, __, ___) => DecoratedBox(
                     decoration: BoxDecoration(color: AppColors.surfaceHigh),
                     child: Icon(
                       Icons.person_rounded,
@@ -53,7 +53,7 @@ class SectionHeader extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -67,7 +67,7 @@ class SectionHeader extends StatelessWidget {
                     subtitle!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 12,
                     ),
@@ -135,7 +135,7 @@ class TrollGreeting extends StatelessWidget {
               duration: AppMotion.base,
               child: Text(
                 subtitle!,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
                 ),

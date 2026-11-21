@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
@@ -8,7 +9,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'app/app.dart';
 import 'app/network_providers.dart';
 import 'app/providers.dart';
+import 'core/network/http_client.dart';
 import 'core/network/http_overrides.dart';
+import 'core/network/instance_directory.dart';
 import 'core/network/lyrics/lyrics_client.dart';
 import 'core/network/piped/invidious_client.dart';
 import 'core/network/piped/piped_client.dart';
@@ -43,6 +46,10 @@ Future<void> main() async {
     health: health,
   );
 
+  // Встроенный каталог зеркал: обновляется сам, без участия пользователя.
+  InstanceDirectory.instance.attach(settings, createDio(settings: settings));
+  unawaited(InstanceDirectory.instance.refreshIfStale());
+
   final storage = await StorageService.open(library: library, lyrics: lyrics);
   final downloads = DownloadService(
     library: library,
@@ -55,8 +62,7 @@ Future<void> main() async {
     builder: () => TrollAudioHandler(
       library: library,
       settings: settings,
-      resolveStreams: youtube.resolveAudioUrls,
-      workerHealth: health,
+      resolveStreams: youtube.resolveCandidates,
     ),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.trollmusic.audio',

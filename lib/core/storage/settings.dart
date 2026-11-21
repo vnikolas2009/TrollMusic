@@ -1,6 +1,7 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../config/app_config.dart';
+import '../utils/audio_pick.dart';
 
 class Settings {
   Settings(this._box);
@@ -94,13 +95,96 @@ class Settings {
   set spotifyClientSecret(String value) =>
       _box.put('spotifyClientSecret', value.trim());
 
-  int get bitrate => _box.get('bitrate', defaultValue: AppConfig.defaultBitrate) as int;
+  // ---------------------------------------------------------------- звук
 
-  set bitrate(int value) => _box.put('bitrate', value);
+  /// Качество звука: Низкое / Среднее / Высокое / Авто (по умолчанию Авто).
+  AudioQuality get audioQuality {
+    final index = (_box.get('audioQuality') as num?)?.toInt() ?? AudioQuality.auto.index;
+    return AudioQuality.values[index.clamp(0, AudioQuality.values.length - 1)];
+  }
 
-  bool get preferOpus => _box.get('preferOpus', defaultValue: false) as bool;
+  set audioQuality(AudioQuality value) => _box.put('audioQuality', value.index);
 
-  set preferOpus(bool value) => _box.put('preferOpus', value);
+  /// Целевой битрейт для зеркал Piped/Invidious (производная от качества).
+  int get bitrate {
+    switch (audioQuality) {
+      case AudioQuality.low:
+        return 64;
+      case AudioQuality.medium:
+        return 128;
+      case AudioQuality.high:
+      case AudioQuality.auto:
+        return 256;
+    }
+  }
+
+  /// Opus не поддерживается AVPlayer, поэтому предпочитаем AAC.
+  bool get preferOpus => false;
+
+  /// Подготавливать следующий трек заранее, чтобы переход был без пауз.
+  bool get gaplessEnabled => _box.get('gapless', defaultValue: true) as bool;
+
+  set gaplessEnabled(bool value) => _box.put('gapless', value);
+
+  /// Выравнивать громкость треков по данным YouTube (`loudnessDb`).
+  bool get normalizeVolume => _box.get('normalizeVolume', defaultValue: true) as bool;
+
+  set normalizeVolume(bool value) => _box.put('normalizeVolume', value);
+
+  // ----------------------------------------------------------------- тема
+
+  /// 0 — системная, 1 — светлая, 2 — тёмная (порядок `ThemeMode`).
+  /// Выбранный источник каталога: 0 — YouTube Music, 1 — Spotify.
+  int get musicSourceIndex => (_box.get('musicSource', defaultValue: 0) as num).toInt();
+
+  set musicSourceIndex(int value) => _box.put('musicSource', value);
+
+  int get themeModeIndex =>
+      ((_box.get('themeMode') as num?)?.toInt() ?? 2).clamp(0, 2);
+
+  set themeModeIndex(int value) => _box.put('themeMode', value);
+
+  int get accentValue => (_box.get('accentValue') as num?)?.toInt() ?? 0xFF1ED760;
+
+  set accentValue(int value) => _box.put('accentValue', value);
+
+  /// Чисто чёрный фон в тёмной теме (экономит батарею на OLED).
+  bool get amoled => _box.get('amoled', defaultValue: false) as bool;
+
+  set amoled(bool value) => _box.put('amoled', value);
+
+  /// Лёгкий градиент от акцентного цвета в верхней части экранов.
+  bool get gradientBackground =>
+      _box.get('gradientBackground', defaultValue: true) as bool;
+
+  set gradientBackground(bool value) => _box.put('gradientBackground', value);
+
+  // --------------------------------------- встроенный каталог зеркал и матчи
+
+  List<String> get cachedPiped =>
+      (_box.get('dirPiped') as List?)?.cast<String>().toList() ?? const [];
+
+  set cachedPiped(List<String> value) => _box.put('dirPiped', value);
+
+  List<String> get cachedInvidious =>
+      (_box.get('dirInvidious') as List?)?.cast<String>().toList() ?? const [];
+
+  set cachedInvidious(List<String> value) => _box.put('dirInvidious', value);
+
+  DateTime? get directoryUpdatedAt {
+    final ms = (_box.get('dirUpdatedAt') as num?)?.toInt();
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
+  set directoryUpdatedAt(DateTime? value) =>
+      _box.put('dirUpdatedAt', value?.millisecondsSinceEpoch);
+
+  /// Соответствие Spotify-трека видео на YouTube (сохраняется между запусками).
+  String? matchedVideo(String spotifyTrackId) =>
+      _box.get('spMatch:$spotifyTrackId') as String?;
+
+  void rememberMatch(String spotifyTrackId, String videoId) =>
+      _box.put('spMatch:$spotifyTrackId', videoId);
 
   bool get proxyAudioStreams =>
       _box.get('proxyAudioStreams', defaultValue: false) as bool;

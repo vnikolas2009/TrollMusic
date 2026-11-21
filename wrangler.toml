@@ -1,0 +1,8 @@
+name = "trollmusic-proxy"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+[vars]
+PIPED_ORIGINS = "https://pipedapi.kavin.rocks,https://pipedapi.adminforge.de,https://api.piped.private.coffee"
+INVIDIOUS_ORIGINS = "https://inv.nadeko.net,https://yewtu.be,https://invidious.nerdvpn.de"
