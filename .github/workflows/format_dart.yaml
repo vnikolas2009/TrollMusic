@@ -1,0 +1,41 @@
+name: Format Dart
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/core/network/soundcloud/soundcloud_service.dart'
+      - '.github/workflows/format_dart.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    name: Format SoundCloud
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.50.1'
+          channel: stable
+          cache: true
+
+      - name: Format Dart file
+        run: |
+          dart format lib/core/network/soundcloud/soundcloud_service.dart
+
+      - name: Save formatted code
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'style: format SoundCloud Dart code'
+          file_pattern: 'lib/core/network/soundcloud/soundcloud_service.dart'
