@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -41,7 +42,6 @@ class SoundCloudService {
     }
 
     final future = _loadClientId(force: force);
-
     _inflight = future;
 
     return future.whenComplete(() {
@@ -68,7 +68,6 @@ class SoundCloudService {
         _clientId = id;
 
         await _cache.put('clientId', id);
-
         await _cache.put(
           _clientIdKey,
           DateTime.now().millisecondsSinceEpoch,
@@ -108,7 +107,7 @@ class SoundCloudService {
       Uri.parse('https://soundcloud.com/'),
       options: Options(
         responseType: ResponseType.plain,
-        headers: {
+        headers: const {
           'accept': 'text/html',
         },
       ),
@@ -120,27 +119,40 @@ class SoundCloudService {
 
     final html = response.data ?? '';
 
-    final scripts = RegExp(
-      r'<script[^>]+src=["'']([^"'']*a-v2\.sndcdn\.com/assets/[^"'']+\.js)[\"'']',
-    )
-        .allMatches(html)
-        .map((m) {
-          final raw = m.group(1)!;
+    final scriptPattern = RegExp(
+      r'''<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']''',
+      caseSensitive: false,
+      dotAll: true,
+    );
 
-          return raw.startsWith('http')
-              ? raw
-              : 'https://soundcloud.com$raw';
-        })
-        .toList();
+    final scripts = <String>[];
 
-    if (scripts.isEmpty) {
-      scripts.addAll(
-        RegExp(
-          r'https://a-v2\.sndcdn\.com/assets/[^"''\s]+\.js',
-        )
-            .allMatches(html)
-            .map((m) => m.group(0)!),
-      );
+    for (final match in scriptPattern.allMatches(html)) {
+      final raw = match.group(1);
+
+      if (raw == null || raw.isEmpty) continue;
+
+      final uri = Uri.tryParse(raw);
+
+      if (uri == null) continue;
+
+      final resolved = Uri.parse('https://soundcloud.com/').resolveUri(uri);
+
+      if (resolved.host != 'a-v2.sndcdn.com' &&
+          resolved.host != 'soundcloud.com') {
+        continue;
+      }
+
+      if (!resolved.path.contains('/assets/') ||
+          !resolved.path.endsWith('.js')) {
+        continue;
+      }
+
+      final url = resolved.toString();
+
+      if (!scripts.contains(url)) {
+        scripts.add(url);
+      }
     }
 
     for (final url in scripts.take(12)) {
@@ -149,6 +161,9 @@ class SoundCloudService {
           Uri.parse(url),
           options: Options(
             responseType: ResponseType.plain,
+            headers: const {
+              'accept': '*/*',
+            },
           ),
         );
 
@@ -162,7 +177,7 @@ class SoundCloudService {
           return match.group(1);
         }
       } catch (_) {
-        // Следующий JS-бандл.
+        // Пробуем следующий JS-бандл.
       }
     }
 
@@ -335,8 +350,7 @@ class SoundCloudService {
         final query = <String, String>{
           ...original.queryParameters,
           'client_id': id,
-          if (authorization != null &&
-              authorization.isNotEmpty)
+          if (authorization != null && authorization.isNotEmpty)
             'track_authorization': authorization,
         };
 
@@ -376,9 +390,7 @@ class SoundCloudService {
           decoded = jsonDecode(data);
         }
 
-        final url = decoded is Map
-            ? decoded['url']
-            : null;
+        final url = decoded is Map ? decoded['url'] : null;
 
         if (url is String && url.isNotEmpty) {
           return url;
@@ -460,14 +472,11 @@ List<Track> parseSearchBody(
 }) {
   final json = jsonDecode(body);
 
-  final collection = json is Map
-      ? json['collection']
-      : null;
+  final collection = json is Map ? json['collection'] : null;
 
   if (collection is! List) return const [];
 
   final out = <Track>[];
-
   final seen = <String>{};
 
   for (final item in collection.whereType<Map>()) {
@@ -492,9 +501,7 @@ List<Track> parseSearchBody(
         : null;
 
     final artwork = _asString(item['artwork_url']) ??
-        (user is Map
-            ? _asString(user['avatar_url'])
-            : null);
+        (user is Map ? _asString(user['avatar_url']) : null);
 
     out.add(
       Track(
@@ -527,10 +534,7 @@ List<Track> parseSearchBody(
     );
   }
 
-  final authorization = _asString(
-    json['track_authorization'],
-  );
-
+  final authorization = _asString(json['track_authorization']);
   final policy = _asString(json['policy']);
 
   if (policy == 'BLOCK' || policy == 'SNIP') {
@@ -542,9 +546,7 @@ List<Track> parseSearchBody(
 
   final media = json['media'];
 
-  final transcodings = media is Map
-      ? media['transcodings']
-      : null;
+  final transcodings = media is Map ? media['transcodings'] : null;
 
   if (transcodings is! List) {
     return (
@@ -562,8 +564,7 @@ List<Track> parseSearchBody(
     if (format is! Map) continue;
 
     final protocol = _asString(format['protocol']);
-    final mime = (_asString(format['mime_type']) ?? '')
-        .toLowerCase();
+    final mime = (_asString(format['mime_type']) ?? '').toLowerCase();
 
     if (!mime.startsWith('audio/')) continue;
 
@@ -573,20 +574,14 @@ List<Track> parseSearchBody(
 
     if (protocol == 'progressive') {
       progressive.add(url);
-    } else if (protocol == 'hls' ||
-        protocol == 'hls_aac') {
+    } else if (protocol == 'hls' || protocol == 'hls_aac') {
       hls.add(url);
     }
   }
 
-  final urls = <String>[
-    ...progressive,
-    ...hls,
-  ];
-
   return (
     authorization: authorization,
-    urls: urls.toSet().toList(),
+    urls: [...progressive, ...hls].toSet().toList(),
   );
 }
 
@@ -598,15 +593,10 @@ Track? pickBest(
   if (candidates.isEmpty) return null;
 
   final title = _norm(target.title);
-
-  final artist = _norm(
-    target.artist.split(',').first,
-  );
-
+  final artist = _norm(target.artist.split(',').first);
   final wantedDuration = target.duration.inSeconds;
 
   Track? best;
-
   var bestScore = 0.0;
 
   for (final candidate in candidates) {
@@ -628,13 +618,10 @@ Track? pickBest(
       score += 10;
     }
 
-    final candidateDuration =
-        candidate.duration.inSeconds;
+    final candidateDuration = candidate.duration.inSeconds;
 
-    if (wantedDuration > 0 &&
-        candidateDuration > 0) {
-      final difference =
-          (candidateDuration - wantedDuration).abs();
+    if (wantedDuration > 0 && candidateDuration > 0) {
+      final difference = (candidateDuration - wantedDuration).abs();
 
       if (difference <= 5) {
         score += 10;
