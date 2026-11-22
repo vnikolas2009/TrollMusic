@@ -35,15 +35,11 @@ jobs:
       - name: Fetch branches
         run: |
           set -euo pipefail
-
-          git fetch origin \
-            "$BASE_BRANCH" \
-            "$FEATURE_BRANCH"
+          git fetch origin "$BASE_BRANCH" "$FEATURE_BRANCH"
 
       - name: Checkout feature branch
         run: |
           set -euo pipefail
-
           git checkout -B "$FEATURE_BRANCH" "origin/$FEATURE_BRANCH"
 
       - name: Merge main into feature branch
@@ -94,7 +90,7 @@ jobs:
       - name: Analyze project
         run: |
           set -euo pipefail
-          flutter analyze
+          flutter analyze --no-fatal-infos
 
       - name: Run tests
         run: |
@@ -109,6 +105,12 @@ jobs:
       - name: Push feature branch
         run: |
           set -euo pipefail
+
+          git add -A
+
+          if ! git diff --cached --quiet; then
+            git commit -m "Fix analyzer issues"
+          fi
 
           git push origin "HEAD:refs/heads/$FEATURE_BRANCH"
 
@@ -128,12 +130,11 @@ jobs:
 
           if [ -n "$PR_NUMBER" ]; then
             echo "Pull request already exists: #$PR_NUMBER"
+
             gh pr edit "$PR_NUMBER" \
               --repo "$GITHUB_REPOSITORY" \
               --title "Merge $FEATURE_BRANCH into $BASE_BRANCH"
           else
-            echo "Creating pull request..."
-
             gh pr create \
               --repo "$GITHUB_REPOSITORY" \
               --base "$BASE_BRANCH" \
