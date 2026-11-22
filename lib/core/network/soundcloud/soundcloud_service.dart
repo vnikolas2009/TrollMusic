@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -76,7 +75,7 @@ class SoundCloudService {
         return id;
       }
     } catch (_) {
-      // Используем сохранённый client_id.
+      // При ошибке используем сохранённый client_id.
     }
 
     final stale = _cache.get('clientId') as String?;
@@ -136,7 +135,8 @@ class SoundCloudService {
 
       if (uri == null) continue;
 
-      final resolved = Uri.parse('https://soundcloud.com/').resolveUri(uri);
+      final resolved = Uri.parse('https://soundcloud.com/')
+          .resolveUri(uri);
 
       if (resolved.host != 'a-v2.sndcdn.com' &&
           resolved.host != 'soundcloud.com') {
@@ -177,7 +177,7 @@ class SoundCloudService {
           return match.group(1);
         }
       } catch (_) {
-        // Пробуем следующий JS-бандл.
+        // Проверяем следующий JS-бандл.
       }
     }
 
@@ -246,10 +246,12 @@ class SoundCloudService {
     return const [];
   }
 
+  /// Возвращает все доступные аудиоссылки трека.
+  ///
+  /// Progressive-ссылки идут раньше HLS.
+  /// Ссылки кэшируются вместе, а не только первая из них.
   Future<List<String>> audioUrls(String trackId) async {
-    final normalizedId = trackId.startsWith('sc:')
-        ? trackId.substring(3)
-        : trackId;
+    final normalizedId = _normalizeTrackId(trackId);
 
     if (normalizedId.isEmpty) return const [];
 
@@ -257,8 +259,10 @@ class SoundCloudService {
 
     if (cached != null &&
         cached.expiresAt.isAfter(DateTime.now())) {
-      return [cached.url];
+      return List<String>.unmodifiable(cached.urls);
     }
+
+    _streamCache.remove(normalizedId);
 
     var id = await clientId();
 
@@ -308,7 +312,7 @@ class SoundCloudService {
 
         final result = <String>[];
 
-        for (final transcoding in parsed.urls.take(5)) {
+        for (final transcoding in parsed.urls.take(8)) {
           final url = await _signedUrl(
             transcoding,
             id,
@@ -322,7 +326,7 @@ class SoundCloudService {
 
         if (result.isNotEmpty) {
           _streamCache[normalizedId] = _CachedStream(
-            result.first,
+            List<String>.unmodifiable(result),
             DateTime.now().add(
               AppConfig.soundcloudStreamCacheTtl,
             ),
@@ -347,10 +351,17 @@ class SoundCloudService {
       try {
         final original = Uri.parse(transcoding);
 
+        if (original.scheme != 'https' ||
+            (original.host != 'api-v2.soundcloud.com' &&
+                original.host != 'api.soundcloud.com')) {
+          return null;
+        }
+
         final query = <String, String>{
           ...original.queryParameters,
           'client_id': id,
-          if (authorization != null && authorization.isNotEmpty)
+          if (authorization != null &&
+              authorization.isNotEmpty)
             'track_authorization': authorization,
         };
 
@@ -393,6 +404,13 @@ class SoundCloudService {
         final url = decoded is Map ? decoded['url'] : null;
 
         if (url is String && url.isNotEmpty) {
+          final streamUri = Uri.tryParse(url);
+
+          if (streamUri == null ||
+              streamUri.scheme != 'https') {
+            return null;
+          }
+
           return url;
         }
       } catch (_) {
@@ -403,37 +421,51 @@ class SoundCloudService {
     return null;
   }
 
+  /// Получает первую доступную ссылку для совместимости
+  /// с кодом, который ожидает один URL.
   Future<String?> streamFor(Track track) async {
-    final cached = _streamCache[track.id];
+    final urls = await streamUrlsFor(track);
 
-    if (cached != null &&
-        cached.expiresAt.isAfter(DateTime.now())) {
-      return cached.url;
+    return urls.isEmpty ? null : urls.first;
+  }
+
+  /// Получает несколько ссылок, включая поиск замены,
+  /// если исходный трек недоступен.
+  Future<List<String>> streamUrlsFor(Track track) async {
+    final normalizedId = _normalizeTrackId(track.id);
+
+    if (normalizedId.isNotEmpty) {
+      final direct = await audioUrls(normalizedId);
+
+      if (direct.isNotEmpty) {
+        return direct;
+      }
     }
 
-    List<String> urls = const [];
+    final found = pickBest(
+      track,
+      await search(
+        _queryFor(track),
+        limit: 10,
+      ),
+    );
 
-    if (track.id.startsWith('sc:')) {
-      urls = await audioUrls(track.id);
+    if (found == null) return const [];
+
+    return audioUrls(found.id);
+  }
+
+  static String _normalizeTrackId(String id) {
+    final normalized = id.startsWith('sc:')
+        ? id.substring(3)
+        : id;
+
+    if (normalized.isEmpty ||
+        !RegExp(r'^\d+$').hasMatch(normalized)) {
+      return '';
     }
 
-    if (urls.isEmpty) {
-      final found = pickBest(
-        track,
-        await search(
-          _queryFor(track),
-          limit: 10,
-        ),
-      );
-
-      if (found == null) return null;
-
-      urls = await audioUrls(found.id);
-    }
-
-    if (urls.isEmpty) return null;
-
-    return urls.first;
+    return normalized;
   }
 
   static String _queryFor(Track track) {
@@ -442,18 +474,33 @@ class SoundCloudService {
     return '$artist ${track.title}'.trim();
   }
 
+  /// Удаляет кэш конкретного трека.
+  void forget(String trackId) {
+    final normalizedId = _normalizeTrackId(trackId);
+
+    if (normalizedId.isNotEmpty) {
+      _streamCache.remove(normalizedId);
+    }
+  }
+
+  /// Удаляет весь кэш аудиоссылок.
   void clearStreamCache() {
     _streamCache.clear();
+  }
+
+  /// Освобождает HTTP-клиент.
+  void dispose() {
+    _dio.close();
   }
 }
 
 class _CachedStream {
   const _CachedStream(
-    this.url,
+    this.urls,
     this.expiresAt,
   );
 
-  final String url;
+  final List<String> urls;
   final DateTime expiresAt;
 }
 
@@ -546,7 +593,9 @@ List<Track> parseSearchBody(
 
   final media = json['media'];
 
-  final transcodings = media is Map ? media['transcodings'] : null;
+  final transcodings = media is Map
+      ? media['transcodings']
+      : null;
 
   if (transcodings is! List) {
     return (
@@ -564,7 +613,8 @@ List<Track> parseSearchBody(
     if (format is! Map) continue;
 
     final protocol = _asString(format['protocol']);
-    final mime = (_asString(format['mime_type']) ?? '').toLowerCase();
+    final mime = (_asString(format['mime_type']) ?? '')
+        .toLowerCase();
 
     if (!mime.startsWith('audio/')) continue;
 
@@ -586,6 +636,9 @@ List<Track> parseSearchBody(
 }
 
 /// Поиск наиболее подходящего трека.
+///
+/// Важно: совпадение только исполнителя и длительности
+/// не считается достаточным. Название тоже должно совпасть.
 Track? pickBest(
   Track target,
   List<Track> candidates,
@@ -596,21 +649,22 @@ Track? pickBest(
   final artist = _norm(target.artist.split(',').first);
   final wantedDuration = target.duration.inSeconds;
 
+  if (title.isEmpty) return null;
+
   Track? best;
   var bestScore = 0.0;
 
   for (final candidate in candidates) {
-    var score = 0.0;
-
     final candidateTitle = _norm(candidate.title);
     final candidateArtist = _norm(candidate.artist);
 
-    if (title.isNotEmpty &&
-        (candidateTitle == title ||
-            candidateTitle.contains(title) ||
-            title.contains(candidateTitle))) {
-      score += 20;
-    }
+    final titleMatches = candidateTitle == title ||
+        candidateTitle.contains(title) ||
+        title.contains(candidateTitle);
+
+    if (!titleMatches) continue;
+
+    var score = 20.0;
 
     if (artist.isNotEmpty &&
         (candidateArtist.contains(artist) ||
@@ -621,7 +675,8 @@ Track? pickBest(
     final candidateDuration = candidate.duration.inSeconds;
 
     if (wantedDuration > 0 && candidateDuration > 0) {
-      final difference = (candidateDuration - wantedDuration).abs();
+      final difference =
+          (candidateDuration - wantedDuration).abs();
 
       if (difference <= 5) {
         score += 10;
@@ -638,7 +693,7 @@ Track? pickBest(
     }
   }
 
-  return bestScore >= 20 ? best : null;
+  return best;
 }
 
 String _norm(String value) {
