@@ -9,8 +9,9 @@ import '../features/home/home_screen.dart';
 import '../features/library/library_screen.dart';
 import '../features/player/player_screen.dart';
 import '../features/search/search_screen.dart';
+import '../features/settings/settings_screen.dart';
 import '../shared/widgets/mini_player.dart';
-import '../shared/widgets/troll_bottom_nav.dart';
+import '../shared/widgets/rubber_dock.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
@@ -27,6 +28,21 @@ class _AppShellState extends ConsumerState<AppShell> {
     SearchScreen(),
     LibraryScreen(),
     CreateScreen(),
+    SettingsScreen(),
+  ];
+
+  static final _dockTabs = <RubberDockTab>[
+    RubberDockTab(icon: Icons.home_rounded, label: 'Главная'),
+    RubberDockTab(icon: Icons.search_rounded, label: 'Поиск'),
+    RubberDockTab(
+      icon: Icons.library_music_rounded,
+      label: 'Медиатека',
+    ),
+    RubberDockTab(icon: Icons.add_rounded, label: 'Создать'),
+    RubberDockTab(
+      icon: Icons.settings_rounded,
+      label: 'Настройки',
+    ),
   ];
 
   void _openPlayer(BuildContext context) {
@@ -41,6 +57,7 @@ class _AppShellState extends ConsumerState<AppShell> {
             curve: AppMotion.emphasized,
             reverseCurve: AppMotion.exit,
           );
+
           return FadeTransition(
             opacity: curved,
             child: SlideTransition(
@@ -58,14 +75,16 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final track = ref.watch(currentTrackProvider).value;
-
     ref.listen(audioErrorsProvider, (_, next) {
       final message = next.value;
       if (message == null) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
     });
+
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -73,22 +92,34 @@ class _AppShellState extends ConsumerState<AppShell> {
         decoration: AppColors.backdrop,
         child: SafeArea(
           bottom: false,
-          // IndexedStack сохраняет состояние вкладок и рисует только активную.
-          child: IndexedStack(index: _index, children: _tabs),
+          child: IndexedStack(
+            index: _index,
+            children: _tabs,
+          ),
         ),
       ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Один общий мини-плеер для всех вкладок.
           MiniPlayer(
-            onTap: track == null ? null : () => _openPlayer(context),
+            onTap: () => _openPlayer(context),
           ),
-          TrollBottomNav(
-            index: _index,
-            onChanged: (i) {
-              if (i == _index) return;
-              setState(() => _index = i);
-            },
+
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: bottomInset + 8,
+            ),
+            child: RubberDock(
+              tabs: _dockTabs,
+              selected: _index,
+              onSelected: (i) {
+                if (i == _index) return;
+                setState(() => _index = i);
+              },
+              // Используем док только для навигации.
+              panelHeight: 1,
+            ),
           ),
         ],
       ),
