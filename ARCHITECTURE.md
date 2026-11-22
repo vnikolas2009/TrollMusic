@@ -25,6 +25,8 @@ lib/
     app.dart, app_shell.dart   # MaterialApp, IndexedStack вкладок + MiniPlayer
     providers.dart             # AppServices, провайдеры библиотеки/плеера (positionProvider и др.)
     network_providers.dart     # dio, settings, SoundCloud/InnerTube/AudioResolver, Spotify, MusicRepository
+    source_provider.dart       # переключатель источника на главной (Spotify / YouTube)
+    theme_controller.dart      # выбор темы оформления
   core/
     config/app_config.dart     # API base, таймауты, DoH-эндпоинты, TTL client_id, prefetch, cacheWidth
     network/
@@ -45,7 +47,7 @@ lib/
     audio/audio_handler.dart               # TrollAudioHandler: очередь, prefetch, кроссфейд, таймер сна
     download/download_service.dart         # офлайн-загрузки
     storage/                               # файлы, импорт, теги
-  features/                    # home, search, library, playlist, artist, player, lyrics, create, settings
+  features/                    # home (music_sections.dart: подборки по настроению), search, library, playlist, artist, player, lyrics, create, settings
   shared/widgets/              # track_tile, mini_player, cover_art, …
 test/                          # flutter test
 ```
@@ -68,7 +70,7 @@ test/                          # flutter test
 
 **Hive-боксы**: `tracks`, `playlists`, `lyrics` (`LibraryRepository`), `settings` (`Settings`), `soundcloud_cache` (`client_id` + время получения).
 
-**Settings**: `apiBaseUrl`, `httpProxy`, `useSystemProxy`, `customHeaders`, `spotifyGuestMode`, `spotifyClientId/Secret`, `bitrate`, `preferOpus`, `crossfadeSeconds`, `shuffleEnabled`, `repeatIndex`, `lastTrackId`, `lastPositionMs`, `playbackSpeed`, `lyricsOffsetMs(trackId)`, `playCounts`, `recentIds`, `searchQueries`.
+**Settings**: `apiBaseUrl`, `httpProxy`, `useSystemProxy`, `customHeaders`, `spotifyGuestMode`, `spotifyClientId/Secret`, `audioQuality`, `bitrate`, `preferOpus`, `crossfadeSeconds`, `shuffleEnabled`, `repeatIndex`, `lastTrackId`, `lastPositionMs`, `playbackSpeed`, `lyricsOffsetMs(trackId)`, `playCounts`, `recentIds`, `searchQueries`.
 
 ## 4. Сеть
 

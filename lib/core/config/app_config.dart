@@ -46,4 +46,27 @@ abstract final class AppConfig {
 
   static const audioBitrates = <int>[128, 192, 256, 320];
   static const defaultBitrate = 192;
+
+  /// Версии клиентов InnerTube. Если YouTube перестанет их принимать,
+  /// достаточно обновить значения здесь.
+  static const androidVrVersion = '1.65.10';
+  static const androidSdklessVersion = '20.10.38';
+  static const ytMusicClientVersion = '1.20250310.01.00';
+
+  /// Запросы для блока «Популярное в Spotify».
+  static const spotifyQueries = <String>[
+    'Top 50 Global',
+    'Today\'s Top Hits',
+    'Russian Top Hits',
+    'RapCaviar',
+  ];
+
+  /// Запросы для блока «Популярная музыка» на главной (только музыка).
+  static const trendingQueries = <String>[
+    'top hits 2026 official audio',
+    'хиты 2026 русские песни',
+    'new music friday',
+    'billboard hot 100 songs',
+    'трендовые песни топ чарт',
+  ];
 }

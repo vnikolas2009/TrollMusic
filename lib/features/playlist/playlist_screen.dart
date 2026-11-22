@@ -226,7 +226,7 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
                       final track = order[i];
                       return ListTile(
                         key: ValueKey(track.id),
-                        leading: const Icon(
+                        leading: Icon(
                           Icons.drag_handle,
                           size: 18,
                           color: AppColors.textSecondary,
@@ -452,7 +452,7 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondary,
                             ),

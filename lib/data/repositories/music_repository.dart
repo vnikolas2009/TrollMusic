@@ -35,6 +35,46 @@ class MusicRepository {
 
   Future<List<Track>> searchYouTube(String query) => resolver.searchYouTube(query);
 
+  /// Spotify в приоритете: выдаёт песни по названию. Если Spotify ничего
+  /// не вернул — подстраховка песнями YouTube Music.
+  Future<List<Track>> searchSpotify(String query) async {
+    final tracks = await _safeList(spotify.search(query));
+    if (tracks.isNotEmpty) return tracks;
+    return _safeList(resolver.searchYouTube(query));
+  }
+
+  /// Подборка YouTube по нескольким запросам (круговое перемешивание, без дублей).
+  Future<List<Track>> youtubeMix(List<String> queries, {int limit = 30}) async {
+    final results = await Future.wait([
+      for (final q in queries) _safeList(resolver.searchYouTube(q, limit: 15)),
+    ]);
+    return _interleave(results, limit);
+  }
+
+  /// Подборка Spotify по нескольким запросам (круговое перемешивание, без дублей).
+  Future<List<Track>> spotifyMix(List<String> queries, {int limit = 30}) async {
+    final results = await Future.wait([
+      for (final q in queries) _safeList(spotify.search(q, limit: 15)),
+    ]);
+    return _interleave(results, limit);
+  }
+
+  List<Track> _interleave(List<List<Track>> results, int limit) {
+    final out = <Track>[];
+    final seen = <String>{};
+    for (var round = 0; out.length < limit; round++) {
+      var any = false;
+      for (final list in results) {
+        if (round >= list.length || out.length >= limit) continue;
+        any = true;
+        final t = list[round];
+        if (seen.add('${t.artist}|${t.title}'.toLowerCase())) out.add(t);
+      }
+      if (!any) break;
+    }
+    return out;
+  }
+
   Future<Playlist?> spotifyPlaylist(String url) async {
     final link = parseSpotifyLink(url);
     if (link == null || link.kind == SpotifyKind.track) return null;

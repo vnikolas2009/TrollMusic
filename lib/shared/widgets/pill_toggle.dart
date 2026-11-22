@@ -27,7 +27,7 @@ class PillToggle extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.glassBorder),
+        border: Border.all(color: AppColors.outline),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

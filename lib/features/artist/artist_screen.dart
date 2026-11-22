@@ -59,7 +59,7 @@ class ArtistScreen extends ConsumerWidget {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  const DecoratedBox(
+                  DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
@@ -88,7 +88,7 @@ class ArtistScreen extends ConsumerWidget {
             ),
           ),
           if (own.isEmpty)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: Text(
@@ -121,7 +121,7 @@ class ArtistScreen extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
                     child: Text(
                       '${own.length} треков · ${formatLongDuration(total)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textTertiary,
                       ),

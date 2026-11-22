@@ -117,8 +117,7 @@ class DownloadService {
       if (result == null) {
         throw lastError ?? StateError('Не удалось скачать аудио');
       }
-
-      final (target, url) = result;
+      final (target, _) = result;
 
       String? artworkPath;
       if (track.artworkPath == null && (track.thumbnailUrl?.isNotEmpty ?? false)) {
@@ -134,7 +133,6 @@ class DownloadService {
         localPath: target.path,
         artworkPath: artworkPath,
         lyricsPath: lyricsPath,
-        streamUrl: url,
       );
       await _library.saveTrack(saved);
       return saved;
@@ -228,15 +226,28 @@ class DownloadService {
     if (await file.exists()) await file.delete();
   }
 
+  String _extensionOf(String url) {
+    final uri = Uri.tryParse(url);
+    final mime = uri?.queryParameters['mime'] ?? uri?.queryParameters['mimeType'];
+    if (mime != null) {
+      if (mime.contains('webm') || mime.contains('opus')) return 'opus';
+      if (mime.contains('mp4') || mime.contains('m4a')) return 'm4a';
+    }
+    final segment = uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : '';
+    final ext = p.extension(segment).replaceFirst('.', '').toLowerCase();
+    if (['m4a', 'mp4', 'opus', 'webm', 'mp3'].contains(ext)) {
+      return ext == 'webm' ? 'opus' : ext;
+    }
+    return 'm4a';
+  }
+
   Future<void> _downloadFile(
     String url,
     File target,
     String trackId,
     CancelToken token,
   ) async {
-    // createDio пропускает любые ответы < 500, но для файла нужен строгий 2xx:
-    // иначе тело ошибки (403/404) сохранится как «аудио».
-    await _dio.download(
+    final response = await _dio.download(
       url,
       target.path,
       deleteOnError: true,
@@ -256,6 +267,11 @@ class DownloadService {
         );
       },
     );
+    final code = response.statusCode ?? 0;
+    if (code != 200 && code != 206) {
+      if (await target.exists()) await target.delete();
+      throw HttpException('HTTP $code');
+    }
   }
 
   Future<String?> _downloadArtwork(Track track) async {
@@ -299,21 +315,6 @@ class DownloadService {
     } catch (_) {
       return null;
     }
-  }
-
-  String _extensionOf(String url) {
-    final uri = Uri.tryParse(url);
-    final mime = uri?.queryParameters['mime'] ?? uri?.queryParameters['mimeType'];
-    if (mime != null) {
-      if (mime.contains('webm') || mime.contains('opus')) return 'opus';
-      if (mime.contains('mp4') || mime.contains('m4a')) return 'm4a';
-    }
-    final segment = uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : '';
-    final ext = p.extension(segment).replaceFirst('.', '').toLowerCase();
-    if (['m4a', 'mp4', 'opus', 'webm', 'mp3'].contains(ext)) {
-      return ext == 'webm' ? 'opus' : ext;
-    }
-    return 'm4a';
   }
 }
 

@@ -187,10 +187,10 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
   Widget _field(String label, TextEditingController controller) {
     return TextField(
       controller: controller,
-      style: const TextStyle(color: AppColors.textPrimary),
+      style: TextStyle(color: AppColors.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: AppColors.textSecondary),
+        labelStyle: TextStyle(color: AppColors.textSecondary),
         filled: true,
         fillColor: AppColors.surfaceAlt,
         border: OutlineInputBorder(
@@ -252,7 +252,7 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
               maxLines: 10,
               onChanged: (v) => _lyricsInput = v,
               style: const TextStyle(fontSize: 12, height: 1.5),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: '[00:12.30] Первая строка\n[00:18.10] Вторая строка',
                 filled: true,
                 fillColor: AppColors.surfaceHigh,
@@ -321,7 +321,7 @@ class _ArtworkPreview extends StatelessWidget {
             path != null && path.isNotEmpty
                 ? 'Своя обложка'
                 : 'Используется обложка из источника',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
         ),
       ],
@@ -330,7 +330,7 @@ class _ArtworkPreview extends StatelessWidget {
 
   Widget _placeholder() => Container(
         color: AppColors.surfaceHigh,
-        child: const Icon(Icons.music_note, color: AppColors.textSecondary),
+        child: Icon(Icons.music_note, color: AppColors.textSecondary),
       );
 }
 
@@ -360,7 +360,7 @@ class _LyricsStatus extends ConsumerWidget {
           has
               ? (synced ? 'Текст с таймкодами сохранён' : 'Текст сохранён (без таймкодов)')
               : 'Текст не задан',
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
       ],
     );

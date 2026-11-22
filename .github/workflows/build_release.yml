@@ -37,7 +37,7 @@ jobs:
 
   android:
     name: Android APK
-    needs: version
+    needs: [version]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,7 +89,7 @@ jobs:
 
   ios:
     name: iOS IPA (unsigned)
-    needs: version
+    needs: [version]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

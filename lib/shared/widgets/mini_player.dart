@@ -53,8 +53,8 @@ class MiniPlayer extends ConsumerWidget {
           decoration: BoxDecoration(
             color: AppColors.surfaceMini,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.glassBorder),
-            boxShadow: const [
+            border: Border.all(color: AppColors.outline),
+            boxShadow: [
               BoxShadow(
                 color: AppColors.shadow,
                 blurRadius: 22,
@@ -84,7 +84,7 @@ class MiniPlayer extends ConsumerWidget {
                               key: ValueKey(track.id),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppColors.textPrimary,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -97,7 +97,7 @@ class MiniPlayer extends ConsumerWidget {
                             track.artist,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppColors.textSecondary,
                               fontSize: 11,
                             ),
@@ -167,7 +167,7 @@ class _MiniProgress extends ConsumerWidget {
       value: progress,
       minHeight: 2,
       backgroundColor: AppColors.surfaceHigh,
-      valueColor: const AlwaysStoppedAnimation(AppColors.textPrimary),
+      valueColor: AlwaysStoppedAnimation(AppColors.textPrimary),
     );
   }
 }
@@ -265,11 +265,11 @@ class QueueSheet extends ConsumerWidget {
                         children: [
                           Text(
                             formatDuration(duration),
-                            style: const TextStyle(color: AppColors.textSecondary),
+                            style: TextStyle(color: AppColors.textSecondary),
                           ),
                           IconButton(
                             iconSize: 18,
-                            icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                            icon: Icon(Icons.close, color: AppColors.textSecondary),
                             onPressed: () =>
                                 ref.read(audioHandlerProvider).removeFromQueue(index),
                           ),

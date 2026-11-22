@@ -28,10 +28,10 @@ class TrollBottomNav extends StatelessWidget {
       child: Container(
         height: 64,
         decoration: BoxDecoration(
-          color: AppColors.glassStrong,
+          color: AppColors.cardStrong,
           borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: AppColors.glassBorder),
-          boxShadow: const [
+          border: Border.all(color: AppColors.outline),
+          boxShadow: [
             BoxShadow(
               color: AppColors.shadow,
               blurRadius: 24,
@@ -54,7 +54,7 @@ class TrollBottomNav extends StatelessWidget {
                   width: slot - 16,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: AppColors.glassHighlight,
+                      color: AppColors.highlight,
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
                         color: AppColors.textPrimary.withValues(alpha: 0.06),

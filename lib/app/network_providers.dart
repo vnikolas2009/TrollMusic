@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../core/config/app_config.dart';
 import '../core/network/http_client.dart';
 import '../core/network/lyrics/lyrics_client.dart';
 import '../core/network/soundcloud/soundcloud_service.dart';
@@ -48,6 +49,11 @@ final musicRepositoryProvider = Provider<MusicRepository>(
     lyrics: ref.watch(lyricsClientProvider),
   ),
 );
+
+/// Популярное в Spotify (метаданные Spotify, воспроизведение — через YouTube).
+final spotifyTrendingProvider = FutureProvider<List<Track>>((ref) {
+  return ref.watch(musicRepositoryProvider).spotifyMix(AppConfig.spotifyQueries);
+});
 
 /// Тренды для пустой медиатеки. Кэшируются до перезапуска приложения.
 final trendingProvider = FutureProvider<List<Track>>((ref) async {

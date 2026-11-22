@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/network_providers.dart';
+import '../../app/source_provider.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
@@ -35,7 +36,7 @@ class _RecentQueries extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (queries.isEmpty) {
-      return const SliverFillRemaining(
+      return SliverFillRemaining(
         hasScrollBody: false,
         child: Padding(
           padding: EdgeInsets.fromLTRB(32, 40, 32, 32),
@@ -93,7 +94,7 @@ class _RecentQueries extends StatelessWidget {
                     index: i,
                     offsetY: 0.06,
                     child: ActionChip(
-                      avatar: const Icon(
+                      avatar: Icon(
                         Icons.north_west_rounded,
                         size: 14,
                         color: AppColors.textTertiary,
@@ -123,20 +124,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   List<Track> _results = const [];
   bool _loading = false;
   String? _error;
-  TrackSource? _source;
   bool _focused = false;
 
-  List<Track> get _filtered => _source == null
-      ? _results
-      : _results.where((t) => t.source == _source).toList();
-
-  List<({String label, TrackSource? source})> get _sourceFilters => [
-        (label: 'Все', source: null),
-        if (_results.any((t) => t.source == TrackSource.youtube))
-          (label: 'YouTube', source: TrackSource.youtube),
-        if (_results.any((t) => t.source == TrackSource.spotify))
-          (label: 'Spotify', source: TrackSource.spotify),
-      ];
+  List<Track> get _filtered => _results;
 
   @override
   void initState() {
@@ -183,7 +173,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
     try {
       final repo = ref.read(musicRepositoryProvider);
-      final results = await repo.searchAll(trimmed);
+      final results = ref.read(musicSourceProvider) == MusicSource.spotify
+          ? await repo.searchSpotify(trimmed)
+          : await repo.searchYouTube(trimmed);
       if (!mounted) return;
       setState(() {
         _results = results;
@@ -200,8 +192,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filters = _sourceFilters;
-    final filterIndex = filters.indexWhere((f) => f.source == _source);
+    final source = ref.watch(musicSourceProvider);
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
@@ -213,6 +204,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           backgroundColor: AppColors.background.withValues(alpha: 0.92),
           surfaceTintColor: Colors.transparent,
           title: const Text('Поиск'),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: PillToggle(
+                labels: [for (final s in MusicSource.values) s.label],
+                index: source.index,
+                onChanged: (i) {
+                  ref
+                      .read(musicSourceProvider.notifier)
+                      .select(MusicSource.values[i]);
+                  final q = _controller.text.trim();
+                  if (q.isNotEmpty) _search(q);
+                },
+              ),
+            ),
+          ),
         ),
         SliverToBoxAdapter(
           child: Padding(
@@ -228,9 +238,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       : Colors.transparent,
                 ),
                 boxShadow: _focused
-                    ? const [
+                    ? [
                         BoxShadow(
-                          color: AppColors.accentGlow,
+                          color: AppColors.accentTint,
                           blurRadius: 22,
                           offset: Offset(0, 4),
                         ),
@@ -243,7 +253,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 onChanged: _onChanged,
                 onSubmitted: _search,
                 textInputAction: TextInputAction.search,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 14,
                 ),
@@ -302,7 +312,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               child: Text(
                 _error!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: AppColors.textSecondary),
               ),
             ),
           )
@@ -327,7 +337,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   Expanded(
                     child: Text(
                       'Найдено: ${_results.length}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textTertiary,
                       ),
@@ -351,21 +361,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ),
           ),
-          if (filters.length > 2)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: PillToggle(
-                    labels: [for (final f in filters) f.label],
-                    index: filterIndex < 0 ? 0 : filterIndex,
-                    onChanged: (i) =>
-                        setState(() => _source = filters[i].source),
-                  ),
-                ),
-              ),
-            ),
           SliverList.builder(
             itemCount: _filtered.length,
             itemBuilder: (context, i) {

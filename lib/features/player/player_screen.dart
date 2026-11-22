@@ -78,7 +78,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     final audio = ref.read(audioHandlerProvider);
 
     if (track == null) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: AppColors.background,
         body: Center(child: Text('Ничего не играет')),
       );
@@ -103,7 +103,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [_dominant, AppColors.background],
+              colors: [AppColors.tinted(_dominant), AppColors.background],
               stops: const [0, 0.82],
             ),
           ),
@@ -199,7 +199,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                               track.artist,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 13,
                                                 color: AppColors.textSecondary,
                                               ),
@@ -378,7 +378,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                     ? const SizedBox.shrink()
                     : Text(
                         _countdown(remaining),
-                        style: const TextStyle(color: AppColors.accent),
+                        style: TextStyle(color: AppColors.accent),
                       ),
               ),
               onTap: () {
@@ -391,7 +391,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               title: const Text('Кроссфейд'),
               trailing: Text(
                 '${ref.read(audioHandlerProvider).crossfade.value.inSeconds} с',
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: AppColors.textSecondary),
               ),
               onTap: () {
                 Navigator.pop(sheetContext);
@@ -403,7 +403,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               title: const Text('Скорость'),
               trailing: Text(
                 '${ref.read(audioHandlerProvider).player.speed.toStringAsFixed(2)}×',
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: AppColors.textSecondary),
               ),
               onTap: () {
                 Navigator.pop(sheetContext);
@@ -483,7 +483,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 ListTile(
                   title: Text(value == 1 ? 'Обычная' : '${value}×'),
                   trailing: (speed - value).abs() < 0.01
-                      ? const Icon(Icons.check, color: AppColors.accent, size: 18)
+                      ? Icon(Icons.check, color: AppColors.accent, size: 18)
                       : null,
                   onTap: () {
                     ref.read(audioHandlerProvider).setSpeed(value);
@@ -605,7 +605,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             width: 110,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
           ),
           Expanded(
@@ -698,17 +698,17 @@ class _StreamErrorBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.glassBorder),
+        border: Border.all(color: AppColors.outline),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.cloud_off_rounded,
             size: 18,
             color: AppColors.textSecondary,
           ),
           const SizedBox(width: 10),
-          const Expanded(
+          Expanded(
             child: Text(
               'Поток недоступен. Попробуйте ещё раз или другой трек.',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
@@ -737,7 +737,7 @@ class _SeekBar extends ConsumerWidget {
     final position = ref.watch(positionProvider).value ?? Duration.zero;
     final duration = ref.watch(durationProvider).value ?? fallbackDuration;
     final maxMs = duration.inMilliseconds == 0 ? 1 : duration.inMilliseconds;
-    const labelStyle = TextStyle(fontSize: 11, color: AppColors.textSecondary);
+    final labelStyle = TextStyle(fontSize: 11, color: AppColors.textSecondary);
     return RepaintBoundary(
       child: Column(
         children: [
@@ -795,7 +795,7 @@ class _Artwork extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
               color: AppColors.shadow,
               blurRadius: 36,
@@ -820,7 +820,7 @@ class _Artwork extends StatelessWidget {
 
   Widget _placeholder() => Container(
         color: AppColors.surfaceHigh,
-        child: const Icon(Icons.music_note_rounded, size: 64, color: AppColors.textSecondary),
+        child: Icon(Icons.music_note_rounded, size: 64, color: AppColors.textSecondary),
       );
 }
 
@@ -851,7 +851,7 @@ class _PlayButtonState extends State<_PlayButton> {
         child: Container(
           width: 66,
           height: 66,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.textPrimary,
             shape: BoxShape.circle,
             boxShadow: [
@@ -898,7 +898,7 @@ class _LyricsCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surfaceAlt.withValues(alpha: 0.72),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.glassBorder),
+          border: Border.all(color: AppColors.outline),
         ),
         child: Row(
           children: [
@@ -910,7 +910,7 @@ class _LyricsCard extends StatelessWidget {
                 color: AppColors.accent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(11),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.lyrics_outlined,
                 size: 19,
                 color: AppColors.accent,
@@ -930,7 +930,7 @@ class _LyricsCard extends StatelessWidget {
                     hasLyrics
                         ? 'Синхронизированный · нажмите'
                         : 'Текст не найден · нажмите',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
                       color: AppColors.textSecondary,
                     ),
@@ -938,7 +938,7 @@ class _LyricsCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
               color: AppColors.textTertiary,
             ),
@@ -961,7 +961,7 @@ class QueueView extends ConsumerWidget {
       builder: (context, snapshot) {
         final items = snapshot.data ?? const <MediaItem>[];
         if (items.isEmpty) {
-          return const Center(
+          return Center(
             child: Text('Очередь пуста', style: TextStyle(color: AppColors.textSecondary)),
           );
         }
@@ -974,7 +974,7 @@ class QueueView extends ConsumerWidget {
                 children: [
                   Text(
                     'Далее · ${items.length}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
                     ),
@@ -1038,18 +1038,18 @@ class QueueView extends ConsumerWidget {
                       item.artist ?? '',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           formatDuration(item.duration ?? Duration.zero),
-                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                         ),
                         IconButton(
                           iconSize: 18,
-                          icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                          icon: Icon(Icons.close, color: AppColors.textSecondary),
                           onPressed: () => audio.removeFromQueue(i),
                         ),
                       ],
