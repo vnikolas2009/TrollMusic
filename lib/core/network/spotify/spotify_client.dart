@@ -4,25 +4,47 @@ import 'package:dio/dio.dart';
 
 import '../../../data/models/playlist.dart';
 import '../../../data/models/track.dart';
+import '../../config/app_config.dart';
 import '../../network/http_client.dart';
-import '../../network/proxy.dart';
 import '../../storage/settings.dart';
 
-/// Spotify без пользовательского OAuth.
+/// Spotify без пользовательского OAuth. Только метаданные, аудио не отдаётся.
 ///
 /// Стратегия:
-/// 1. client id/secret (если указаны);
-/// 2. анонимный токен веб-плеера (через Worker или напрямую);
-/// 3. публичные embed-страницы и `__NEXT_DATA__` как источник метаданных.
+/// 1. Vercel `/api/spotify/import` и `/api/spotify/token` (метаданные);
+/// 2. client id/secret (если указаны);
+/// 3. анонимный токен веб-плеера напрямую;
+/// 4. публичные embed-страницы и `__NEXT_DATA__` как источник метаданных.
 class SpotifyClient {
-  SpotifyClient({required Settings settings, required ProxyConfig proxy})
+  SpotifyClient({required Settings settings})
       : _settings = settings,
-        _proxy = proxy,
         _dio = createDio(settings: settings, receiveTimeout: const Duration(seconds: 15));
 
   final Settings _settings;
-  final ProxyConfig _proxy;
   final Dio _dio;
+
+  static const _webHeaders = <String, String>{
+    'user-agent': AppConfig.spotifyWebUserAgent,
+    'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+    'referer': 'https://open.spotify.com/',
+  };
+
+  static final _webBase = Uri.parse('https://open.spotify.com');
+
+  Uri _apiUri(String path, [Map<String, dynamic>? query]) => Uri(
+        scheme: 'https',
+        host: 'api.spotify.com',
+        path: path,
+        queryParameters: query?.map((k, v) => MapEntry(k, '$v')),
+      );
+
+  Uri _backendUri(String path, [Map<String, String>? query]) {
+    final base = Uri.parse(_settings.apiBaseUrl);
+    return base.replace(
+      path: '${base.path.endsWith('/') ? base.path.substring(0, base.path.length - 1) : base.path}$path',
+      queryParameters: query,
+    );
+  }
 
   String? _token;
   DateTime? _expiresAt;
@@ -60,7 +82,7 @@ class SpotifyClient {
         utf8.encode('${_settings.spotifyClientId}:${_settings.spotifyClientSecret}'),
       );
       final response = await _dio.postUri<Map<String, dynamic>>(
-        _proxy.spotifyAccounts('/api/token'),
+        Uri.parse('https://accounts.spotify.com/api/token'),
         data: 'grant_type=client_credentials',
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
@@ -77,15 +99,9 @@ class SpotifyClient {
   Future<String?> _anonymousToken() async {
     if (!guestMode) return null;
 
-    if (_proxy.enabled) {
-      try {
-        final response = await _dio.getUri<dynamic>(_proxy.workerSpotifyToken);
-        final token = _readToken(response.data is String
-            ? jsonDecode(response.data as String) as dynamic
-            : response.data);
-        if (token != null) return token;
-      } catch (_) {}
-    }
+    final backend = await _getJson(_backendUri('/api/spotify/token'));
+    final backendToken = _readToken(backend);
+    if (backendToken != null) return backendToken;
 
     const paths = <String>[
       '/get_access_token?reason=transport&productType=web_player',
@@ -93,32 +109,64 @@ class SpotifyClient {
     ];
 
     for (final path in paths) {
-      for (final uri in _embedCandidates(path)) {
-        try {
-          final response = await _dio.getUri<dynamic>(
-            uri,
-            options: Options(
-              responseType: ResponseType.plain,
-              receiveTimeout: const Duration(seconds: 6),
-              headers: {
-                ..._proxy.webHeaders,
-                'accept': 'application/json, text/plain, */*',
-              },
-            ),
-          );
-          final body = response.data;
-          dynamic decoded;
-          if (body is String && body.trim().isNotEmpty) {
-            decoded = jsonDecode(body);
-          } else if (body is Map) {
-            decoded = body;
-          }
-          final token = _readToken(decoded);
-          if (token != null) return token;
-        } catch (_) {}
-      }
+      final decoded = await _getJson(_webUri(path), headers: _webHeaders);
+      final token = _readToken(decoded);
+      if (token != null) return token;
     }
     return null;
+  }
+
+  Future<dynamic> _getJson(Uri uri, {Map<String, String>? headers}) async {
+    try {
+      final response = await _dio.getUri<dynamic>(
+        uri,
+        options: Options(
+          responseType: ResponseType.plain,
+          receiveTimeout: const Duration(seconds: 8),
+          headers: {
+            ...?headers,
+            'accept': 'application/json, text/plain, */*',
+          },
+        ),
+      );
+      final status = response.statusCode ?? 0;
+      if (status < 200 || status >= 300) return null;
+      final body = response.data;
+      if (body is String && body.trim().isNotEmpty) return jsonDecode(body);
+      if (body is Map) return body;
+    } catch (_) {}
+    return null;
+  }
+
+  /// Метаданные плейлиста/альбома/трека через Vercel (без аудио).
+  Future<Playlist?> _backendImport(String type, String id) async {
+    final data = await _getJson(_backendUri('/api/spotify/import', {'type': type, 'id': id}));
+    if (data is! Map) return null;
+    final rawTracks = data['tracks'];
+    if (rawTracks is! List || rawTracks.isEmpty) return null;
+    final cover = data['cover'] as String?;
+    final tracks = <Track>[
+      for (final item in rawTracks)
+        if (item is Map && item['id'] is String && item['title'] is String)
+          Track(
+            id: 'sp:${item['id']}',
+            title: item['title'] as String,
+            artist: (item['artist'] as String?)?.trim().isNotEmpty == true
+                ? item['artist'] as String
+                : 'Spotify',
+            album: type == 'album' ? (data['title'] as String? ?? '') : '',
+            duration: Duration(milliseconds: (item['durationMs'] as num?)?.toInt() ?? 0),
+            thumbnailUrl: item['cover'] as String? ?? cover,
+            source: TrackSource.spotify,
+          ),
+    ];
+    if (tracks.isEmpty) return null;
+    return Playlist(
+      id: data['id'] as String? ?? id,
+      title: data['title'] as String? ?? (type == 'album' ? 'Альбом' : 'Плейлист'),
+      imageUrl: cover,
+      tracks: tracks,
+    );
   }
 
   String? _readToken(dynamic data) {
@@ -165,6 +213,8 @@ class SpotifyClient {
   }
 
   Future<Playlist> playlist(String id) async {
+    final imported = await _backendImport('playlist', id);
+    if (imported != null) return imported;
     if (!_apiBroken) {
       final data = await _get('/v1/playlists/$id');
       if (data != null) {
@@ -195,6 +245,8 @@ class SpotifyClient {
   }
 
   Future<Playlist> album(String id) async {
+    final imported = await _backendImport('album', id);
+    if (imported != null) return imported;
     if (!_apiBroken) {
       final data = await _get('/v1/albums/$id');
       if (data != null) {
@@ -308,35 +360,24 @@ class SpotifyClient {
   }
 
   Future<String?> _fetchHtml(String path) async {
-    for (final uri in _embedCandidates(path)) {
-      try {
-        final response = await _dio.getUri<String>(
-          uri,
-          options: Options(
-            responseType: ResponseType.plain,
-            headers: _proxy.webHeaders,
-          ),
-        );
-        final status = response.statusCode ?? 0;
-        final body = response.data;
-        if (status >= 200 && status < 400 && body != null && body.isNotEmpty) {
-          return body;
-        }
-      } catch (_) {}
-    }
+    try {
+      final response = await _dio.getUri<String>(
+        _webUri(path),
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: _webHeaders,
+        ),
+      );
+      final status = response.statusCode ?? 0;
+      final body = response.data;
+      if (status >= 200 && status < 400 && body != null && body.isNotEmpty) {
+        return body;
+      }
+    } catch (_) {}
     return null;
   }
 
-  List<Uri> _embedCandidates(String path) {
-    if (_proxy.enabled) {
-      return [_proxy.spotifyEmbed(path), _proxy.directEmbed(path)];
-    }
-    final list = <Uri>[_proxy.directEmbed(path)];
-    if (_proxy.hasWorker) {
-      list.add(_proxy.spotifyEmbed(path, null, true));
-    }
-    return list;
-  }
+  Uri _webUri(String path) => Uri.parse('${_webBase.origin}$path');
 
   dynamic _nextData(String html) {
     final match = RegExp(
@@ -499,7 +540,7 @@ class SpotifyClient {
     String? token,
   ) {
     return _dio.getUri<dynamic>(
-      _proxy.spotifyApi(path, query),
+      _apiUri(path, query),
       options: Options(
         headers: {
           if (token != null) 'authorization': 'Bearer $token',

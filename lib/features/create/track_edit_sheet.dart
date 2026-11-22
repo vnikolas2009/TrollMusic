@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/track.dart';
 
@@ -292,9 +293,19 @@ class _ArtworkPreview extends StatelessWidget {
     final url = track?.thumbnailUrl;
 
     final child = path != null && path.isNotEmpty
-        ? Image.file(File(path), fit: BoxFit.cover, errorBuilder: (_, __, ___) => _placeholder())
+        ? Image.file(
+            File(path),
+            fit: BoxFit.cover,
+            cacheWidth: AppConfig.thumbCacheWidth,
+            errorBuilder: (_, __, ___) => _placeholder(),
+          )
         : url != null && url.isNotEmpty
-            ? Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _placeholder())
+            ? Image.network(
+                url,
+                fit: BoxFit.cover,
+                cacheWidth: AppConfig.thumbCacheWidth,
+                errorBuilder: (_, __, ___) => _placeholder(),
+              )
             : _placeholder();
 
     return Row(

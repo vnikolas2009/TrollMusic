@@ -1,135 +1,83 @@
 # TrollMusic
 
-Кроссплатформенный музыкальный плеер (iOS / Android) на Flutter: тёмный
-минималистичный интерфейс, офлайн-загрузки, YouTube Music через Piped/Invidious
-и прямой InnerTube, Spotify **без ключей и OAuth**, синхронизированные тексты
-песен (LRCLIB), обход блокировок.
+Кроссплатформенный музыкальный плеер (iOS / Android) на Flutter: тёмный минималистичный интерфейс, офлайн-загрузки, синхронизированные тексты песен (LRCLIB). Работает в РФ без VPN и без платных сервисов.
+
+## Как это работает
+
+- **Метаданные Spotify** (плейлист, альбом, трек: название, исполнитель, длительность, обложка) отдаёт собственный бесплатный бэкенд на Vercel (`/api`). Аудио через него не проходит.
+- **Аудио** приложение получает напрямую с CDN: сначала SoundCloud (MP3/HLS), при неудаче YouTube через InnerTube (`ANDROID_VR`/`IOS`).
+- **DNS** для запросов приложения идёт через DNS-over-HTTPS (8.8.8.8 / 9.9.9.9), поэтому подмена DNS у провайдера не мешает.
+- **Следующий трек** резолвится заранее, за 15 секунд до конца текущего.
 
 ## Возможности
 
 ### Каталог и поиск
-- **YouTube Music** — Piped + Invidious с быстрым фолбэком (таймаут 4 с,
-  «остывание» упавших зеркал) и прямым InnerTube как последним фолбэком.
-  Несколько кандидатов аудиопотока и автопереключение при ошибке.
-- **Spotify без ключей и OAuth** — импорт плейлистов/альбомов по ссылке и поиск
-  через анонимный веб-токен и публичные метаданные/embed. Spotify-треки
-  воспроизводятся через YouTube-матчинг (аудио Spotify защищено DRM).
-  Client ID/Secret необязательны.
-- **Поиск** по YouTube Music (+ Spotify), история запросов.
-- **Поиск по медиатеке** и вкладка **«Все треки»**.
+- Поиск по SoundCloud и YouTube, история запросов, поиск по медиатеке.
+- Импорт плейлистов и альбомов Spotify по ссылке без ключей и OAuth. Spotify-треки воспроизводятся через подбор совпадения на SoundCloud/YouTube.
 
 ### Главная
-- **Станции по артистам и миксы**, «Подборка дня» (стабильна в течение суток,
-  учитывает историю: недавно слушанное — в конце).
-- **Блок трендов**, пока медиатека пуста.
-- Недавно слушали, счётчик прослушиваний.
+- Станции по артистам, миксы, «Подборка дня», недавно слушанное, тренды при пустой медиатеке.
 
 ### Плеер
-- Фон и экран блокировки (audio_service), очередь (переупорядочивание, удаление,
-  очистка, «играть следующим»), shuffle/repeat, кроссфейд, таймер сна со
-  счётчиком, скорость, информация о треке.
-- **Кэширование аудио при прослушивании** (опционально): повтор без сети.
-- **Экран артиста**; **изменение порядка треков в плейлисте**.
+- Фон и экран блокировки, очередь, shuffle/repeat, кроссфейд, таймер сна, скорость.
+- Кэширование аудио на диск при прослушивании (`LockCachingAudioSource`).
 
-### Тексты (стиль Chroma)
-- Анимированный «аврора»-фон из цвета обложки.
-- Активная строка заливается слева направо по времени, соседние строки
-  размываются тем сильнее, чем дальше от текущей; тап по строке — перемотка.
-- Сдвиг синхронизации по треку, поиск в LRCLIB, импорт `.lrc`/`.txt`,
-  ручная вставка.
+### Тексты
+- Анимированный фон из цвета обложки, активная строка заливается по времени, тап по строке перематывает.
+- Сдвиг синхронизации, поиск в LRCLIB, импорт `.lrc`/`.txt`.
 
 ### Офлайн и библиотека
-- Загрузки с прогрессом по байтам, отменой, удалением и лимитом параллельных
-  задач (`.m4a`/`.opus`, обложка, `.lrc`).
-- Локальные файлы: mp3/m4a/flac/wav/ogg/opus/aac, ID3-теги, обложка, редактор тегов.
-- Плейлисты, JSON-экспорт/импорт медиатеки, диагностика зеркал, сброс кэша.
+- Загрузки с прогрессом и отменой, локальные файлы с тегами, плейлисты, JSON-экспорт и импорт.
 
-## Обход блокировок
+## Деплой бэкенда (Vercel, бесплатно)
 
-Порядок попыток для YouTube-зеркал и Spotify:
+```bash
+npm i -g vercel
+vercel --prod
+```
 
-1. **Напрямую** (по умолчанию).
-2. **Запасной путь через Cloudflare Worker** — подключается автоматически, если
-   прямой доступ не сработал (достаточно указать URL в настройках).
-   Переключатель «Всегда идти через Worker» отправляет весь трафик через него.
-3. **Прямой InnerTube** — если Piped/Invidious недоступны.
-4. **Прокси** (`host:port`, `http://user:pass@host:port`, `socks5://host:port`,
-   системный прокси) применяется ко всем соединениям приложения. Чтобы звук
-   тоже шёл через прокси, включите «Кэшировать аудио при прослушивании».
+Переменные окружения не нужны. Эндпоинты:
 
-Для аудио у трека всегда есть несколько кандидатов: прямые ссылки зеркал,
-ссылка InnerTube и — если указан Worker — `/stream?v=<id>`. Если прямой URL
-отдаёт 403 или троттлится, плеер сам переключается на следующий кандидат, а
-скачивание повторяет попытку на следующем URL. Если Worker не отвечает дважды
-подряд, он на 5 минут исключается из кандидатов (circuit breaker в
-`WorkerHealth`).
-
-Публичного Worker нет — разверните свой (адрес `*.workers.dev` в РФ может быть
-недоступен, надёжнее привязать собственный домен на Cloudflare).
-
-### Что выбрать: Worker или VPS
-
-- **Worker** бесплатен и закрывает метаданные, поиск, обложки, LRCLIB и токен
-  Spotify. Аудио через `/stream` работает, но зависит от живости Piped-зеркал,
-  а Cloudflare ограничивает длительный стриминг через Workers.
-- **Свой VPS** вне РФ (Xray VLESS-REALITY или Shadowsocks-2022) надёжнее для
-  звука: весь трафик идёт через один туннель, включая googlevideo. Достаточно
-  указать `socks5://user:pass@host:port` в настройках прокси.
-- Оба варианта можно совмещать: Worker для API и обложек, VPS — для аудио.
-
-## Worker (`worker.js`)
-
-Задеплойте в Cloudflare Workers. Переменные: `PIPED_ORIGINS` (список через
-запятую) или `PIPED_ORIGIN`, `INVIDIOUS_ORIGINS` / `INVIDIOUS_ORIGIN`,
-`ALLOWED_HOSTS`, опционально `SPOTIFY_TOKEN`.
-
-| Маршрут | Куда проксирует |
+| Маршрут | Ответ |
 |---|---|
-| `/health[?deep=1]` | проверка; `deep` дополнительно опрашивает первые зеркала |
-| `/token` | анонимный токен веб-плеера Spotify (кэшируется) |
-| `/spotify/*` | `https://api.spotify.com/*` |
-| `/accounts/*` | `https://accounts.spotify.com/*` |
-| `/cdn/*` | `https://i.scdn.co/*` |
-| `/embed/*` | `https://open.spotify.com/*` |
-| `/piped/<host>/*` | Piped-зеркало `<host>` (по умолчанию первое из `PIPED_ORIGINS`) |
-| `/invidious/<host>/*` | Invidious-зеркало `<host>` |
-| `/stream?v=<videoId>[&host=<mirror>]` | Worker сам резолвит аудио через Piped/Invidious и отдаёт байты с поддержкой `Range`/206 и фейловером по кандидатам |
-| `/proxy?url=...` | белый список хостов: обложки Spotify, `lrclib.net`, `googlevideo.com`, `ytimg.com`, Piped proxy + `ALLOWED_HOSTS` |
+| `GET /api/spotify/token` | `{accessToken, expiresAt}`: анонимный токен веб-плеера (кэш в памяти инстанса) |
+| `GET /api/spotify/import?url=<ссылка>` | `{type, id, title, cover, tracks:[{id,title,artist,durationMs,cover}]}` для playlist/album/track |
 
-В настройках приложения укажите URL Worker'а, нажмите «Проверить» (кнопка рядом
-с полем) и при необходимости включите «Всегда идти через Worker».
+Укажите полученный домен одним из способов:
+
+- в настройках приложения, поле адреса API;
+- при сборке: `--dart-define=TROLL_API_BASE=https://your-app.vercel.app`;
+- в `AppConfig.defaultApiBase`.
 
 ## Стек
 
-Flutter 3.50 · just_audio · audio_service · audio_session · dio · hive_flutter ·
-file_picker · permission_handler · path_provider · palette_generator ·
-audio_metadata_reader · riverpod · socks5_proxy
+Flutter · just_audio · audio_service · audio_session · dio · hive_flutter · file_picker · permission_handler · path_provider · palette_generator · audio_metadata_reader · riverpod. Бэкенд: Vercel Serverless Functions (TypeScript).
 
 ## Структура
 
 ```
+api/             # Vercel: /api/spotify/token, /api/spotify/import
 lib/
   app/           # оболочка, провайдеры, сетевые зависимости
-  core/          # конфиг, тема, сеть (piped/spotify/innertube/proxy), хранилище
+  core/          # конфиг, тема, сеть (DoH, SoundCloud, InnerTube, Spotify, LRCLIB), хранилище
   data/          # модели (Track, Playlist, Lyrics), репозитории
-  services/      # аудио, скачивание, импорт/хранилище
+  services/      # аудио (резолвер, обработчик), скачивание, импорт/хранилище
   features/      # home, search, library, playlist, artist, player, lyrics, create, settings
   shared/        # общие виджеты
-worker.js        # Cloudflare Worker: Spotify/Piped/Invidious/токен/passthrough
+vercel.json
 ```
+
+Подробнее: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Сборка
 
 ```bash
 flutter pub get
+flutter analyze
 flutter test
 flutter build apk --release
 ```
 
 ## CI
 
-Push в `main` собирает `TrollMusic-v<version>-android.apk` и
-`TrollMusic-v<version>-ios.ipa` (unsigned), публикует их в ветку `releases`
-и GitHub Release `v<version>`.
-
-Версия: `1.0.<run_number - 1>+<run_number>`.
+Push в `main` собирает `TrollMusic-v<version>-android.apk` и `TrollMusic-v<version>-ios.ipa` (unsigned), публикует их в ветку `releases` и GitHub Release `v<version>`. Версия: `1.0.<run_number - 1>+<run_number>`.

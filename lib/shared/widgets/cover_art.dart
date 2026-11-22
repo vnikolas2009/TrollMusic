@@ -34,17 +34,19 @@ class CoverArt extends StatelessWidget {
   Widget build(BuildContext context) {
     final radiusValue =
         circle ? BorderRadius.circular(size / 2) : BorderRadius.circular(radius);
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth = (size * devicePixelRatio).round().clamp(32, 1200);
     return ClipRRect(
       borderRadius: radiusValue,
       child: SizedBox(
         width: size,
         height: size,
-        child: _content(placeholderColor ?? AppColors.surfaceHigh),
+        child: _content(placeholderColor ?? AppColors.surfaceHigh, cacheWidth),
       ),
     );
   }
 
-  Widget _content(Color fallback) {
+  Widget _content(Color fallback, int cacheWidth) {
     if (path != null && path!.isNotEmpty) {
       final file = File(path!);
       if (file.existsSync()) {
@@ -52,6 +54,7 @@ class CoverArt extends StatelessWidget {
           Image.file(
             file,
             fit: fit,
+            cacheWidth: cacheWidth,
             errorBuilder: (_, __, ___) => _placeholder(fallback),
           ),
         );
@@ -62,6 +65,7 @@ class CoverArt extends StatelessWidget {
         Image.network(
           url!,
           fit: fit,
+          cacheWidth: cacheWidth,
           errorBuilder: (_, __, ___) => _placeholder(fallback),
           loadingBuilder: (context, child, progress) =>
               progress == null ? child : _placeholder(fallback),

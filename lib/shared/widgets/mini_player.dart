@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/utils/formatters.dart';
@@ -21,7 +22,6 @@ class MiniPlayer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final track = ref.watch(currentTrackProvider).value;
     final state = ref.watch(playbackStateProvider).value;
-    final position = ref.watch(positionProvider).value ?? Duration.zero;
 
     if (track == null) {
       // Тот же AnimatedSize, что и ниже: при появлении трека плашка
@@ -35,10 +35,6 @@ class MiniPlayer extends ConsumerWidget {
     }
 
     final playing = state?.playing ?? false;
-    final duration = track.duration;
-    final progress = duration.inMilliseconds > 0
-        ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0)
-        : 0.0;
     final buffering = state?.processingState == AudioProcessingState.loading ||
         state?.processingState == AudioProcessingState.buffering;
 
@@ -146,23 +142,32 @@ class MiniPlayer extends ConsumerWidget {
                   ],
                 ),
               ),
-              TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: 0, end: progress),
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.linear,
-                builder: (context, value, _) => LinearProgressIndicator(
-                  value: value,
-                  minHeight: 2,
-                  backgroundColor: AppColors.surfaceHigh,
-                  valueColor: const AlwaysStoppedAnimation(
-                    AppColors.textPrimary,
-                  ),
-                ),
-              ),
+              _MiniProgress(duration: track.duration),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Полоса прогресса: единственный виджет, который слушает `positionProvider`.
+class _MiniProgress extends ConsumerWidget {
+  const _MiniProgress({required this.duration});
+
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final position = ref.watch(positionProvider).value ?? Duration.zero;
+    final progress = duration.inMilliseconds > 0
+        ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0)
+        : 0.0;
+    return LinearProgressIndicator(
+      value: progress,
+      minHeight: 2,
+      backgroundColor: AppColors.surfaceHigh,
+      valueColor: const AlwaysStoppedAnimation(AppColors.textPrimary),
     );
   }
 }
@@ -178,11 +183,16 @@ class _Cover extends StatelessWidget {
     final url = track.thumbnailUrl;
     Widget child;
     if (path != null && path.isNotEmpty && File(path).existsSync()) {
-      child = Image.file(File(path), fit: BoxFit.cover);
+      child = Image.file(
+        File(path),
+        fit: BoxFit.cover,
+        cacheWidth: AppConfig.thumbCacheWidth,
+      );
     } else if (url != null && url.isNotEmpty) {
       child = Image.network(
         url,
         fit: BoxFit.cover,
+        cacheWidth: AppConfig.thumbCacheWidth,
         errorBuilder: (_, __, ___) => _fallback(),
       );
     } else {

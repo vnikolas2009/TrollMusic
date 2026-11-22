@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palette_generator/palette_generator.dart';
 
 import '../../app/providers.dart';
+import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/utils/formatters.dart';
@@ -74,9 +75,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Widget build(BuildContext context) {
     final track = ref.watch(currentTrackProvider).value ?? widget.initialTrack;
     final state = ref.watch(playbackStateProvider).value;
-    final position = ref.watch(positionProvider).value ?? Duration.zero;
     final audio = ref.read(audioHandlerProvider);
-    final duration = ref.watch(durationProvider).value ?? track?.duration ?? Duration.zero;
 
     if (track == null) {
       return const Scaffold(
@@ -237,47 +236,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 10),
-                                Slider(
-                                  value: position.inMilliseconds
-                                      .clamp(
-                                        0,
-                                        duration.inMilliseconds == 0
-                                            ? 1
-                                            : duration.inMilliseconds,
-                                      )
-                                      .toDouble(),
-                                  max: duration.inMilliseconds == 0
-                                      ? 1
-                                      : duration.inMilliseconds.toDouble(),
-                                  onChanged: (v) => audio.seek(
-                                    Duration(milliseconds: v.toInt()),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        formatDuration(position),
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                      ),
-                                      Text(
-                                        formatDuration(duration),
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                _SeekBar(fallbackDuration: track.duration),
                                 const SizedBox(height: 10),
                                 Row(
                                   mainAxisAlignment:
@@ -659,6 +618,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   String _sourceLabel(TrackSource source) => switch (source) {
         TrackSource.youtube => 'YouTube',
+        TrackSource.soundcloud => 'SoundCloud',
         TrackSource.spotify => 'Spotify',
         TrackSource.local => 'Локальный файл',
         TrackSource.downloaded => 'Скачанный',
@@ -750,13 +710,53 @@ class _StreamErrorBanner extends StatelessWidget {
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Поток недоступен. Попробуйте другое зеркало.',
+              'Поток недоступен. Попробуйте ещё раз или другой трек.',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
           ),
           TextButton(
             onPressed: onRetry,
             child: const Text('Повторить'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Ползунок и таймеры: единственная часть экрана, которая слушает
+/// `positionProvider`/`durationProvider`, поэтому остальной экран не
+/// перестраивается на каждый тик позиции.
+class _SeekBar extends ConsumerWidget {
+  const _SeekBar({required this.fallbackDuration});
+
+  final Duration fallbackDuration;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final position = ref.watch(positionProvider).value ?? Duration.zero;
+    final duration = ref.watch(durationProvider).value ?? fallbackDuration;
+    final maxMs = duration.inMilliseconds == 0 ? 1 : duration.inMilliseconds;
+    const labelStyle = TextStyle(fontSize: 11, color: AppColors.textSecondary);
+    return RepaintBoundary(
+      child: Column(
+        children: [
+          Slider(
+            value: position.inMilliseconds.clamp(0, maxMs).toDouble(),
+            max: maxMs.toDouble(),
+            onChanged: (v) => ref
+                .read(audioHandlerProvider)
+                .seek(Duration(milliseconds: v.toInt())),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(formatDuration(position), style: labelStyle),
+                Text(formatDuration(duration), style: labelStyle),
+              ],
+            ),
           ),
         ],
       ),
@@ -775,11 +775,16 @@ class _Artwork extends StatelessWidget {
     final url = track.thumbnailUrl;
     Widget child;
     if (path != null && path.isNotEmpty && File(path).existsSync()) {
-      child = Image.file(File(path), fit: BoxFit.cover);
+      child = Image.file(
+        File(path),
+        fit: BoxFit.cover,
+        cacheWidth: AppConfig.coverCacheWidth,
+      );
     } else if (url != null && url.isNotEmpty) {
       child = Image.network(
         url,
         fit: BoxFit.cover,
+        cacheWidth: AppConfig.coverCacheWidth,
         errorBuilder: (_, __, ___) => _placeholder(),
       );
     } else {

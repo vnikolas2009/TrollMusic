@@ -14,26 +14,19 @@ class Settings {
     return Settings(box);
   }
 
-  String get workerUrl =>
-      (_box.get('workerUrl') as String?)?.trim().isNotEmpty == true
-          ? (_box.get('workerUrl') as String).trim()
-          : AppConfig.defaultWorkerUrl;
+  /// Базовый URL Vercel-бэкенда с метаданными Spotify.
+  String get apiBaseUrl {
+    final raw = (_box.get('apiBaseUrl') as String? ?? '').trim();
+    final value = raw.isEmpty ? AppConfig.defaultApiBase : raw;
+    return value.endsWith('/') ? value.substring(0, value.length - 1) : value;
+  }
 
-  set workerUrl(String value) => _box.put('workerUrl', value.trim());
+  set apiBaseUrl(String value) => _box.put('apiBaseUrl', value.trim());
 
-  /// HTTP/SOCKS5-прокси для всех соединений приложения (пусто — напрямую).
+  /// HTTP-прокси для всех соединений приложения (пусто — напрямую).
   String get httpProxy => (_box.get('httpProxy') as String? ?? '').trim();
 
   set httpProxy(String value) => _box.put('httpProxy', value.trim());
-
-  /// Кэшировать проигрываемый аудиопоток на диск (мгновенный повтор, работа через прокси).
-  bool get audioCache => _box.get('audioCache', defaultValue: false) as bool;
-
-  set audioCache(bool value) => _box.put('audioCache', value);
-
-  bool get useWorkerProxy => _box.get('useWorkerProxy', defaultValue: false) as bool;
-
-  set useWorkerProxy(bool value) => _box.put('useWorkerProxy', value);
 
   /// Использовать системные настройки прокси (переменные окружения / ОС).
   bool get useSystemProxy =>
@@ -71,19 +64,6 @@ class Settings {
   set spotifyAccessToken(String value) =>
       _box.put('spotifyAccessToken', value.trim());
 
-  List<String> get pipedInstances =>
-      (_box.get('pipedInstances') as List?)?.cast<String>().toList() ??
-      AppConfig.defaultPipedInstances;
-
-  set pipedInstances(List<String> value) => _box.put('pipedInstances', value);
-
-  List<String> get invidiousInstances =>
-      (_box.get('invidiousInstances') as List?)?.cast<String>().toList() ??
-      AppConfig.defaultInvidiousInstances;
-
-  set invidiousInstances(List<String> value) =>
-      _box.put('invidiousInstances', value);
-
   String get spotifyClientId => _box.get('spotifyClientId') as String? ?? '';
 
   set spotifyClientId(String value) => _box.put('spotifyClientId', value.trim());
@@ -101,11 +81,6 @@ class Settings {
   bool get preferOpus => _box.get('preferOpus', defaultValue: false) as bool;
 
   set preferOpus(bool value) => _box.put('preferOpus', value);
-
-  bool get proxyAudioStreams =>
-      _box.get('proxyAudioStreams', defaultValue: false) as bool;
-
-  set proxyAudioStreams(bool value) => _box.put('proxyAudioStreams', value);
 
   int get crossfadeSeconds => _box.get('crossfadeSeconds', defaultValue: 0) as int;
 

@@ -1,0 +1,10 @@
+{
+  "name": "trollmusic-api",
+  "private": true,
+  "description": "Vercel serverless metadata API for TrollMusic",
+  "engines": { "node": ">=20" },
+  "devDependencies": {
+    "@vercel/node": "^3.2.0",
+    "typescript": "^5.5.0"
+  }
+}

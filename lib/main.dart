@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,16 +6,13 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'app/app.dart';
 import 'app/network_providers.dart';
 import 'app/providers.dart';
-import 'core/network/http_overrides.dart';
 import 'core/network/lyrics/lyrics_client.dart';
-import 'core/network/piped/invidious_client.dart';
-import 'core/network/piped/piped_client.dart';
-import 'core/network/piped/youtube_music_client.dart';
-import 'core/network/proxy.dart';
-import 'core/network/worker_health.dart';
+import 'core/network/soundcloud/soundcloud_service.dart';
+import 'core/network/youtube/innertube_service.dart';
 import 'core/storage/settings.dart';
 import 'data/repositories/library_repository.dart';
 import 'services/audio/audio_handler.dart';
+import 'services/audio/audio_resolver_service.dart';
 import 'services/download/download_service.dart';
 import 'services/storage/storage_service.dart';
 
@@ -26,28 +21,19 @@ Future<void> main() async {
 
   await Hive.initFlutter();
   final settings = await Settings.open();
-  HttpOverrides.global = AppHttpOverrides(settings);
+  final soundCloudCache = await Hive.openBox<dynamic>(SoundCloudService.cacheBoxName);
   final library = await LibraryRepository.open();
 
-  final proxy = ProxyConfig(settings);
-  final health = WorkerHealth(settings: settings, proxy: proxy);
   final lyrics = LyricsClient();
-  final piped = PipedClient(settings: settings, proxy: proxy, health: health);
-  final invidious =
-      InvidiousClient(settings: settings, proxy: proxy, health: health);
-  final youtube = YouTubeMusicClient(
-    piped: piped,
-    invidious: invidious,
-    settings: settings,
-    proxy: proxy,
-    health: health,
-  );
+  final soundCloud = SoundCloudService(settings: settings, cache: soundCloudCache);
+  final innerTube = InnerTubeService(settings: settings);
+  final resolver = AudioResolverService(soundcloud: soundCloud, innerTube: innerTube);
 
   final storage = await StorageService.open(library: library, lyrics: lyrics);
   final downloads = DownloadService(
     library: library,
     storage: storage,
-    youtube: youtube,
+    resolver: resolver,
     settings: settings,
   );
 
@@ -55,8 +41,7 @@ Future<void> main() async {
     builder: () => TrollAudioHandler(
       library: library,
       settings: settings,
-      resolveStreams: youtube.resolveAudioUrls,
-      workerHealth: health,
+      resolver: resolver,
     ),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.trollmusic.audio',
@@ -71,10 +56,9 @@ Future<void> main() async {
   final container = ProviderContainer(
     overrides: [
       settingsProvider.overrideWithValue(settings),
-      workerHealthProvider.overrideWithValue(health),
-      pipedClientProvider.overrideWithValue(piped),
-      invidiousClientProvider.overrideWithValue(invidious),
-      youtubeClientProvider.overrideWithValue(youtube),
+      soundCloudServiceProvider.overrideWithValue(soundCloud),
+      innerTubeServiceProvider.overrideWithValue(innerTube),
+      audioResolverProvider.overrideWithValue(resolver),
       lyricsClientProvider.overrideWithValue(lyrics),
       servicesProvider.overrideWithValue(
         AppServices(

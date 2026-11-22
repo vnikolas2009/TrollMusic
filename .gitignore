@@ -31,3 +31,7 @@ ios/Flutter/ephemeral/
 secrets.json
 .env
 *.log
+
+# Vercel / Node
+node_modules/
+.vercel/

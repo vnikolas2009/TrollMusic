@@ -192,7 +192,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Не удалось выполнить поиск. Проверьте зеркала в настройках.';
+        _error = 'Не удалось выполнить поиск. Проверьте подключение к интернету.';
         _loading = false;
       });
     }

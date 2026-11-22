@@ -183,12 +183,21 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
       );
     }
 
-    return StreamBuilder<Duration>(
-      stream: ref.watch(audioHandlerProvider).positionStream,
+    final positions = ref.watch(audioHandlerProvider).positionStream;
+    Duration shifted(Duration raw) {
+      final value = raw + Duration(milliseconds: _offsetMs);
+      return value < Duration.zero ? Duration.zero : value;
+    }
+
+    // Список перестраивается только при смене активной строки, а не на
+    // каждый тик позиции. Тики слушает лишь прогресс активной строки.
+    final indexes = positions.map((p) => lyrics.indexAt(shifted(p))).distinct();
+
+    return StreamBuilder<int>(
+      stream: indexes,
+      initialData: -1,
       builder: (context, snapshot) {
-        final position = (snapshot.data ?? Duration.zero) + Duration(milliseconds: _offsetMs);
-        final safe = position < Duration.zero ? Duration.zero : position;
-        final index = lyrics.indexAt(safe);
+        final index = snapshot.data ?? -1;
         if (index != _activeIndex) {
           _activeIndex = index;
           WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible(index));
@@ -199,22 +208,31 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           itemCount: lyrics.lines.length,
           itemBuilder: (context, i) {
             final line = lyrics.lines[i];
-            final end = i + 1 < lyrics.lines.length
-                ? lyrics.lines[i + 1].time
-                : line.time + const Duration(seconds: 5);
-            final span = (end - line.time).inMilliseconds;
-            final progress = i == index && span > 0
-                ? ((safe - line.time).inMilliseconds / span).clamp(0.0, 1.0).toDouble()
-                : 0.0;
+            final distance = index < 0 ? 99 : i - index;
+            Widget child;
+            if (i == index) {
+              final end = i + 1 < lyrics.lines.length
+                  ? lyrics.lines[i + 1].time
+                  : line.time + const Duration(seconds: 5);
+              final span = (end - line.time).inMilliseconds;
+              child = StreamBuilder<Duration>(
+                stream: positions,
+                builder: (context, position) {
+                  final safe = shifted(position.data ?? Duration.zero);
+                  final progress = span > 0
+                      ? ((safe - line.time).inMilliseconds / span).clamp(0.0, 1.0).toDouble()
+                      : 0.0;
+                  return _LyricLine(text: line.text, distance: 0, progress: progress);
+                },
+              );
+            } else {
+              child = _LyricLine(text: line.text, distance: distance, progress: 0);
+            }
             return GestureDetector(
               key: _keys.putIfAbsent(i, () => GlobalKey()),
               behavior: HitTestBehavior.opaque,
               onTap: () => ref.read(audioHandlerProvider).seek(line.time),
-              child: _LyricLine(
-                text: line.text,
-                distance: index < 0 ? 99 : i - index,
-                progress: progress,
-              ),
+              child: RepaintBoundary(child: child),
             );
           },
         );

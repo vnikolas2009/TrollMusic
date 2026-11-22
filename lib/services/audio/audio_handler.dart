@@ -6,47 +6,59 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
-import '../../core/network/worker_health.dart';
+import '../../core/config/app_config.dart';
 import '../../core/storage/settings.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../data/models/lyrics.dart';
 import '../../data/models/track.dart';
 import '../../data/repositories/library_repository.dart';
+import 'audio_resolver_service.dart';
 
 enum TrollRepeat { off, all, one }
-
-typedef TrollStreamResolver = Future<List<String>> Function(Track track);
 
 class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   TrollAudioHandler({
     required LibraryRepository library,
     Settings? settings,
-    this.resolveStreams,
-    this.workerHealth,
+    this.resolver,
   })  : _library = library,
         _settings = settings;
 
   final LibraryRepository _library;
   final Settings? _settings;
-  final TrollStreamResolver? resolveStreams;
-  final WorkerHealth? workerHealth;
+  final AudioResolverService? resolver;
 
   final AudioPlayer _player = AudioPlayer();
 
-  /// Сетевые потоки — через локальный кэширующий прокси just_audio: повтор без
-  /// сети и обход блокировок через HTTP-прокси приложения (нативный плеер его не видит).
+  /// Прямые потоки идут через `LockCachingAudioSource`: повторное
+  /// воспроизведение и перемотка без сети. HLS отдаётся нативному плееру,
+  /// ещё не разрешённые треки очереди заменяются тишиной до подгрузки URL.
   IndexedAudioSource _source(Track track, MediaItem tag) {
+    if (!_isResolved(track)) {
+      return SilenceAudioSource(
+        duration: track.duration > Duration.zero
+            ? track.duration
+            : const Duration(seconds: 3),
+        tag: tag,
+      );
+    }
     final uri = _uriOf(track);
     final remote = uri.scheme == 'http' || uri.scheme == 'https';
-    final s = _settings;
-    if (remote && s != null && (s.audioCache || s.httpProxy.isNotEmpty)) {
-      return LockCachingAudioSource(uri, headers: _streamHeaders, tag: tag);
+    if (!remote) return AudioSource.uri(uri, tag: tag);
+
+    final headers = _headersFor(uri.toString());
+    if (uri.path.toLowerCase().endsWith('.m3u8')) {
+      return AudioSource.uri(uri, tag: tag, headers: headers);
     }
-    return AudioSource.uri(
-      uri,
-      tag: tag,
-      headers: remote ? _streamHeaders : null,
-    );
+    // ignore: experimental_member_use
+    return LockCachingAudioSource(uri, headers: headers, tag: tag);
+  }
+
+  bool _isResolved(Track track) {
+    final local = track.localPath;
+    if (local != null && local.isNotEmpty && File(local).existsSync()) return true;
+    final url = track.streamUrl;
+    return url != null && url.isNotEmpty;
   }
 
   final _crossfade = ValueNotifier<Duration>(Duration.zero);
@@ -66,6 +78,8 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   bool _restoring = false;
   bool _recovering = false;
   bool _loading = false;
+  bool _activating = false;
+  final Set<String> _prefetching = {};
 
   Stream<String> get errors => _errors.stream;
   ValueNotifier<Duration> get crossfade => _crossfade;
@@ -99,13 +113,16 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     _player.processingStateStream.listen((state) {
       if (state == ProcessingState.completed) _onCompleted();
     });
-    _player.currentIndexStream.listen((_) {
+    _player.currentIndexStream.listen((index) {
+      _prefetching.clear();
       _syncQueueIndex();
       _persistCurrentTrack();
       if (!_restoring) _fadeIn();
+      unawaited(_activateIfUnresolved(index));
     });
     _player.positionStream.listen((position) {
       _maybeFadeOut(position);
+      _maybePrefetch(position);
       _persistPosition(position);
     });
   }
@@ -149,9 +166,9 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     if (requested.isEmpty) return;
 
     final anchor = requested[initialIndex.clamp(0, requested.length - 1)];
-    final playable = await _prepare(requested, anchorId: anchor.id);
-    if (playable.isEmpty) {
-      _errors.add('Не удалось получить аудиопоток. Проверьте зеркала в настройках.');
+    final playable = await _prepare(requested, eager: {anchor.id});
+    if (!playable.any((t) => t.id == anchor.id)) {
+      _errors.add('Не удалось получить аудиопоток. Проверьте подключение к интернету.');
       playbackState.add(playbackState.value.copyWith(
         processingState: AudioProcessingState.idle,
         playing: false,
@@ -221,37 +238,24 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     if (urls != null && urls.isNotEmpty) _candidates[track.id] = urls;
   }
 
-  Future<List<Track>> _prepare(Iterable<Track> tracks, {String? anchorId}) async {
+  /// Разрешает URL только для треков из [eager] (`null` — для всех).
+  /// Остальные остаются заглушками и подгружаются при переходе/предзагрузке.
+  Future<List<Track>> _prepare(Iterable<Track> tracks, {Set<String>? eager}) async {
     final list = tracks.toList();
     final results = List<Track?>.filled(list.length, null);
     final pending = <int>[];
 
     for (var i = 0; i < list.length; i++) {
       final track = list[i];
-      final local = track.localPath;
-      if (local != null && local.isNotEmpty && File(local).existsSync()) {
-        results[i] = track;
-        continue;
-      }
-      final known = track.streamUrl;
-      if (known != null && known.isNotEmpty) {
+      if (_isResolved(track) || (eager != null && !eager.contains(track.id))) {
         results[i] = track;
         continue;
       }
       pending.add(i);
     }
 
-    final resolve = resolveStreams;
-    if (resolve == null || pending.isEmpty) {
+    if (resolver == null || pending.isEmpty) {
       return results.whereType<Track>().toList();
-    }
-
-    if (anchorId != null) {
-      final anchorIndex = pending.indexWhere((i) => list[i].id == anchorId);
-      if (anchorIndex > 0) {
-        final anchor = pending.removeAt(anchorIndex);
-        pending.insert(0, anchor);
-      }
     }
 
     var cursor = 0;
@@ -259,14 +263,9 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
       while (cursor < pending.length) {
         final index = pending[cursor++];
         final track = list[index];
-        List<String> urls = const [];
-        try {
-          urls = await resolve(track);
-        } catch (_) {
-          urls = const [];
-        }
+        final urls = await _resolveSafe(track);
         if (urls.isNotEmpty) {
-          final resolved = track.copyWith(streamUrl: urls.first);
+          final resolved = _withStreamUrl(track, urls.first);
           results[index] = resolved;
           _remember(resolved, urls: urls);
         }
@@ -282,15 +281,25 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
 
   Uri _uriOf(Track track) {
     final local = track.localPath;
-    if (local != null && local.isNotEmpty) {
-      return File(local).existsSync() ? Uri.file(local) : Uri.parse(local);
+    if (local != null && local.isNotEmpty && File(local).existsSync()) {
+      return Uri.file(local);
     }
     return Uri.parse(track.streamUrl!);
   }
 
+  Future<List<String>> _resolveSafe(Track track) async {
+    final r = resolver;
+    if (r == null) return const [];
+    try {
+      return await r.resolve(track).timeout(const Duration(seconds: 15));
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// `copyWith` не умеет перезаписывать уже заданный `streamUrl`, поэтому
   /// собираем трек заново при смене источника.
-  Track _withStreamUrl(Track track, String url) => Track(
+  Track _withStreamUrl(Track track, String? url) => Track(
         id: track.id,
         title: track.title,
         artist: track.artist,
@@ -307,12 +316,8 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
         albumId: track.albumId,
       );
 
-  Map<String, String> get _streamHeaders => {
-        'User-Agent':
-            'com.google.android.youtube/19.44.38 (Linux; U; Android 11) gzip',
-        'Referer': 'https://www.youtube.com/',
-        'Origin': 'https://www.youtube.com',
-        'Accept': '*/*',
+  Map<String, String> _headersFor(String url) => {
+        ...?resolver?.streamHeaders(url),
         ...?_settings?.requestHeaders,
       };
 
@@ -344,10 +349,6 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
         initialPosition: Duration.zero,
       );
       await _player.setVolume(1);
-      final url = _playable[target].streamUrl;
-      if (url != null && (workerHealth?.owns(url) ?? false)) {
-        workerHealth!.reportSuccess();
-      }
       if (autoPlay) {
         unawaited(play());
       }
@@ -404,7 +405,11 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
         .map((item) => _tracks[item.id] ?? _library.trackById(item.id))
         .whereType<Track>()
         .toList();
-    final playable = await _prepare(tracks);
+    final fallbackId = items[index.clamp(0, items.length - 1)].id;
+    final playable = await _prepare(
+      tracks,
+      eager: {if (anchorId != null) anchorId, fallbackId},
+    );
     if (playable.isEmpty) {
       queue.add(items);
       return;
@@ -554,10 +559,6 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
       }
 
       if (index != null) {
-        final currentUrl = track.streamUrl;
-        if (currentUrl != null && (workerHealth?.owns(currentUrl) ?? false)) {
-          workerHealth!.reportFailure('stream');
-        }
         final recovered = await _tryAlternatives(index);
         if (recovered) return;
       }
@@ -594,15 +595,16 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     final current = track.streamUrl;
     final usable = urls.where((u) => u != current).toList();
 
-    if (usable.isEmpty && resolveStreams != null && track.source != TrackSource.local) {
-      try {
-        final fresh = await resolveStreams!(track);
+    if (usable.isEmpty && resolver != null && track.source != TrackSource.local) {
+      resolver!.forget(track.id);
+      final fresh = await _resolveSafe(_withStreamUrl(track, null));
+      if (fresh.isNotEmpty) {
         _candidates[track.id] = fresh;
         urls = fresh;
         for (final url in fresh) {
           if (url != current && !usable.contains(url)) usable.add(url);
         }
-      } catch (_) {}
+      }
     }
 
     for (final url in usable) {
@@ -619,14 +621,98 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
         );
         await _player.setVolume(1);
         await play();
-        if (workerHealth?.owns(url) ?? false) workerHealth!.reportSuccess();
         return true;
       } catch (_) {
-        if (workerHealth?.owns(url) ?? false) workerHealth!.reportFailure();
         continue;
       }
     }
     return false;
+  }
+
+  /// Подгружает URL для трека-заглушки, на который перешёл плеер.
+  Future<void> _activateIfUnresolved(int? index) async {
+    if (index == null || index < 0 || index >= _playable.length) return;
+    if (_isResolved(_playable[index]) || _loading || _recovering || _activating) return;
+
+    _activating = true;
+    try {
+      final track = _playable[index];
+      final urls = await _resolveSafe(track);
+      final at = _playable.indexWhere((t) => t.id == track.id);
+      if (at < 0) return;
+
+      if (urls.isEmpty) {
+        if (_player.currentIndex != at) return;
+        if (_player.hasNext) {
+          _errors.add('Трек недоступен, включаю следующий');
+          await _player.seekToNext();
+          unawaited(play());
+        } else {
+          _emitError('Не удалось воспроизвести трек');
+        }
+        return;
+      }
+
+      _applyResolved(at, urls);
+      if (_player.currentIndex == at) {
+        final wasPlaying = _player.playing;
+        await _player.setAudioSources(
+          [for (final t in _playable) _source(t, _toMediaItem(t))],
+          initialIndex: at,
+          initialPosition: Duration.zero,
+        );
+        await _player.setVolume(1);
+        if (wasPlaying) unawaited(play());
+      } else {
+        await _swapSource(at);
+      }
+    } catch (error) {
+      debugPrint('activate: $error');
+    } finally {
+      _activating = false;
+      final current = _player.currentIndex;
+      if (current != null && current != index) {
+        unawaited(_activateIfUnresolved(current));
+      }
+    }
+  }
+
+  void _maybePrefetch(Duration position) {
+    final duration = _player.duration;
+    if (duration == null || duration <= Duration.zero) return;
+    if (duration - position > AppConfig.prefetchBefore) return;
+    if (_repeat.value == TrollRepeat.one) return;
+    final next = _player.nextIndex;
+    if (next == null || next < 0 || next >= _playable.length) return;
+    final track = _playable[next];
+    if (_isResolved(track) || !_prefetching.add(track.id)) return;
+    unawaited(_prefetch(track));
+  }
+
+  Future<void> _prefetch(Track track) async {
+    try {
+      final urls = await _resolveSafe(track);
+      if (urls.isEmpty) return;
+      final at = _playable.indexWhere((t) => t.id == track.id);
+      if (at < 0 || _isResolved(_playable[at]) || at == _player.currentIndex) return;
+      _applyResolved(at, urls);
+      await _swapSource(at);
+    } catch (error) {
+      debugPrint('prefetch: $error');
+    }
+  }
+
+  void _applyResolved(int index, List<String> urls) {
+    final updated = _withStreamUrl(_playable[index], urls.first);
+    _playable = [..._playable]..[index] = updated;
+    _remember(updated, urls: urls);
+  }
+
+  Future<void> _swapSource(int index) async {
+    final track = _playable[index];
+    final source = _source(track, _toMediaItem(track));
+    await _player.removeAudioSourceAt(index);
+    await _player.insertAudioSource(index, source);
   }
 
   void _emitError(String message) {

@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:trollmusic/core/utils/proxy_address.dart';
 import 'package:trollmusic/core/utils/spotify_link.dart';
 
 void main() {
@@ -33,21 +32,6 @@ void main() {
       expect(parseSpotifyLink(id), const SpotifyLink(SpotifyKind.playlist, id));
       expect(parseSpotifyLink(''), isNull);
       expect(parseSpotifyLink('https://example.com/playlist'), isNull);
-    });
-  });
-
-  group('normalizeProxyAddress', () {
-    test('accepts host:port and strips scheme/path', () {
-      expect(normalizeProxyAddress(' 127.0.0.1:8080 '), '127.0.0.1:8080');
-      expect(normalizeProxyAddress('http://proxy.local:3128/'), 'proxy.local:3128');
-      expect(normalizeProxyAddress('http://user:pass@10.0.0.2:8000'), '10.0.0.2:8000');
-    });
-
-    test('rejects empty, socks, bad port', () {
-      expect(normalizeProxyAddress(''), '');
-      expect(normalizeProxyAddress('socks5://127.0.0.1:1080'), '');
-      expect(normalizeProxyAddress('host:99999'), '');
-      expect(normalizeProxyAddress('host'), '');
     });
   });
 }

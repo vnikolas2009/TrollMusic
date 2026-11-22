@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
 import 'explicit_badge.dart';
@@ -258,12 +259,14 @@ class CoverImage extends StatelessWidget {
           ? Image.file(
               File(path!),
               fit: BoxFit.cover,
+              cacheWidth: AppConfig.thumbCacheWidth,
               errorBuilder: (_, __, ___) => _fallback(),
             )
           : (url != null && url!.isNotEmpty
               ? Image.network(
                   url!,
                   fit: BoxFit.cover,
+                  cacheWidth: AppConfig.thumbCacheWidth,
                   errorBuilder: (_, __, ___) => _fallback(),
                 )
               : _fallback()),

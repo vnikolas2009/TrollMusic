@@ -2,24 +2,26 @@ import '../models/lyrics.dart';
 import '../models/playlist.dart';
 import '../models/track.dart';
 import '../../core/network/lyrics/lyrics_client.dart';
-import '../../core/network/piped/youtube_music_client.dart';
 import '../../core/network/spotify/spotify_client.dart';
 import '../../core/utils/spotify_link.dart';
+import '../../services/audio/audio_resolver_service.dart';
 
 class MusicRepository {
   MusicRepository({
-    required this.youtube,
+    required this.resolver,
     required this.spotify,
     required this.lyrics,
   });
 
-  final YouTubeMusicClient youtube;
+  final AudioResolverService resolver;
   final SpotifyClient spotify;
   final LyricsClient lyrics;
 
+  /// SoundCloud, InnerTube и Spotify опрашиваются параллельно.
   Future<List<Track>> searchAll(String query) async {
     final responses = await Future.wait([
-      _safeList(youtube.search(query)),
+      _safeList(resolver.searchSoundCloud(query)),
+      _safeList(resolver.searchYouTube(query)),
       _safeList(spotify.search(query)),
     ]);
 
@@ -31,7 +33,7 @@ class MusicRepository {
     ];
   }
 
-  Future<List<Track>> searchYouTube(String query) => youtube.search(query);
+  Future<List<Track>> searchYouTube(String query) => resolver.searchYouTube(query);
 
   Future<Playlist?> spotifyPlaylist(String url) async {
     final link = parseSpotifyLink(url);

@@ -5,8 +5,6 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../app/network_providers.dart';
 import '../../app/providers.dart';
 import '../../core/config/app_config.dart';
-import '../../core/network/mirror_manager.dart';
-import '../../core/network/worker_health.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/permission_service.dart';
@@ -19,47 +17,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  static const _workerWarn = Color(0xFFFF8A80);
-
   int _cacheBytes = 0;
   bool _loadingCache = true;
-  bool _probing = false;
-  bool _checkingWorker = false;
-  WorkerStatus? _workerStatus;
-  Map<String, MirrorProbe> _pipedProbes = const {};
-  Map<String, MirrorProbe> _invidiousProbes = const {};
-
-  String get _probeSummary {
-    final all = <String, MirrorProbe>{..._pipedProbes, ..._invidiousProbes};
-    if (all.isEmpty) return 'Проверка доступности зеркал';
-    final ok = all.values.where((p) => p.ok).length;
-    return 'Доступно $ok из ${all.length}';
-  }
-
-  Future<void> _probeMirrors() async {
-    setState(() => _probing = true);
-    final manager = ref.read(mirrorManagerProvider);
-    final piped = await manager.probeAll(MirrorKind.piped);
-    final invidious = await manager.probeAll(MirrorKind.invidious);
-    if (!mounted) return;
-    setState(() {
-      _pipedProbes = {for (final p in piped) p.origin: p};
-      _invidiousProbes = {for (final p in invidious) p.origin: p};
-      _probing = false;
-    });
-  }
-
-  Future<void> _checkWorker() async {
-    setState(() => _checkingWorker = true);
-    final status = await ref
-        .read(workerHealthProvider)
-        .check(force: true, deep: true);
-    if (!mounted) return;
-    setState(() {
-      _workerStatus = status;
-      _checkingWorker = false;
-    });
-  }
 
   @override
   void initState() {
@@ -121,54 +80,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
-          _Section('Сеть и прокси'),
+          const _Section('Сеть'),
           _TextFieldTile(
-            label: 'Cloudflare Worker URL',
-            value: settings.workerUrl,
-            hint: 'https://ваш-worker.example.workers.dev или свой домен',
-            onSaved: (v) {
-              settings.workerUrl = v;
-              ref.read(mirrorManagerProvider).resetHealth();
-              ref.read(workerHealthProvider).reset();
-              setState(() => _workerStatus = null);
-            },
+            label: 'URL бэкенда (Vercel)',
+            value: settings.apiBaseUrl,
+            hint: AppConfig.defaultApiBase,
+            onSaved: (v) => settings.apiBaseUrl = v,
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _checkingWorker
-                        ? 'Проверка Worker и зеркал…'
-                        : (_workerStatus?.label ??
-                            'Worker проксирует Spotify, поиск и аудио через /stream'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: _workerStatus == null
-                          ? AppColors.textSecondary
-                          : _workerStatus!.ok
-                              ? AppColors.accentSoft
-                              : _workerStatus!.configured
-                                  ? _workerWarn
-                                  : AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: settings.workerUrl.isEmpty || _checkingWorker
-                      ? null
-                      : _checkWorker,
-                  child: const Text('Проверить'),
-                ),
-              ],
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Сервер отдаёт только метаданные Spotify (название, артист, '
+              'длительность, обложка) и анонимный токен. Аудио идёт напрямую '
+              'с SoundCloud / YouTube.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             ),
-          ),
-          SwitchListTile(
-            title: const Text('Всегда идти через Worker'),
-            subtitle: const Text('Выкл — напрямую, а Worker подключается сам, если зеркало недоступно'),
-            value: settings.useWorkerProxy,
-            onChanged: (v) => setState(() => settings.useWorkerProxy = v),
           ),
           SwitchListTile(
             title: const Text('Системный прокси'),
@@ -177,19 +103,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onChanged: (v) => setState(() => settings.useSystemProxy = v),
           ),
           _TextFieldTile(
-            label: 'HTTP / SOCKS5 прокси',
+            label: 'HTTP-прокси',
             value: settings.httpProxy,
-            hint: '127.0.0.1:8080, socks5://127.0.0.1:1080 или http://user:pass@host:8080',
-            onSaved: (v) {
-              settings.httpProxy = v;
-              ref.read(mirrorManagerProvider).resetHealth();
-            },
-          ),
-          SwitchListTile(
-            title: const Text('Кэшировать аудио при прослушивании'),
-            subtitle: const Text('Повтор без сети; нужен, чтобы звук шёл через HTTP-прокси'),
-            value: settings.audioCache,
-            onChanged: (v) => setState(() => settings.audioCache = v),
+            hint: 'http://user:pass@host:8080',
+            onSaved: (v) => settings.httpProxy = v,
           ),
           _TextFieldTile(
             label: 'Дополнительные заголовки',
@@ -198,11 +115,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             maxLines: 3,
             onSaved: (v) => setState(() => settings.customHeaders = v),
           ),
-          _Section('Spotify (без OAuth)'),
+          const _Section('Spotify (без OAuth)'),
           SwitchListTile(
             title: const Text('Гостевой режим Spotify'),
             subtitle: const Text(
-              'Анонимный веб-токен и публичные метаданные: поиск работает '
+              'Анонимный токен и публичные метаданные: поиск работает '
               'без client id/secret',
             ),
             value: settings.spotifyGuestMode,
@@ -211,7 +128,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _TextFieldTile(
             label: 'Client ID',
             value: settings.spotifyClientId,
-            hint: 'не обязательно: без ключей работает embed',
+            hint: 'не обязательно: без ключей работает бэкенд и embed',
             onSaved: (v) => settings.spotifyClientId = v,
           ),
           _TextFieldTile(
@@ -221,62 +138,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             obscure: true,
             onSaved: (v) => settings.spotifyClientSecret = v,
           ),
-          _Section('Зеркала YouTube (Piped / Invidious)'),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _probing ? 'Проверка зеркал...' : _probeSummary,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: _probing ? null : _probeMirrors,
-                  child: const Text('Проверить'),
-                ),
-              ],
-            ),
-          ),
-          for (var i = 0; i < settings.pipedInstances.length; i++)
-            _MirrorTile(
-              origin: settings.pipedInstances[i],
-              probe: _pipedProbes[settings.pipedInstances[i]],
-              onDelete: () {
-                final list = [...settings.pipedInstances]..removeAt(i);
-                setState(() => settings.pipedInstances = list);
-                ref.read(mirrorManagerProvider).resetHealth();
-              },
-            ),
-          _AddMirrorButton(
-            label: 'Добавить Piped-инстанс',
-            onAdd: (value) {
-              setState(() => settings.pipedInstances = [...settings.pipedInstances, value]);
-              ref.read(mirrorManagerProvider).resetHealth();
-            },
-          ),
-          for (var i = 0; i < settings.invidiousInstances.length; i++)
-            _MirrorTile(
-              origin: settings.invidiousInstances[i],
-              probe: _invidiousProbes[settings.invidiousInstances[i]],
-              onDelete: () {
-                final list = [...settings.invidiousInstances]..removeAt(i);
-                setState(() => settings.invidiousInstances = list);
-                ref.read(mirrorManagerProvider).resetHealth();
-              },
-            ),
-          _AddMirrorButton(
-            label: 'Добавить Invidious-инстанс',
-            onAdd: (value) {
-              setState(() => settings.invidiousInstances = [...settings.invidiousInstances, value]);
-              ref.read(mirrorManagerProvider).resetHealth();
-            },
-          ),
-          _Section('Качество и воспроизведение'),
+          const _Section('Качество и воспроизведение'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
@@ -303,15 +165,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             subtitle: const Text('Экономия трафика на мобильной сети'),
             value: settings.preferOpus,
             onChanged: (v) => setState(() => settings.preferOpus = v),
-          ),
-          SwitchListTile(
-            title: const Text('Всегда проксировать аудио'),
-            subtitle: const Text(
-              'По умолчанию Worker — запасной путь при 403/таймауте; включите, '
-              'чтобы звук всегда шёл через Worker',
-            ),
-            value: settings.proxyAudioStreams,
-            onChanged: (v) => setState(() => settings.proxyAudioStreams = v),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -340,7 +193,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
-          _Section('Кэш и офлайн'),
+          const _Section('Кэш и офлайн'),
           ListTile(
             title: const Text('Занято на устройстве'),
             subtitle: Text(
@@ -352,7 +205,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: const Text('Очистить'),
             ),
           ),
-          _Section('История прослушивания'),
+          const _Section('История прослушивания'),
           ListTile(
             title: const Text('Очистить историю'),
             subtitle: Text(
@@ -370,7 +223,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: const Text('Очистить'),
             ),
           ),
-          _Section('Разрешения'),          ListTile(
+          const _Section('Разрешения'),
+          ListTile(
             title: const Text('Уведомления'),
             subtitle: const Text('Экран блокировки и фоновое воспроизведение'),
             trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
@@ -480,94 +334,6 @@ class _TextFieldTileState extends State<_TextFieldTile> {
             onPressed: () => widget.onSaved(_controller.text),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _MirrorTile extends StatelessWidget {
-  const _MirrorTile({
-    required this.origin,
-    required this.onDelete,
-    this.probe,
-  });
-
-  final String origin;
-  final VoidCallback onDelete;
-  final MirrorProbe? probe;
-
-  @override
-  Widget build(BuildContext context) {
-    final probe = this.probe;
-    return ListTile(
-      dense: true,
-      title: Text(origin, style: const TextStyle(fontSize: 12)),
-      subtitle: probe == null
-          ? null
-          : Text(
-              probe.ok
-                  ? 'Работает · ${probe.latency} мс'
-                  : 'Недоступно · ${probe.detail ?? 'ошибка'}',
-              style: TextStyle(
-                fontSize: 11,
-                color: probe.ok ? AppColors.accent : AppColors.textSecondary,
-              ),
-            ),
-      trailing: IconButton(
-        icon: const Icon(Icons.close, size: 16),
-        color: AppColors.textSecondary,
-        onPressed: onDelete,
-      ),
-    );
-  }
-}
-
-class _AddMirrorButton extends StatelessWidget {
-  const _AddMirrorButton({required this.label, required this.onAdd});
-
-  final String label;
-  final ValueChanged<String> onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textPrimary,
-          side: const BorderSide(color: AppColors.surfaceHigh),
-          minimumSize: const Size.fromHeight(40),
-        ),
-        onPressed: () async {
-          final controller = TextEditingController();
-          final value = await showDialog<String>(
-            context: context,
-            builder: (dialogContext) => AlertDialog(
-              backgroundColor: AppColors.surfaceAlt,
-              title: Text(label),
-              content: TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: const InputDecoration(hintText: 'https://api.example.com'),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Отмена'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(dialogContext, controller.text),
-                  child: const Text('Добавить'),
-                ),
-              ],
-            ),
-          );
-          final trimmed = value?.trim();
-          if (trimmed != null && trimmed.startsWith('http')) onAdd(trimmed);
-          controller.dispose();
-        },
-        icon: const Icon(Icons.add, size: 18),
-        label: Text(label, style: const TextStyle(fontSize: 12)),
       ),
     );
   }

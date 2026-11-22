@@ -6,11 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/network/http_client.dart';
-import '../../core/network/piped/youtube_music_client.dart';
 import '../../core/storage/settings.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../data/models/track.dart';
 import '../../data/repositories/library_repository.dart';
+import '../audio/audio_resolver_service.dart';
 import '../storage/storage_service.dart';
 
 enum DownloadState { queued, running, done, failed, canceled }
@@ -38,11 +38,11 @@ class DownloadService {
   DownloadService({
     required LibraryRepository library,
     required StorageService storage,
-    required YouTubeMusicClient youtube,
+    required AudioResolverService resolver,
     required Settings settings,
   })  : _library = library,
         _storage = storage,
-        _youtube = youtube,
+        _resolver = resolver,
         _dio = createDio(
           settings: settings,
           connectTimeout: const Duration(seconds: 15),
@@ -51,7 +51,7 @@ class DownloadService {
 
   final LibraryRepository _library;
   final StorageService _storage;
-  final YouTubeMusicClient _youtube;
+  final AudioResolverService _resolver;
   final Dio _dio;
 
   static const maxConcurrent = 2;
@@ -94,7 +94,9 @@ class DownloadService {
 
       Future<(File file, String url)?> attempt(Iterable<String> candidates) async {
         for (final candidate in candidates) {
-          if (candidate.isEmpty || !attempted.add(candidate)) continue;
+          if (candidate.isEmpty || candidate.contains('.m3u8') || !attempted.add(candidate)) {
+            continue;
+          }
           try {
             final extension = _extensionOf(candidate);
             final file = File(p.join(_storage.audioDir.path, '${track.id}.$extension'));
@@ -109,9 +111,9 @@ class DownloadService {
       }
 
       // Сначала известный URL (например из результата поиска), затем свежие
-      // кандидаты: Piped/Invidious → InnerTube → Worker (/stream).
+      // кандидаты: SoundCloud → InnerTube.
       var result = known.isEmpty ? null : await attempt([known]);
-      result ??= await attempt(await _youtube.resolveAudioUrls(track));
+      result ??= await attempt(await _resolver.resolve(track));
       if (result == null) {
         throw lastError ?? StateError('Не удалось скачать аудио');
       }
@@ -240,6 +242,7 @@ class DownloadService {
       deleteOnError: true,
       cancelToken: token,
       options: Options(
+        headers: _resolver.streamHeaders(url),
         validateStatus: (code) => code != null && code >= 200 && code < 300,
       ),
       onReceiveProgress: (received, total) {

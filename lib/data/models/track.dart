@@ -1,4 +1,4 @@
-enum TrackSource { youtube, spotify, local, downloaded }
+enum TrackSource { youtube, spotify, soundcloud, local, downloaded }
 
 class Track {
   const Track({

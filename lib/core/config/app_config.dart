@@ -1,14 +1,37 @@
 abstract final class AppConfig {
   static const appName = 'TrollMusic';
-  static const appVersion = '1.1.0';
-  /// Публичного Worker нет: пользователь разворачивает свой (см. README).
-  static const defaultWorkerUrl = '';
-  static const mirrorTimeout = Duration(seconds: 4);
+  static const appVersion = '2.0.0';
+
+  /// Базовый URL своего Vercel-деплоя (`/api/spotify/*`). Переопределяется
+  /// в настройках или через `--dart-define=TROLL_API_BASE=https://...`.
+  static const defaultApiBase = String.fromEnvironment(
+    'TROLL_API_BASE',
+    defaultValue: 'https://trollmusic.vercel.app',
+  );
+
+  static const connectTimeout = Duration(seconds: 8);
   static const requestTimeout = Duration(seconds: 20);
   static const playbackTimeout = Duration(seconds: 12);
 
-  /// Заголовки, максимально похожие на обычный клиент. Помогают обходить
-  /// часть гео/бот-ограничений без пользовательского OAuth.
+  /// DNS-over-HTTPS: запросы идут на IP-адреса, поэтому системный DNS
+  /// (и его подмена у провайдера) не участвует.
+  static const dohEndpoints = <String>[
+    'https://8.8.8.8/resolve',
+    'https://9.9.9.9:5053/dns-query',
+  ];
+  static const dohTimeout = Duration(seconds: 4);
+
+  /// Время жизни `client_id` SoundCloud в кэше.
+  static const soundcloudClientIdTtl = Duration(hours: 24);
+
+  /// За сколько до конца трека резолвится следующий.
+  static const prefetchBefore = Duration(seconds: 15);
+
+  /// Ширина декодирования обложек (логические пиксели × DPR считает виджет).
+  static const coverCacheWidth = 600;
+  static const thumbCacheWidth = 160;
+
+  /// Заголовки, максимально похожие на обычный клиент.
   static const defaultHeaders = <String, String>{
     'user-agent':
         'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 '
@@ -20,26 +43,6 @@ abstract final class AppConfig {
   static const spotifyWebUserAgent =
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-
-  static const defaultPipedInstances = <String>[
-    'https://pipedapi.adminforge.de',
-    'https://pipedapi.reallyaweso.me',
-    'https://pipedapi.ducks.party',
-    'https://pipedapi.kavin.rocks',
-    'https://pipedapi.leptons.xyz',
-    'https://api.piped.private.coffee',
-    'https://pipedapi.nosebs.ru',
-  ];
-
-  static const defaultInvidiousInstances = <String>[
-    'https://inv.nadeko.net',
-    'https://invidious.nerdvpn.de',
-    'https://yewtu.be',
-    'https://inv.tux.pizza',
-    'https://invidious.privacyredirect.com',
-    'https://iv.ggtyler.dev',
-    'https://invidious.f5.si',
-  ];
 
   static const audioBitrates = <int>[128, 192, 256, 320];
   static const defaultBitrate = 192;
