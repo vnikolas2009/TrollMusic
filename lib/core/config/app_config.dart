@@ -16,9 +16,9 @@ abstract final class AppConfig {
   /// DNS-over-HTTPS: запросы идут на IP-адреса, поэтому системный DNS
   /// (и его подмена у провайдера) не участвует.
   static const dohEndpoints = <String>[
-    'https://8.8.8.8/resolve',
-    'https://9.9.9.9:5053/dns-query',
-  ];
+  'https://dns.google/resolve',
+  'https://dns.quad9.net/dns-query',
+ ];
   static const dohTimeout = Duration(seconds: 4);
 
   /// Время жизни `client_id` SoundCloud в кэше.
