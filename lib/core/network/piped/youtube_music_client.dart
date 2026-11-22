@@ -47,17 +47,18 @@ class YouTubeMusicClient {
   // ----------------------------------------------------------------- поиск
 
   Future<List<Track>> search(String query) async {
-    final primary = await firstNonEmptyList<Track>(
-      [
-        () => _innerTube.searchMusic(query),
-        () => _piped.search(query),
-      ],
-      timeout: const Duration(seconds: 7),
-    );
-    if (primary.isNotEmpty) return primary;
+    // Сначала только песни YouTube Music (не видео), и лишь потом — запасные
+    // источники, которые отдают обычные видео.
+    try {
+      final songs = await _innerTube
+          .searchMusic(query)
+          .timeout(const Duration(seconds: 6));
+      if (songs.isNotEmpty) return songs;
+    } catch (_) {}
 
     return firstNonEmptyList<Track>(
       [
+        () => _piped.search(query),
         () => _invidious.search(query),
         () => _innerTube.search(query),
       ],

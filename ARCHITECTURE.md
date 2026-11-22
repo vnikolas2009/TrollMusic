@@ -78,7 +78,7 @@ test/                        # flutter test: чистые утилиты, мод
 
 **Worker (встроенный):** `worker.js` + `wrangler.toml` деплоятся job'ом `worker` в `build_release.yml` при наличии секретов `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`; полученный `*.workers.dev` URL передаётся в сборку как `--dart-define=WORKER_URL` (`AppConfig.defaultWorkerUrl`). Клиент добавляет `/stream` Worker'а последним кандидатом (`WorkerHealth` — circuit breaker). Без секретов приложение работает без Worker.
 
-**Источники:** `MusicSource` (YouTube Music / Spotify, `app/source_provider.dart`, хранится в `Settings.musicSourceIndex`) — раздельные вкладки на Главной и в Поиске; Spotify даёт метаданные, воспроизведение — через сопоставление с YouTube.
+**Источники:** Spotify — приоритетный (поиск по названию отдаёт песни Spotify, при пустом ответе — песни YouTube Music; YouTube-поиск сначала берёт только песни InnerTube, видео — лишь запасной путь). `MusicSource` (YouTube Music / Spotify, `app/source_provider.dart`, хранится в `Settings.musicSourceIndex`) — раздельные вкладки на Главной и в Поиске; Spotify даёт метаданные, воспроизведение — через сопоставление с YouTube.
 
 ## 5. Воспроизведение (сквозной сценарий)
 

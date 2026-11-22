@@ -4,8 +4,8 @@ import 'network_providers.dart';
 
 /// Источник каталога: YouTube Music и Spotify показываются раздельно.
 enum MusicSource {
-  youtube('YouTube Music'),
-  spotify('Spotify');
+  spotify('Spotify'),
+  youtube('YouTube Music');
 
   const MusicSource(this.label);
   final String label;

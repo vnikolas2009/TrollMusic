@@ -33,7 +33,13 @@ class MusicRepository {
 
   Future<List<Track>> searchYouTube(String query) => youtube.search(query);
 
-  Future<List<Track>> searchSpotify(String query) => spotify.search(query);
+  /// Spotify в приоритете: выдаёт песни по названию. Если Spotify ничего
+  /// не вернул — подстраховка песнями YouTube Music.
+  Future<List<Track>> searchSpotify(String query) async {
+    final tracks = await _safeList(spotify.search(query));
+    if (tracks.isNotEmpty) return tracks;
+    return _safeList(youtube.search(query));
+  }
 
   /// Подборка Spotify по нескольким запросам (круговое перемешивание, без дублей).
   Future<List<Track>> spotifyMix(List<String> queries, {int limit = 30}) async {

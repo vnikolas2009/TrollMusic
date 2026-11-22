@@ -134,7 +134,7 @@ class Settings {
   // ----------------------------------------------------------------- тема
 
   /// 0 — системная, 1 — светлая, 2 — тёмная (порядок `ThemeMode`).
-  /// Выбранный источник каталога: 0 — YouTube Music, 1 — Spotify.
+  /// Выбранный источник каталога: 0 — Spotify (по умолчанию), 1 — YouTube Music.
   int get musicSourceIndex => (_box.get('musicSource', defaultValue: 0) as num).toInt();
 
   set musicSourceIndex(int value) => _box.put('musicSource', value);
