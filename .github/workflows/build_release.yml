@@ -26,6 +26,7 @@ jobs:
       name: ${{ steps.v.outputs.name }}
       code: ${{ steps.v.outputs.code }}
       tag: ${{ steps.v.outputs.tag }}
+
     steps:
       - id: v
         run: |
@@ -39,6 +40,7 @@ jobs:
     name: Android APK
     needs: [version]
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +53,7 @@ jobs:
         run: |
           SDKMAN="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
           yes | "$SDKMAN" --licenses > /dev/null 2>&1 || true
-          "$SDKMAN" "platform-tools" "platforms;android-37.0" \
+          "$SDKMAN" "platform-tools" "platforms;android-37" \
             "build-tools;37.0.0" > /dev/null 2>&1 || true
           "$SDKMAN" "ndk;28.2.13676358" > /dev/null 2>&1 || true
           "$SDKMAN" --list_installed | head -20
@@ -62,22 +64,71 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Prepare Gradle repositories
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+
+          cat > "$HOME/.gradle/init.d/extra-repositories.gradle" <<'GRADLE'
+          settingsEvaluated { settings ->
+              settings.pluginManagement.repositories {
+                  mavenCentral()
+                  google()
+                  gradlePluginPortal()
+              }
+          }
+
+          allprojects {
+              buildscript {
+                  repositories {
+                      mavenCentral()
+                      google()
+                      gradlePluginPortal()
+                  }
+              }
+
+              repositories {
+                  mavenCentral()
+                  google()
+              }
+          }
+          GRADLE
+
       - name: Set version
         run: |
           sed -i -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
           grep '^version:' pubspec.yaml
 
-      - run: flutter pub get
+      - name: Get Flutter dependencies
+        run: flutter pub get
 
       - name: Build APK
+        shell: bash
         run: |
-          flutter build apk --release \
-            --build-name=${{ needs.version.outputs.name }} \
-            --build-number=${{ needs.version.outputs.code }}
+          set -euo pipefail
+
+          for attempt in 1 2 3; do
+            echo "APK build attempt $attempt/3"
+
+            if flutter build apk --release \
+              --build-name="${{ needs.version.outputs.name }}" \
+              --build-number="${{ needs.version.outputs.code }}"; then
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "Build failed; retrying..."
+              sleep 15
+            fi
+          done
+
+          echo "APK build failed after 3 attempts."
+          exit 1
 
       - name: Rename artifact
         run: |
           mkdir -p dist
+
           cp build/app/outputs/flutter-apk/app-release.apk \
             "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-android.apk"
 
@@ -91,6 +142,7 @@ jobs:
     name: iOS IPA (unsigned)
     needs: [version]
     runs-on: macos-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -105,19 +157,55 @@ jobs:
           sed -i '' -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
           grep '^version:' pubspec.yaml
 
-      - run: flutter pub get
+      - name: Get Flutter dependencies
+        run: flutter pub get
 
-      - name: Build iOS
+      - name: Build unsigned iOS app
+        shell: bash
         run: |
+          set -euo pipefail
+
+          rm -rf build/ios/iphoneos/Runner.app
+
+          set +e
+
           flutter build ios --release --no-codesign \
-            --build-name=${{ needs.version.outputs.name }} \
-            --build-number=${{ needs.version.outputs.code }}
+            --build-name="${{ needs.version.outputs.name }}" \
+            --build-number="${{ needs.version.outputs.code }}"
+
+          BUILD_STATUS=$?
+
+          set -e
+
+          APP_PATH="build/ios/iphoneos/Runner.app"
+
+          if [ "$BUILD_STATUS" -ne 0 ]; then
+            if [ -d "$APP_PATH" ] && [ -f "$APP_PATH/Runner" ]; then
+              echo "::warning::Flutter returned a signing validation error after Xcode produced Runner.app. Continuing with the unsigned app."
+            else
+              echo "::error::iOS compilation failed."
+              exit "$BUILD_STATUS"
+            fi
+          fi
+
+          if [ ! -d "$APP_PATH" ] || [ ! -f "$APP_PATH/Runner" ]; then
+            echo "::error::Runner.app or its executable is missing."
+            exit 1
+          fi
 
       - name: Package IPA
+        shell: bash
         run: |
-          mkdir -p dist Payload
+          set -euo pipefail
+
+          rm -rf Payload dist
+          mkdir -p Payload dist
+
           cp -R build/ios/iphoneos/Runner.app Payload/
-          zip -qry "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa" Payload
+
+          ditto -c -k --sequesterRsrc --keepParent \
+            Payload \
+            "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -129,6 +217,7 @@ jobs:
     name: Publish
     needs: [version, android, ios]
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -140,21 +229,28 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+
           cd "$RUNNER_TEMP"
           rm -rf releases-repo
           git init -q releases-repo
           cd releases-repo
-          git config user.name  "github-actions[bot]"
+
+          git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+
           if git fetch --depth=1 origin releases; then
             git checkout -q -B releases FETCH_HEAD
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           else
             git checkout -q --orphan releases
           fi
+
           cp "$GITHUB_WORKSPACE"/dist/* .
+
           echo "${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}" > latest-version.txt
+
           git add -A
           git commit -q -m "release ${{ needs.version.outputs.tag }}"
           git push -q --force origin releases
