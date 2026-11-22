@@ -1,43 +1,3 @@
-name: Sync feature branch into main
-
-on:
-  workflow_dispatch:
-
-concurrency:
-  group: sync-feature-into-main
-  cancel-in-progress: false
-
-permissions:
-  contents: write
-  pull-requests: write
-
-env:
-  BASE_BRANCH: main
-  FEATURE_BRANCH: feat/sources-yandex-vk-audius-player
-  FLUTTER_VERSION: 3.50.1
-
-jobs:
-  sync:
-    name: Sync, test and create PR
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout feature branch
-        uses: actions/checkout@v4
-        with:
-          ref: feat/sources-yandex-vk-audius-player
-          fetch-depth: 0
-
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Fetch branches
-        run: |
-          git fetch origin main
-          git fetch origin feat/sources-yandex-vk-audius-player
-
       - name: Merge main into feature branch
         run: |
           set -euo pipefail
@@ -46,74 +6,29 @@ jobs:
 
           if git merge-base --is-ancestor "origin/$BASE_BRANCH" HEAD; then
             echo "Feature branch already contains main."
-          else
-            git merge --no-edit "origin/$BASE_BRANCH"
+            exit 0
           fi
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Analyze project
-        run: flutter analyze
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Push synchronized feature branch
-        run: |
-          git push origin "$FEATURE_BRANCH"
-
-      - name: Create Pull Request
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          EXISTING_PR=$(gh pr list \
-            --head "$FEATURE_BRANCH" \
-            --base "$BASE_BRANCH" \
-            --state open \
-            --json url \
-            --jq '.[0].url // empty')
-
-          if [ -n "$EXISTING_PR" ]; then
-            echo "Pull Request already exists: $EXISTING_PR"
+          if git merge --no-edit "origin/$BASE_BRANCH"; then
+            echo "Merge completed without conflicts."
           else
-            gh pr create \
-              --base "$BASE_BRANCH" \
-              --head "$FEATURE_BRANCH" \
-              --title "Merge music sources and player UI into main" \
-              --body "$(cat <<'EOF'
-          ## Changes
+            echo "Merge conflicts detected."
 
-          Synchronizes the feature branch with main and proposes merging the music player updates.
+            CONFLICT_FILE="lib/features/settings/settings_screen.dart"
 
-          Includes:
-          - Yandex Music, VK Music and Audius integrations
-          - Player UI improvements
-          - Rubber dock and spring switch
-          - Read Along and scrubber components
-          - Settings and source selection updates
+            if git diff --name-only --diff-filter=U | grep -Fxq "$CONFLICT_FILE"; then
+              echo "Keeping feature branch version of $CONFLICT_FILE"
+              git checkout --ours -- "$CONFLICT_FILE"
+              git add "$CONFLICT_FILE"
+            fi
 
-          ## Validation
-          - flutter pub get
-          - flutter analyze
-          - flutter test
+            REMAINING=$(git diff --name-only --diff-filter=U)
 
-          Please review the changes before merging.
-          EOF
-          )"
+            if [ -n "$REMAINING" ]; then
+              echo "::error::Unresolved conflicts:"
+              echo "$REMAINING"
+              exit 1
+            fi
+
+            git commit -m "Merge main into feature branch"
           fi
