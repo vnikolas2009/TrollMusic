@@ -1,16 +1,9 @@
-
+import '../../core/config/app_config.dart';
 import '../../core/network/soundcloud/soundcloud_service.dart';
 import '../../core/network/youtube/innertube_service.dart';
 import '../../core/utils/track_match.dart';
 import '../../data/models/track.dart';
 
-/// Единая точка получения аудиопотока.
-///
-/// Приоритет зависит от источника трека:
-/// YouTube: YouTube → SoundCloud.
-/// SoundCloud: SoundCloud → YouTube.
-/// Spotify: SoundCloud → YouTube.
-/// Локальные файлы обрабатываются AudioHandler.
 class AudioResolverService {
   AudioResolverService({
     required SoundCloudService soundcloud,
@@ -21,32 +14,51 @@ class AudioResolverService {
   final SoundCloudService _soundcloud;
   final InnerTubeService _innerTube;
 
-  final Map<String, List<String>> _cache = {};
+  static final _videoId = RegExp(
+    r'^[A-Za-z0-9_-]{11}$',
+  );
+
+  static const _cacheTtl = Duration(minutes: 10);
+
+  final Map<String, _ResolvedCache> _cache = {};
+
   final Map<String, Future<List<String>>> _inflight = {};
 
-  static final RegExp _videoId = RegExp(r'^[A-Za-z0-9_-]{11}$');
-
-  /// Возвращает список аудиоссылок для трека.
+  /// Получение всех доступных кандидатов.
   Future<List<String>> resolve(Track track) {
-    if (track.localPath?.isNotEmpty == true) {
+    final local = track.localPath;
+
+    if (local != null && local.isNotEmpty) {
       return Future.value(const []);
     }
 
     final cached = _cache[track.id];
-    if (cached != null && cached.isNotEmpty) {
-      return Future.value(cached);
+
+    if (cached != null &&
+        cached.expiresAt.isAfter(DateTime.now())) {
+      return Future.value(cached.urls);
+    }
+
+    if (cached != null) {
+      _cache.remove(track.id);
     }
 
     final existing = _inflight[track.id];
+
     if (existing != null) return existing;
 
     final future = _resolve(track);
+
     _inflight[track.id] = future;
 
     return future.then((urls) {
       if (urls.isNotEmpty) {
-        _cache[track.id] = urls;
+        _cache[track.id] = _ResolvedCache(
+          urls,
+          DateTime.now().add(_cacheTtl),
+        );
       }
+
       return urls;
     }).whenComplete(() {
       _inflight.remove(track.id);
@@ -55,20 +67,16 @@ class AudioResolverService {
 
   Future<String?> resolveTrackUrl(Track track) async {
     final urls = await resolve(track);
+
     return urls.isEmpty ? null : urls.first;
   }
 
-  /// Заголовки для потоков YouTube.
+  /// Заголовки для прямых YouTube-потоков.
   Map<String, String> streamHeaders(String url) {
     final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
 
-    final isGoogleVideo = host == 'googlevideo.com' ||
-        host.endsWith('.googlevideo.com');
-
-    final isYouTube = host == 'youtube.com' ||
-        host.endsWith('.youtube.com');
-
-    if (isGoogleVideo || isYouTube) {
+    if (host.endsWith('googlevideo.com') ||
+        host.contains('youtube.com')) {
       return InnerTubeService.androidVrStreamHeaders;
     }
 
@@ -79,39 +87,44 @@ class AudioResolverService {
     String query, {
     int limit = 30,
   }) {
-    return _soundcloud
-        .search(query, limit: limit)
-        .catchError((_) => const <Track>[]);
+    return _soundcloud.search(
+      query,
+      limit: limit,
+    ).catchError(
+      (_) => const <Track>[],
+    );
   }
 
   Future<List<Track>> searchYouTube(
     String query, {
     int limit = 30,
   }) {
-    return _innerTube
-        .search(query, limit: limit)
-        .catchError((_) => const <Track>[]);
+    return _innerTube.search(
+      query,
+      limit: limit,
+    ).catchError(
+      (_) => const <Track>[],
+    );
   }
 
-  /// Рекомендации для пустой медиатеки.
   Future<List<Track>> trending() async {
-    final youtube = await searchYouTube('популярная музыка 2026');
+    final youtube = await searchYouTube(
+      'популярная музыка 2026',
+    );
 
-    if (youtube.isNotEmpty) {
-      return youtube;
-    }
+    if (youtube.isNotEmpty) return youtube;
 
-    return searchSoundCloud('популярная музыка');
+    return searchSoundCloud(
+      'популярная музыка',
+    );
   }
 
-  /// Удаляет сохранённые ссылки трека.
+  /// Сбрасывает кэш после ошибки воспроизведения.
   void forget(String trackId) {
     _cache.remove(trackId);
-  }
 
-  /// Очищает весь кэш ссылок.
-  void clearCache() {
-    _cache.clear();
+    _soundcloud.forget(trackId);
+    _innerTube.forget(trackId);
   }
 
   Future<List<String>> _resolve(Track track) async {
@@ -121,76 +134,75 @@ class AudioResolverService {
       return [known];
     }
 
+    final soundCloudFirst =
+        track.source != TrackSource.youtube;
+
     final urls = <String>[];
 
-    switch (track.source) {
-      case TrackSource.youtube:
-        await _resolveYouTubeFirst(track, urls);
-        if (urls.isEmpty) {
-          await _resolveSoundCloud(track, urls);
-        }
+    if (soundCloudFirst) {
+      urls.addAll(
+        await _resolveSoundCloud(track),
+      );
 
-      case TrackSource.soundcloud:
-        await _resolveSoundCloud(track, urls);
-        if (urls.isEmpty) {
-          await _resolveYouTube(track, urls);
-        }
+      urls.addAll(
+        await _resolveYouTube(track),
+      );
+    } else {
+      urls.addAll(
+        await _resolveYouTube(track),
+      );
 
-      case TrackSource.spotify:
-        await _resolveSoundCloud(track, urls);
-        if (urls.isEmpty) {
-          await _resolveYouTube(track, urls);
-        }
-
-      case TrackSource.local:
-      case TrackSource.downloaded:
-        break;
+      urls.addAll(
+        await _resolveSoundCloud(track),
+      );
     }
 
     return _dedupe(urls);
   }
 
-  Future<void> _resolveYouTubeFirst(
+  /// Получение нескольких SoundCloud-потоков.
+  Future<List<String>> _resolveSoundCloud(
     Track track,
-    List<String> result,
   ) async {
-    final id = track.id;
+    try {
+      if (track.id.startsWith('sc:')) {
+        return await _soundcloud.audioUrls(track.id);
+      }
 
-    if (_videoId.hasMatch(id)) {
-      result.addAll(
-        await _innerTube.audioUrls(id).catchError(
-          (_) => const <String>[],
-        ),
+      final query = _queryFor(track);
+
+      final candidates = await _soundcloud.search(
+        query,
+        limit: 10,
       );
-      return;
+
+      final best = pickBestMatch(
+        track,
+        candidates,
+      );
+
+      if (best == null) return const [];
+
+      return await _soundcloud.audioUrls(best.id);
+    } catch (_) {
+      return const [];
     }
-
-    await _resolveYouTube(track, result);
   }
 
-  Future<void> _resolveYouTube(
+  /// Получение нескольких YouTube-потоков.
+  Future<List<String>> _resolveYouTube(
     Track track,
-    List<String> result,
   ) async {
-    final videoId = await _findVideoId(track);
+    try {
+      final id = _videoId.hasMatch(track.id)
+          ? track.id
+          : await _findVideoId(track);
 
-    if (videoId == null) return;
+      if (id == null) return const [];
 
-    final urls = await _innerTube.audioUrls(videoId).catchError(
-      (_) => const <String>[],
-    );
-
-    result.addAll(urls);
-  }
-
-  Future<void> _resolveSoundCloud(
-    Track track,
-    List<String> result,
-  ) async {
-    final url = await _soundcloud.streamFor(track);
-
-    if (url != null && url.trim().isNotEmpty) {
-      result.add(url);
+      return await _innerTube.audioUrls(id);
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -206,18 +218,28 @@ class AudioResolverService {
     for (final query in queries) {
       if (query.isEmpty) continue;
 
-      final candidates = await searchYouTube(query);
+      final candidates = await searchYouTube(
+        query,
+        limit: 15,
+      );
 
       if (candidates.isEmpty) continue;
 
-      final best = pickBestMatch(track, candidates);
+      final best = pickBestMatch(
+        track,
+        candidates,
+      );
 
-      if (best != null && _videoId.hasMatch(best.id)) {
-        return best.id;
-      }
+      if (best != null) return best.id;
     }
 
     return null;
+  }
+
+  static String _queryFor(Track track) {
+    final artist = track.artist.split(',').first.trim();
+
+    return '$artist ${track.title}'.trim();
   }
 
   List<String> _dedupe(Iterable<String> input) {
@@ -225,8 +247,25 @@ class AudioResolverService {
 
     return [
       for (final url in input)
-        if (url.trim().isNotEmpty && seen.add(url.trim()))
-          url.trim(),
+        if (url.isNotEmpty && seen.add(url))
+          url,
     ];
   }
+
+  void clearCache() {
+    _cache.clear();
+
+    _soundcloud.clearStreamCache();
+    _innerTube.clearCache();
+  }
+}
+
+class _ResolvedCache {
+  const _ResolvedCache(
+    this.urls,
+    this.expiresAt,
+  );
+
+  final List<String> urls;
+  final DateTime expiresAt;
 }
