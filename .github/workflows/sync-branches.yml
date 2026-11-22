@@ -1,8 +1,54 @@
-      - name: Merge main into feature branch
+name: Sync feature branch with main
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-feature-branch
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync, analyze and create PR
+    runs-on: ubuntu-latest
+
+    env:
+      BASE_BRANCH: main
+      FEATURE_BRANCH: feat/sources-yandex-vk-audius-player
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch branches
+        run: |
+          set -euo pipefail
+
+          git fetch origin \
+            "$BASE_BRANCH" \
+            "$FEATURE_BRANCH"
+
+      - name: Checkout feature branch
         run: |
           set -euo pipefail
 
           git checkout -B "$FEATURE_BRANCH" "origin/$FEATURE_BRANCH"
+
+      - name: Merge main into feature branch
+        run: |
+          set -euo pipefail
 
           if git merge-base --is-ancestor "origin/$BASE_BRANCH" HEAD; then
             echo "Feature branch already contains main."
@@ -31,4 +77,67 @@
             fi
 
             git commit -m "Merge main into feature branch"
+          fi
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.50.1"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          flutter pub get
+
+      - name: Analyze project
+        run: |
+          set -euo pipefail
+          flutter analyze
+
+      - name: Run tests
+        run: |
+          set -euo pipefail
+
+          if [ -d test ] && find test -type f -name '*_test.dart' -print -quit | grep -q .; then
+            flutter test
+          else
+            echo "No Flutter tests found. Skipping."
+          fi
+
+      - name: Push feature branch
+        run: |
+          set -euo pipefail
+
+          git push origin "HEAD:refs/heads/$FEATURE_BRANCH"
+
+      - name: Create or update Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          PR_NUMBER=$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --head "$FEATURE_BRANCH" \
+            --base "$BASE_BRANCH" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$PR_NUMBER" ]; then
+            echo "Pull request already exists: #$PR_NUMBER"
+            gh pr edit "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Merge $FEATURE_BRANCH into $BASE_BRANCH"
+          else
+            echo "Creating pull request..."
+
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base "$BASE_BRANCH" \
+              --head "$FEATURE_BRANCH" \
+              --title "Merge $FEATURE_BRANCH into $BASE_BRANCH" \
+              --body "Automated pull request. The feature branch has been synchronized with main and checked using Flutter analyze and tests."
           fi
