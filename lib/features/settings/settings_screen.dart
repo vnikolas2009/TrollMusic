@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/network_providers.dart';
 import '../../app/providers.dart';
+import '../../app/source_provider.dart';
 import '../../app/theme_controller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/audio_pick.dart';
 import '../../core/utils/formatters.dart';
+import '../../shared/widgets/spring_switch_tile.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -28,6 +30,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _loadCache() async {
     final bytes = await ref.read(storageProvider).usedBytes();
     if (!mounted) return;
+
     setState(() {
       _cacheBytes = bytes;
       _loadingCache = false;
@@ -36,7 +39,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _confirmClearCache() async {
     final downloads = ref.read(downloadProvider);
-    if (downloads.activeCount > 0) downloads.cancelAll();
+
+    if (downloads.activeCount > 0) {
+      downloads.cancelAll();
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -57,13 +64,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
     );
+
     if (confirmed != true) return;
 
     await ref.read(storageProvider).clearCache();
     await _loadCache();
+
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Кэш очищен')));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Кэш очищен')),
+    );
   }
 
   static const _qualityLabels = {
@@ -77,7 +88,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     AudioQuality.low: '≈ 64 кбит/с — минимум трафика',
     AudioQuality.medium: '≈ 128 кбит/с — баланс',
     AudioQuality.high: 'Максимум, что отдаёт источник',
-    AudioQuality.auto: 'Высокое по Wi‑Fi, среднее по мобильной сети',
+    AudioQuality.auto: 'Высокое по Wi-Fi, среднее по мобильной сети',
   };
 
   @override
@@ -88,13 +99,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final audio = ref.read(audioHandlerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Настройки')),
+      appBar: AppBar(
+        title: const Text('Настройки'),
+      ),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
           const _Section('Качество звука'),
+
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -106,50 +123,78 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ChoiceChip(
                         label: Text(_qualityLabels[q]!),
                         selected: settings.audioQuality == q,
-                        onSelected: (_) =>
-                            setState(() => settings.audioQuality = q),
+                        onSelected: (_) {
+                          setState(() => settings.audioQuality = q);
+                        },
                       ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Text(
                   _qualityHints[settings.audioQuality]!,
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
           ),
+
           const _Section('Тема'),
+
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
             child: SegmentedButton<ThemeMode>(
               showSelectedIcon: false,
               segments: const [
-                ButtonSegment(value: ThemeMode.dark, label: Text('Тёмная')),
-                ButtonSegment(value: ThemeMode.light, label: Text('Светлая')),
-                ButtonSegment(value: ThemeMode.system, label: Text('Система')),
+                ButtonSegment(
+                  value: ThemeMode.dark,
+                  label: Text('Тёмная'),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.light,
+                  label: Text('Светлая'),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  label: Text('Система'),
+                ),
               ],
               selected: {theme.mode},
               onSelectionChanged: (v) => themeCtl.setMode(v.first),
             ),
           ),
+
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
             child: Text(
               'Акцентный цвет',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
+
           SizedBox(
             height: 52,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
               itemCount: kAccentChoices.length,
               separatorBuilder: (_, __) => const SizedBox(width: 12),
               itemBuilder: (context, i) {
                 final color = kAccentChoices[i];
-                final selected = color.toARGB32() == theme.accent.toARGB32();
+                final selected =
+                    color.toARGB32() == theme.accent.toARGB32();
+
                 return GestureDetector(
                   onTap: () => themeCtl.setAccent(color),
                   child: Container(
@@ -179,11 +224,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               },
             ),
           ),
+
           ListTile(
             title: const Text('Свой цвет'),
             subtitle: Text(
               'Выберите любой оттенок акцента',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
             ),
             trailing: Container(
               width: 28,
@@ -197,47 +246,70 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onTap: () async {
               final picked = await showDialog<Color>(
                 context: context,
-                builder: (_) => _ColorDialog(initial: theme.accent),
+                builder: (_) => _ColorDialog(
+                  initial: theme.accent,
+                ),
               );
-              if (picked != null) themeCtl.setAccent(picked);
+
+              if (picked != null) {
+                themeCtl.setAccent(picked);
+              }
             },
           ),
-          SwitchListTile(
-            title: const Text('Градиентный фон'),
-            subtitle: const Text('Едва заметный градиент от акцентного цвета'),
+
+          SpringSwitchTile(
+            title: 'Градиентный фон',
+            subtitle: 'Едва заметный градиент от акцентного цвета',
             value: theme.gradient,
             onChanged: themeCtl.setGradient,
           ),
-          SwitchListTile(
-            title: const Text('Чёрный AMOLED'),
-            subtitle: const Text('Чисто чёрный фон в тёмной теме'),
+
+          SpringSwitchTile(
+            title: 'Чёрный AMOLED',
+            subtitle: 'Чисто чёрный фон в тёмной теме',
             value: theme.amoled,
             onChanged: themeCtl.setAmoled,
           ),
+
           const _Section('Воспроизведение'),
-          SwitchListTile(
-            title: const Text('Без пауз (gapless)'),
-            subtitle: const Text('Следующий трек подготавливается заранее'),
+
+          SpringSwitchTile(
+            title: 'Без пауз (gapless)',
+            subtitle: 'Следующий трек подготавливается заранее',
             value: settings.gaplessEnabled,
-            onChanged: (v) => setState(() => settings.gaplessEnabled = v),
+            onChanged: (v) {
+              setState(() => settings.gaplessEnabled = v);
+            },
           ),
+
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Кроссфейд', style: TextStyle(fontSize: 14)),
+                const Text(
+                  'Кроссфейд',
+                  style: TextStyle(fontSize: 14),
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   children: [
                     for (final seconds in const [0, 3, 6, 10, 12])
                       ChoiceChip(
-                        label: Text(seconds == 0 ? 'Выкл' : '$seconds с'),
-                        selected: settings.crossfadeSeconds == seconds,
+                        label: Text(
+                          seconds == 0 ? 'Выкл' : '$seconds с',
+                        ),
+                        selected:
+                            settings.crossfadeSeconds == seconds,
                         onSelected: (_) {
                           settings.crossfadeSeconds = seconds;
-                          audio.setCrossfade(Duration(seconds: seconds));
+                          audio.setCrossfade(
+                            Duration(seconds: seconds),
+                          );
                           setState(() {});
                         },
                       ),
@@ -246,33 +318,185 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
+
+          const _Section('Источники музыки'),
+
+          _TokenField(
+            label: 'Яндекс Музыка · OAuth-токен',
+            help: 'Необязательно. Поиск и чарты работают без токена; '
+                'с токеном треки играют напрямую из Яндекс Музыки '
+                '(нужна ваша подписка). Токен хранится только на '
+                'этом устройстве и отправляется только в Яндекс.',
+            initial: ref.read(serviceTokensProvider).yandex,
+            onSave: ref.read(serviceTokensProvider.notifier).setYandex,
+          ),
+
+          _TokenField(
+            label: 'VK Музыка · токен',
+            help: 'Нужен для VK Музыки. VK разрешает методы музыки '
+                'не всем токенам, поэтому доступ не гарантирован. '
+                'Токен хранится только на этом устройстве и '
+                'отправляется только в VK.',
+            initial: ref.read(serviceTokensProvider).vk,
+            onSave: ref.read(serviceTokensProvider.notifier).setVk,
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.public_rounded),
+            title: const Text('Audius'),
+            subtitle: Text(
+              'Открытый каталог независимых артистов — токен не нужен',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ),
+
           const _Section('Кэш и хранилище'),
+
           ListTile(
             title: const Text('Занято на устройстве'),
             subtitle: Text(
-              _loadingCache ? 'Подсчёт...' : formatBytes(_cacheBytes),
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              _loadingCache
+                  ? 'Подсчёт...'
+                  : formatBytes(_cacheBytes),
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
             ),
             trailing: TextButton(
               onPressed: _confirmClearCache,
               child: const Text('Очистить кэш'),
             ),
           ),
+
           ListTile(
             title: const Text('История прослушивания'),
             subtitle: Text(
               '${settings.recentIds.length} треков',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
             ),
             trailing: TextButton(
               onPressed: () {
                 settings.clearHistory();
                 setState(() {});
+
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('История очищена')),
+                  const SnackBar(
+                    content: Text('История очищена'),
+                  ),
                 );
               },
               child: const Text('Очистить'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TokenField extends StatefulWidget {
+  const _TokenField({
+    required this.label,
+    required this.help,
+    required this.initial,
+    required this.onSave,
+  });
+
+  final String label;
+  final String help;
+  final String initial;
+  final ValueChanged<String> onSave;
+
+  @override
+  State<_TokenField> createState() => _TokenFieldState();
+}
+
+class _TokenFieldState extends State<_TokenField> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial);
+
+  bool _obscure = true;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save([String? _]) {
+    final value = _controller.text.trim();
+
+    widget.onSave(value);
+    FocusScope.of(context).unfocus();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          value.isEmpty ? 'Токен удалён' : 'Токен сохранён',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _controller,
+            obscureText: _obscure,
+            autocorrect: false,
+            enableSuggestions: false,
+            textInputAction: TextInputAction.done,
+            onSubmitted: _save,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              labelText: widget.label,
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      setState(() => _obscure = !_obscure);
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.check_rounded,
+                      size: 22,
+                    ),
+                    onPressed: _save,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              widget.help,
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.4,
+                color: AppColors.textTertiary,
+              ),
             ),
           ),
         ],
@@ -303,7 +527,6 @@ class _Section extends StatelessWidget {
   }
 }
 
-/// Простой выбор цвета: оттенок, насыщенность и яркость.
 class _ColorDialog extends StatefulWidget {
   const _ColorDialog({required this.initial});
 
@@ -319,31 +542,48 @@ class _ColorDialogState extends State<_ColorDialog> {
   @override
   Widget build(BuildContext context) {
     final color = _hsv.toColor();
+
     return AlertDialog(
       title: const Text('Свой цвет'),
       content: SliderTheme(
         data: SliderTheme.of(context).copyWith(
-          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+          thumbShape: const RoundSliderThumbShape(
+            enabledThumbRadius: 9,
+          ),
           activeTrackColor: color,
           thumbColor: color,
         ),
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            height: 56,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.outline),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.outline),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _slider('Оттенок', _hsv.hue, 360, (v) => _hsv = _hsv.withHue(v)),
-          _slider('Насыщенность', _hsv.saturation, 1,
-              (v) => _hsv = _hsv.withSaturation(v)),
-          _slider('Яркость', _hsv.value, 1, (v) => _hsv = _hsv.withValue(v)),
-        ],
+            const SizedBox(height: 12),
+            _slider(
+              'Оттенок',
+              _hsv.hue,
+              360,
+              (v) => _hsv = _hsv.withHue(v),
+            ),
+            _slider(
+              'Насыщенность',
+              _hsv.saturation,
+              1,
+              (v) => _hsv = _hsv.withSaturation(v),
+            ),
+            _slider(
+              'Яркость',
+              _hsv.value,
+              1,
+              (v) => _hsv = _hsv.withValue(v),
+            ),
+          ],
         ),
       ),
       actions: [
@@ -369,13 +609,18 @@ class _ColorDialogState extends State<_ColorDialog> {
       children: [
         SizedBox(
           width: 96,
-          child: Text(label, style: const TextStyle(fontSize: 12)),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12),
+          ),
         ),
         Expanded(
           child: Slider(
             value: value.clamp(0.0, max),
             max: max,
-            onChanged: (v) => setState(() => update(v)),
+            onChanged: (v) {
+              setState(() => update(v));
+            },
           ),
         ),
       ],
