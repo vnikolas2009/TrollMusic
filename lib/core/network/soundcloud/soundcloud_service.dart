@@ -281,8 +281,18 @@ class SoundCloudService {
 
         final result = <String>[];
 
+        // `id` переприсваивается в цикле повторных попыток, поэтому Dart
+        // не считает его non-null здесь: берём неизменяемую копию.
+        final signingId = id;
+
+        if (signingId == null) return const [];
+
         for (final transcoding in parsed.urls.take(8)) {
-          final url = await _signedUrl(transcoding, id, parsed.authorization);
+          final url = await _signedUrl(
+            transcoding,
+            signingId,
+            parsed.authorization,
+          );
 
           if (url != null && !result.contains(url)) {
             result.add(url);
