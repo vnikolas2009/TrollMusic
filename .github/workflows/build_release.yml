@@ -2,11 +2,6 @@ name: Build Release
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths-ignore:
-      - 'README.md'
-  workflow_dispatch:
 
 concurrency:
   group: release-main
@@ -29,7 +24,9 @@ jobs:
       tag: ${{ steps.v.outputs.tag }}
 
     steps:
-      - id: v
+      - name: Generate version
+        id: v
+        shell: bash
         run: |
           VERSION_NAME="1.0.$(( ${{ github.run_number }} - 1 ))"
           echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
@@ -43,97 +40,75 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Setup Android SDK
+        shell: bash
         run: |
-          SDKMAN="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
-          yes | "$SDKMAN" --licenses > /dev/null 2>&1 || true
-          "$SDKMAN" "platform-tools" "platforms;android-37" \
-            "build-tools;37.0.0" > /dev/null 2>&1 || true
-          "$SDKMAN" "ndk;28.2.13676358" > /dev/null 2>&1 || true
-          "$SDKMAN" --list_installed | head -20
+          set -euo pipefail
 
-      - uses: subosito/flutter-action@v2
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)"
+          fi
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            echo "::error::Android sdkmanager not found"
+            exit 1
+          fi
+
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+
+          "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-37" \
+            "build-tools;37.0.0" \
+            "ndk;28.2.13676358"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      - name: Prepare Gradle repositories
-        shell: bash
-        run: |
-          mkdir -p "$HOME/.gradle/init.d"
-
-          cat > "$HOME/.gradle/init.d/extra-repositories.gradle" <<'GRADLE'
-          settingsEvaluated { settings ->
-              settings.pluginManagement.repositories {
-                  mavenCentral()
-                  google()
-                  gradlePluginPortal()
-              }
-          }
-
-          allprojects {
-              buildscript {
-                  repositories {
-                      mavenCentral()
-                      google()
-                      gradlePluginPortal()
-                  }
-              }
-
-              repositories {
-                  mavenCentral()
-                  google()
-              }
-          }
-          GRADLE
-
       - name: Set version
+        shell: bash
         run: |
           sed -i -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
           grep '^version:' pubspec.yaml
 
-      - name: Get Flutter dependencies
+      - name: Get dependencies
         run: flutter pub get
 
       - name: Build APK
+        run: |
+          flutter build apk --release \
+            --build-name="${{ needs.version.outputs.name }}" \
+            --build-number="${{ needs.version.outputs.code }}"
+
+      - name: Prepare APK artifact
         shell: bash
         run: |
           set -euo pipefail
 
-          for attempt in 1 2 3; do
-            echo "APK build attempt $attempt/3"
-
-            if flutter build apk --release \
-              --build-name="${{ needs.version.outputs.name }}" \
-              --build-number="${{ needs.version.outputs.code }}"; then
-              exit 0
-            fi
-
-            if [ "$attempt" -lt 3 ]; then
-              echo "Build failed; retrying..."
-              sleep 15
-            fi
-          done
-
-          echo "APK build failed after 3 attempts."
-          exit 1
-
-      - name: Rename artifact
-        run: |
           mkdir -p dist
 
           cp build/app/outputs/flutter-apk/app-release.apk \
             "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-android.apk"
 
-      - uses: actions/upload-artifact@v4
+          ls -lh dist/
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: android
           path: dist/*.apk
@@ -145,70 +120,94 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
       - name: Set version
+        shell: bash
         run: |
           sed -i '' -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
           grep '^version:' pubspec.yaml
 
-      - name: Get Flutter dependencies
+      - name: Get dependencies
         run: flutter pub get
 
       - name: Build unsigned iOS app
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
 
-          rm -rf build/ios/iphoneos/Runner.app
+          rm -rf build/ios
 
           set +e
-
           flutter build ios --release --no-codesign \
             --build-name="${{ needs.version.outputs.name }}" \
-            --build-number="${{ needs.version.outputs.code }}"
+            --build-number="${{ needs.version.outputs.code }}" \
+            2>&1 | tee ios-build.log
 
-          BUILD_STATUS=$?
-
+          BUILD_STATUS=${PIPESTATUS[0]}
           set -e
 
-          APP_PATH="build/ios/iphoneos/Runner.app"
+          APP_PATH="$(find build/ios -type d -name Runner.app -print -quit 2>/dev/null || true)"
+
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::Runner.app was not created"
+            echo "Available build files:"
+            find build/ios -maxdepth 6 -print 2>/dev/null | head -200 || true
+            exit 1
+          fi
+
+          if [ ! -f "$APP_PATH/Info.plist" ]; then
+            echo "::error::Runner.app has no Info.plist"
+            exit 1
+          fi
+
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_PATH/Info.plist")
+
+          if [ ! -f "$APP_PATH/$EXECUTABLE" ]; then
+            echo "::error::iOS executable is missing: $EXECUTABLE"
+            exit 1
+          fi
 
           if [ "$BUILD_STATUS" -ne 0 ]; then
-            if [ -d "$APP_PATH" ] && [ -f "$APP_PATH/Runner" ]; then
-              echo "::warning::Flutter returned a signing validation error after Xcode produced Runner.app. Continuing with the unsigned app."
+            if grep -q "requires a selected Development Team" ios-build.log; then
+              echo "::warning::Flutter reported a signing validation error, but the unsigned app was successfully created."
             else
-              echo "::error::iOS compilation failed."
+              echo "::error::iOS build failed for a reason other than missing signing."
               exit "$BUILD_STATUS"
             fi
           fi
 
-          if [ ! -d "$APP_PATH" ] || [ ! -f "$APP_PATH/Runner" ]; then
-            echo "::error::Runner.app or its executable is missing."
-            exit 1
-          fi
+          echo "iOS app found: $APP_PATH"
+          echo "Executable: $EXECUTABLE"
 
       - name: Package IPA
         shell: bash
         run: |
           set -euo pipefail
 
+          APP_PATH="$(find build/ios -type d -name Runner.app -print -quit)"
+
           rm -rf Payload dist
           mkdir -p Payload dist
 
-          cp -R build/ios/iphoneos/Runner.app Payload/
+          cp -R "$APP_PATH" Payload/
 
           ditto -c -k --sequesterRsrc --keepParent \
             Payload \
             "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa"
 
-      - uses: actions/upload-artifact@v4
+          ls -lh dist/
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
         with:
           name: ios
           path: dist/*.ipa
@@ -220,7 +219,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
@@ -228,6 +228,7 @@ jobs:
       - name: Push to releases branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -239,7 +240,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git remote add origin \
+            "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
 
           if git fetch --depth=1 origin releases; then
             git checkout -q -B releases FETCH_HEAD
@@ -256,7 +258,7 @@ jobs:
           git commit -q -m "release ${{ needs.version.outputs.tag }}"
           git push -q --force origin releases
 
-      - name: GitHub Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
