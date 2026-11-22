@@ -1,141 +1,373 @@
-# TrollMusic — архитектура
+TrollMusic — архитектура и инструкции для AI-агентов
 
-Flutter-приложение (iOS/Android). Состояние — Riverpod, хранилище — Hive, звук — just_audio + audio_service. Работает в РФ без VPN и без платных сервисов.
+Этот документ помогает Claude Code / Claude Sonnet ориентироваться в
+репозитории. Это карта проекта, а не источник истины: если описание
+расходится с кодом текущей ветки, проверяй исходники, вызовы и тесты,
+затем обновляй документ.
 
-Схема:
+Инструкции агенту
 
-- **Метаданные Spotify** (плейлист, альбом, трек: название, исполнитель, длительность, обложка) отдаёт собственный бесплатный Vercel-бэкенд `/api`. Аудио через Vercel **никогда** не проходит.
-- **Аудио** приложение получает напрямую с CDN: сначала SoundCloud (MP3/HLS), при неудаче YouTube через InnerTube (`ANDROID_VR`/`IOS`).
-- **DNS** для всех запросов Dio идёт через DNS-over-HTTPS (8.8.8.8 / 9.9.9.9), поэтому подмена DNS у провайдера не мешает.
-- Тексты — LRCLIB.
+Перед работой: 1. Прочитай README.md и этот файл. 2. Проверь
+актуальную структуру и содержимое файлов в текущей ветке. Не полагайся
+на старые чаты. 3. Найди все usages изменяемых классов, методов, моделей
+и providers. 4. Проследи поток данных: UI → provider/repository →
+service → network/storage → UI. 5. Делай минимальные изменения. Не
+переписывай несвязанные файлы. 6. Не выдумывай API, методы и
+зависимости: сверяйся с pubspec.yaml и pubspec.lock. 7. Сохраняй
+совместимость существующих данных Hive/JSON. 8. Не помещай токены,
+cookies, пароли и ключи в код, логи или репозиторий. 9. Не обходи
+авторизацию, paywall и ограничения доступа. Используй разрешённые
+API/OAuth. 10. Не утверждай, что тесты прошли, если они реально не
+запускались. 11. Не делай force-push и не меняй main для рискованных
+задач без прямого указания. 12. В отчёте перечисли изменённые файлы,
+проверки и оставшиеся риски.
 
-Проверка: `flutter pub get`, `flutter analyze`, `flutter test` выполняются локально. CI (`.github/workflows/build_release.yml`) только собирает APK/IPA и тесты не запускает.
+1. Проект
 
-## 1. Слои и карта файлов
+TrollMusic — Flutter-приложение для iOS и Android.
 
-```
-api/                           # Vercel serverless (TypeScript)
-  _lib/spotify.ts              # анонимный токен open.spotify.com + разбор ответов Spotify
-  spotify/token.ts             # GET  /api/spotify/token  → {accessToken, expiresAt}
-  spotify/import.ts            # GET  /api/spotify/import?url=… → {type,id,title,cover,tracks[]}
-vercel.json, package.json, tsconfig.json
+Область            Технология
+
+────────
+
+UI / язык          Flutter, Dart
+Состояние          Riverpod (flutter_riverpod)
+HTTP               Dio
+YouTube            youtube_explode_dart
+Плеер              just_audio, audio_service, audio_session
+Локальные данные   Hive / hive_flutter
+Spotify            получение метаданных; аудио ищется на других источниках
+Тексты             LRCLIB
+Backend            Vercel Serverless Functions (TypeScript)
+CI                 GitHub Actions
+
+2. Карта репозитория
+
 lib/
-  main.dart                    # ручная сборка зависимостей → ProviderContainer (overrides) → runApp
-  app/
-    app.dart, app_shell.dart   # MaterialApp, IndexedStack вкладок + MiniPlayer
-    providers.dart             # AppServices, провайдеры библиотеки/плеера (positionProvider и др.)
-    network_providers.dart     # dio, settings, SoundCloud/InnerTube/AudioResolver, Spotify, MusicRepository
-    source_provider.dart       # переключатель источника на главной (Spotify / YouTube)
-    theme_controller.dart      # выбор темы оформления
-  core/
-    config/app_config.dart     # API base, таймауты, DoH-эндпоинты, TTL client_id, prefetch, cacheWidth
-    network/
-      doh_resolver.dart        # DohResolver: HttpClient.connectionFactory + DoH по IP-адресам
-      http_client.dart         # createDio(): DoH + HTTP-прокси + пользовательские заголовки
-      soundcloud/soundcloud_service.dart   # client_id (Hive, 24 ч), поиск, прямой MP3/HLS
-      youtube/innertube_service.dart       # поиск и аудио через ANDROID_VR / IOS
-      spotify/spotify_client.dart          # Vercel import/token → прямой API → embed
-      lyrics/lyrics_client.dart            # LRCLIB
-    storage/settings.dart      # Hive-box 'settings'
-    theme/, utils/             # чистые функции (lrc_parser, track_match, spotify_link, json_isolate, …)
-  data/
-    models/{track,playlist,lyrics,artist}.dart
-    repositories/library_repository.dart   # Hive: треки, плейлисты, лайки, тексты, бэкап
-    repositories/music_repository.dart     # поиск, импорт Spotify-ссылок, тексты
-  services/
-    audio/audio_resolver_service.dart      # SoundCloud → InnerTube
-    audio/audio_handler.dart               # TrollAudioHandler: очередь, prefetch, кроссфейд, таймер сна
-    download/download_service.dart         # офлайн-загрузки
-    storage/                               # файлы, импорт, теги
-  features/                    # home (music_sections.dart: подборки по настроению), search, library, playlist, artist, player, lyrics, create, settings
-  shared/widgets/              # track_tile, mini_player, cover_art, …
-test/                          # flutter test
-```
+├── main.dart                         # Инициализация Flutter и DI
+├── app/
+│   ├── app.dart, app_shell.dart      # MaterialApp и оболочка
+│   ├── providers.dart                # Библиотека, плеер, загрузки, UI streams
+│   ├── network_providers.dart        # Dio, сетевые сервисы, repositories
+│   ├── source_provider.dart           # Выбранный источник каталога
+│   └── theme_controller.dart
+├── core/
+│   ├── config/app_config.dart         # URL, timeout, TTL, общие параметры
+│   ├── network/
+│   │   ├── doh_resolver.dart          # DNS-over-HTTPS
+│   │   ├── http_client.dart           # createDio(), proxy, HTTP adapter
+│   │   ├── soundcloud/soundcloud_service.dart
+│   │   ├── youtube/innertube_service.dart
+│   │   ├── spotify/spotify_client.dart
+│   │   └── lyrics/lyrics_client.dart
+│   ├── storage/settings.dart          # Hive-настройки
+│   └── utils/                         # Парсеры и чистые функции
+├── data/
+│   ├── models/                        # Track, Playlist, Lyrics, Artist
+│   └── repositories/
+│       ├── library_repository.dart    # Hive: tracks/playlists/lyrics
+│       └── music_repository.dart      # Поиск, подборки, Spotify, lyrics
+├── services/
+│   ├── audio/
+│   │   ├── audio_handler.dart         # Очередь и воспроизведение
+│   │   └── audio_resolver_service.dart# Поиск аудиопотоков и fallback
+│   ├── download/download_service.dart
+│   └── storage/                       # Файлы, импорт, теги
+├── features/                          # home, search, library, playlist,
+│                                      # artist, player, lyrics, create, settings
+└── shared/widgets/                    # Общие UI-компоненты
 
-Правило слоёв: `features/shared` → `app` (провайдеры) → `services/data` → `core`. `core/utils` не зависит от Flutter-UI и Riverpod.
+api/
+├── _lib/spotify.ts
+└── spotify/
+    ├── token.ts
+    └── import.ts
 
-## 2. Инициализация и DI
+test/                                  # flutter_test
+.github/workflows/build_release.yml   # APK + unsigned IPA + публикация
+pubspec.yaml                           # Зависимости и SDK
 
-`main.dart` создаёт объекты вручную и передаёт их в `ProviderContainer(overrides: ...)`:
+Это главные точки входа, а не полный список. Перед созданием файлов
+проверь актуальное дерево.
 
-`Hive.initFlutter → Settings.open → открытие box SoundCloud-кэша → LibraryRepository.open → SoundCloudService / InnerTubeService → AudioResolverService → StorageService → DownloadService → AudioService.init(TrollAudioHandler) → restoreLastPlayed`.
+3. Слои и направление зависимостей
 
-Провайдеры с `throw UnimplementedError()` (`servicesProvider`, `settingsProvider`, …) обязательно переопределяются в `main`. Остальные сетевые провайдеры строятся лениво в `network_providers.dart`.
+features / shared widgets
+          ↓
+      app/providers
+          ↓
+ repositories / services
+       ↙       ↘
+    data       core
+              (network, config,
+               storage, utils)
 
-## 3. Данные
+• features/ — экраны и пользовательские сценарии; не размещай
+здесь HTTP-клиенты.
+• app/ — composition root для Riverpod и зависимости приложения.
+• data/repositories/ — координация получения и хранения данных.
+• services/ — прикладная логика аудио, загрузок и файлов.
+• core/ — сеть, конфигурация, настройки и утилиты.
+• data/models/ — модели без зависимости от UI.
 
-**Track** (`data/models/track.dart`): `id, title, artist, album, duration, thumbnailUrl, streamUrl, localPath, lyricsPath, artworkPath, explicit, source (youtube|spotify|soundcloud|local|downloaded), bitrate, albumId`.
-- `id` YouTube-трека = videoId; Spotify = `sp:<id>`; SoundCloud = `sc:<id>`.
-- Исполнители в `artist` хранятся строкой через запятую; основной — первый.
+Не создавай повторные экземпляры сервисов без причины: это может
+разделить кэш и сетевые настройки.
 
-**Hive-боксы**: `tracks`, `playlists`, `lyrics` (`LibraryRepository`), `settings` (`Settings`), `soundcloud_cache` (`client_id` + время получения).
+4. Инициализация и DI
 
-**Settings**: `apiBaseUrl`, `httpProxy`, `useSystemProxy`, `customHeaders`, `spotifyGuestMode`, `spotifyClientId/Secret`, `audioQuality`, `bitrate`, `preferOpus`, `crossfadeSeconds`, `shuffleEnabled`, `repeatIndex`, `lastTrackId`, `lastPositionMs`, `playbackSpeed`, `lyricsOffsetMs(trackId)`, `playCounts`, `recentIds`, `searchQueries`.
+Точка входа — lib/main.dart. Текущая последовательность: 1.
+Инициализация Flutter и Hive. 2. Открытие Settings, SoundCloud cache box
+и LibraryRepository. 3. Создание LyricsClient, SoundCloudService,
+InnerTubeService и AudioResolverService. 4. Создание StorageService и
+DownloadService. 5. Инициализация AudioService с TrollAudioHandler и
+восстановление последнего трека. 6. Создание ProviderContainer с
+overrides и запуск TrollMusicApp.
 
-## 4. Сеть
+lib/app/network_providers.dart связывает Dio, Settings, SoundCloud,
+InnerTube, AudioResolver, Spotify, Lyrics и MusicRepository.
 
-- **Dio** (`createDio`) использует `DohResolver`: имя хоста резолвится через DoH-запросы к IP-адресам (`https://8.8.8.8/resolve`, `https://9.9.9.9:5053/dns-query`), TLS проверяется по исходному имени хоста. Если DoH недоступен, используется системный DNS.
-- **HTTP-прокси** (`httpProxy` или системный) необязателен. SOCKS не поддерживается.
-- **Тяжёлый JSON** (ответы поиска, плеера, страницы SoundCloud) разбирается через `Isolate.run()` (`core/utils/json_isolate.dart`).
-- **Vercel**: базовый URL — `AppConfig.defaultApiBase` (`--dart-define=TROLL_API_BASE=…`) или поле в настройках. Функции: `token.ts` (токен кэшируется в памяти инстанса до истечения), `import.ts` (только метаданные).
+lib/app/providers.dart предоставляет AppServices, LibraryRepository,
+StorageService, DownloadService, AudioHandler и UI stream providers.
 
-### SoundCloud (`SoundCloudService`)
-1. `client_id` скрейпится со скриптов страницы soundcloud.com, хранится в Hive 24 часа; если скрейп не удался, используется просроченный id из кэша. Принудительное обновление при 401 не реализовано.
-2. Поиск: `api-v2.soundcloud.com/search/tracks`.
-3. Поток: `media.transcodings` → progressive MP3 предпочтительнее HLS; треки с `policy: BLOCK`/`SNIP` пропускаются.
+Некоторые providers намеренно выбрасывают UnimplementedError() и
+переопределяются в main.dart (например, settingsProvider,
+servicesProvider). Не удаляй overrides, не проверив usages.
 
-### InnerTube (`InnerTubeService`, фолбэк)
-Поиск и `player` с контекстами `ANDROID_VR` и `IOS`: прямые ссылки googlevideo без подписи и PO-токена. Для воспроизведения нужны заголовки клиента (`AudioResolverService.streamHeaders`).
+5. Track и локальное хранилище
 
-### Единый резолвер (`AudioResolverService`)
-Поиск и получение потока: SoundCloud первым, InnerTube при ошибке или пустом результате. Для Spotify-трека ищется кандидат по «артист название», выбирается `pickBest` (длительность, название, исполнитель, штраф за live/remix).
+Модель: lib/data/models/track.dart.
 
-## 5. Воспроизведение
+Поля включают ID, title, artist, album, duration, thumbnailUrl,
+streamUrl, localPath, lyricsPath, artworkPath, explicit, source, bitrate
+и albumId.
 
-1. UI вызывает `audioHandler.playTrack(track, contextQueue:)` / `setLibraryQueue(...)`.
-2. В очереди неразрешённые треки представлены `SilenceAudioSource`. Сразу резолвится только якорный трек.
-3. При переходе на трек без URL он резолвится на месте (`_activateIfUnresolved`).
-4. **Prefetch**: за 15 секунд до конца (`AppConfig.prefetchBefore`) резолвится следующий трек и подменяется в очереди (`removeAudioSourceAt` + `insertAudioSource`).
-5. Сетевые не-HLS URL играются через `LockCachingAudioSource` (кэш на диск), HLS — через `AudioSource.uri`. Заголовки: `streamHeaders(url)` + `settings.requestHeaders`.
-6. Ошибка потока → `errors` stream → повторный резолв → следующий трек.
-7. Загрузка: `DownloadService.download(track)` → кандидаты `AudioResolverService` (HLS пропускаются) → файл + обложка + `.lrc`.
+Текущий enum:
 
-## 6. Тексты
+enum TrackSource { youtube, spotify, soundcloud, local, downloaded }
 
-`LyricsClient` (LRCLIB) → `LibraryRepository.saveLyrics` → `LrcParser.parse`. Экран `lyrics_screen.dart`: список перестраивается только при смене активной строки (`positionStream.map(indexAt).distinct()`); тики позиции слушает лишь прогресс активной строки; каждая строка в `RepaintBoundary`.
+Текущие ID: - YouTube: video ID; - Spotify: sp:<id>; - SoundCloud:
+sc:<id>; - local/downloaded: проверь места создания треков.
 
-## 7. UI и производительность
+При добавлении источника: 1. Проверь все switch/if по TrackSource. 2.
+Определи уникальный стабильный ID prefix. 3. Проверь
+Track.toJson/fromJson и чтение старых записей. 4. Проверь library,
+playlists, likes, queue, import/export, downloads и UI. 5. Добавь тесты
+сериализации и старых данных.
 
-- Позиция (`positionProvider`) слушается только узкими виджетами: `_SeekBar` в `player_screen.dart` и `_MiniProgress` в `mini_player.dart`.
-- Все обложки задают `cacheWidth` (`AppConfig.coverCacheWidth` = 600 для плеера, `thumbCacheWidth` = 160 для плиток, `CoverArt` считает от размера и devicePixelRatio).
-- Вкладки в `AppShell` (IndexedStack). Палитра `AppColors`, акцент #1ED760.
+Важно: текущий Track.copyWith использует ??; передача null не
+очищает nullable-поле. Не меняй это поведение без проверки всех вызовов.
 
-## 8. Деплой бэкенда
+Hive boxes: - tracks, playlists, lyrics — LibraryRepository; -
+settings — Settings; - soundcloud_cache — SoundCloud client_id
+cache.
 
-```bash
-npm i -g vercel
-vercel --prod
-```
+Не меняй имена boxes/ключей без миграции или совместимого fallback.
 
-Переменные окружения не нужны. Полученный домен укажите в `AppConfig.defaultApiBase` (или `--dart-define=TROLL_API_BASE=…`, либо в настройках приложения).
+6. Поиск и источники аудио
 
-## 9. CI и релизы
+MusicRepository
 
-`push` в `main` → `Version` → `Android APK` + `iOS IPA (unsigned)` → `Publish` (ветка `releases` + GitHub Release). Версия `1.0.<run_number−1>+<run_number>`. Тесты в CI не запускаются.
+lib/data/repositories/music_repository.dart: - searchAll()
+параллельно вызывает SoundCloud, YouTube и Spotify; удаляет дубли по
+source + ID. - searchSpotify() сначала ищет Spotify, затем использует
+YouTube как fallback. - youtubeMix() и spotifyMix() собирают
+подборки из нескольких запросов. - spotifyPlaylist() разбирает
+Spotify-ссылку и импортирует playlist/album. - findLyrics() обращается
+к LyricsClient.
 
-## 10. Как вносить изменения
+SoundCloudService
 
-- Логику (парсинг, сопоставление, форматирование) выносить в чистые функции и покрывать тестом в `test/`.
-- Новая настройка: геттер/сеттер в `Settings` → UI в `settings_screen.dart`.
-- Новый источник аудио: сервис в `core/network/...`, подключение в `AudioResolverService`. Аудио не проксировать через Vercel.
-- Правка структуры, провайдеров, потока воспроизведения или сети → обновить этот файл.
-- Строки UI — на русском. Существующие тесты не ломать.
+lib/core/network/soundcloud/soundcloud_service.dart: - получает
+client_id со страницы SoundCloud и JS-бандлов; - хранит client_id в Hive
+с TTL из AppConfig; - при 401/403 обновляет client_id и повторяет
+запрос; - ищет треки через SoundCloud API; - получает транскодинги;
+progressive обычно предпочтительнее HLS; - кэширует stream URLs с
+ограниченным TTL.
 
-## 11. Известные ограничения
+При изменениях проверяй 401/403, retry, пустые транскодинги, BLOCK/SNIP
+policy, HTTPS и истечение URL.
 
-- Ручная проверка на устройстве (воспроизведение, экран блокировки, загрузки, кроссфейд, prefetch) не проводилась.
-- `LockCachingAudioSource` в just_audio помечен как экспериментальный.
-- Приватные API (`client_id` SoundCloud, клиенты InnerTube) могут меняться без предупреждения. Версии клиентов InnerTube заданы константами в `innertube_service.dart`.
-- Соответствие Spotify → SoundCloud/YouTube хранится в памяти; для редких треков возможен неверный матч.
-- Нет входа в аккаунт Spotify: личные плейлисты недоступны.
-- Бесплатный тариф Vercel ограничивает число вызовов; аудио через него не идёт.
+YouTube / InnerTubeService
+
+Файл: lib/core/network/youtube/innertube_service.dart.
+
+Название историческое: текущая реализация поиска и получения потоков
+использует youtube_explode_dart, а не самописный низкоуровневый
+InnerTube-клиент. Поиск идёт через YouTube search; stream manifest
+запрашивается с клиентами Safari и Android VR. Форматы сортируются по
+кодеку и bitrate, URL кэшируются временно.
+
+В файле также оставлены legacy parsing helpers для совместимости с
+тестами. Не удаляй их без проверки тестов и usages.
+
+AudioResolverService
+
+lib/services/audio/audio_resolver_service.dart — единая точка
+получения кандидатов: - существующий streamUrl используется первым; -
+YouTube source: YouTube → SoundCloud; - остальные sources: SoundCloud →
+YouTube; - для Spotify metadata подбирается аудиокандидат поиском и
+pickBestMatch; - найденные URL кэшируются в памяти; - forget()
+очищает кэш резолвера и кэши источников.
+
+Заголовки прямого YouTube-потока определяются через streamHeaders().
+Не удаляй их без проверки на iOS/Android.
+
+Как добавить новый источник
+
+Не подключай API прямо в экран или AudioHandler: 1. Изучи Track,
+AudioResolverService, MusicRepository, DownloadService и
+TrollAudioHandler. 2. Создай отдельный network service в
+lib/core/network/<source>/. 3. Используй общий
+createDio(settings: ...), если он подходит протоколу. 4. Добавь
+provider и DI в main.dart, если нужен единый жизненный цикл. 5. Раздели
+каталог метаданных и получение реального аудио: это разные возможности.
+6. Определи ID, enum source, приоритет, headers, timeout, retry, TTL и
+cache invalidation. 7. Подключи поиск и резолвинг в orchestration
+layers. 8. Проверь playback, очередь, prefetch, downloads, offline,
+import/export. 9. Добавь тесты парсинга, matching, ошибок и пустых
+ответов.
+
+Не предполагай, что наличие поиска означает возможность потокового
+воспроизведения. Не используй приватные API/учётные данные способом,
+нарушающим правила сервиса.
+
+7. Воспроизведение и загрузки
+
+TrollAudioHandler
+
+lib/services/audio/audio_handler.dart отвечает за очередь, MediaItem,
+play/pause/seek, shuffle/repeat, crossfade, скорость, восстановление
+позиции, prefetch и ошибки.
+
+Особенности текущего кода: - неразрешённые элементы очереди могут
+временно быть SilenceAudioSource; - удалённые non-HLS URL
+воспроизводятся через LockCachingAudioSource; - HLS (.m3u8) передаётся
+через AudioSource.uri; - локальные файлы воспроизводятся напрямую; -
+AudioHandler вызывает resolver для подготовки и повторного получения
+URL.
+
+Изменения очереди/AudioPlayer могут затронуть экран блокировки, кнопки
+гарнитуры, переходы, восстановление состояния и prefetch.
+
+DownloadService
+
+lib/services/download/download_service.dart: - сначала пробует
+известный streamUrl, затем кандидаты resolver; - пропускает HLS при
+скачивании; - поддерживает ограниченную параллельность, прогресс и
+отмену; - сохраняет аудио, обложку и при возможности текст; - обновляет
+Track в LibraryRepository.
+
+При изменении headers/URL проверяй playback и download: пути используют
+общую инфраструктуру, но не идентичны.
+
+8. Сеть и конфигурация
+
+lib/core/config/app_config.dart содержит API base URL, timeout, DoH
+endpoints, SoundCloud TTL, prefetch duration, image cache widths,
+default headers и параметры YouTube-клиентов. Не дублируй эти значения
+без необходимости.
+
+Файлы HTTP/DNS: - lib/core/network/http_client.dart -
+lib/core/network/doh_resolver.dart
+
+createDio() централизует Dio options, таймауты, заголовки, HTTP
+adapter и DNS resolver. Приоритет proxy: ручной HTTP → системный →
+прямое соединение. Не считай SOCKS поддержанным без отдельной
+реализации.
+
+При изменении сети проверь TLS hostname verification, DNS fallback,
+proxy, timeout и ошибки. Не отключай TLS validation ради обхода сетевых
+проблем.
+
+9. Spotify и Vercel API
+
+lib/core/network/spotify/spotify_client.dart отвечает за Spotify
+metadata/search/track/album/playlist. Он не отдаёт прямые аудиопотоки
+Spotify. Воспроизведение Spotify-трека выполняется через поиск
+подходящего аудио на других источниках.
+
+Backend:
+
+api/_lib/spotify.ts
+api/spotify/token.ts
+api/spotify/import.ts
+
+Маршруты: - GET /api/spotify/token — анонимный web token; -
+GET /api/spotify/import?type=playlist&id=<id> — metadata playlist; -
+GET /api/spotify/import?type=album&id=<id> — metadata album; -
+GET /api/spotify/import?type=track&id=<id> — metadata track.
+
+Важно: текущий import endpoint принимает type и id, а не url. Не
+используй устаревший /api/spotify/import?url=....
+
+Аудио через Vercel не проксируется. При изменении API синхронно проверь
+TypeScript handlers, Flutter client, README и Vercel config.
+
+10. Lyrics и UI
+
+Lyrics: - client: lib/core/network/lyrics/lyrics_client.dart; -
+источник: LRCLIB; - parser: lib/core/utils/lrc_parser.dart; - storage:
+LibraryRepository / Hive box lyrics; - screen:
+lib/features/lyrics/lyrics_screen.dart.
+
+Сохраняй различие synced LRC и plain text. Проверяй timestamps,
+malformed lines, пустые ответы и seek-to-line.
+
+UI находится в lib/features/, общие элементы — в
+lib/shared/widgets/. Не дублируй существующие widgets и не переноси
+бизнес-логику в UI. Частые position updates должны перестраивать только
+необходимые небольшие виджеты. Учитывай cacheWidth обложек.
+
+11. Проверки и CI
+
+Запускать из корня:
+
+flutter pub get
+dart format --output=none --set-exit-if-changed lib test
+flutter analyze
+flutter test
+
+Точечные проверки:
+
+dart format --output=none --set-exit-if-changed lib/path/to/file.dart
+flutter test test/name_of_test.dart
+
+--output=none только проверяет форматирование, не изменяет файлы.
+
+.github/workflows/build_release.yml собирает Android APK и iOS IPA без
+codesign, затем публикует их в ветку releases и GitHub Release.
+Текущий release workflow не запускает flutter analyze и
+flutter test. Не утверждай, что CI проверил тесты, если отдельный
+workflow не добавлен и не запускался.
+
+12. Чек-лист завершения
+
+☐ Найдены все usages изменённого API и модели.
+☐ Сохранена совместимость старых Hive/JSON данных.
+☐ Проверены пустые ответы, ошибки, timeout, retry и cache
+invalidation.
+☐ Проверены iOS/Android особенности при изменении сети или аудио.
+☐ Проверены очередь, prefetch, экран блокировки при изменении
+playback.
+☐ Проверены загрузки и offline при изменении источника.
+☐ Добавлены/обновлены тесты.
+☐ Реально выполнены format/analyze/test или описано, почему это
+невозможно.
+☐ Обновлены README/ARCHITECTURE при изменении архитектуры.
+
+13. Известные риски
+
+• Внешние API SoundCloud/YouTube/Spotify и их ответы могут меняться.
+• Ссылки на аудиопотоки могут истекать.
+• Spotify metadata matching может выбрать live/remix/cover вместо
+оригинала.
+• LockCachingAudioSource помечен в just_audio как experimental.
+• Unsigned IPA не означает, что приложение подписано и готово к
+обычной установке.
+• Успешная сборка не заменяет ручную проверку воспроизведения на iOS и
+Android.
+
+────────
+
+Последнее сверение структуры: ветка main. После существенных
+архитектурных изменений обновляй этот документ.
