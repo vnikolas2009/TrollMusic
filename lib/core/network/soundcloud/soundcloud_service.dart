@@ -10,14 +10,12 @@ import '../../utils/json_isolate.dart';
 import '../http_client.dart';
 
 class SoundCloudService {
-  SoundCloudService({
-    required Settings settings,
-    required Box<dynamic> cache,
-  })  : _cache = cache,
-        _dio = createDio(
-          settings: settings,
-          receiveTimeout: const Duration(seconds: 15),
-        );
+  SoundCloudService({required Settings settings, required Box<dynamic> cache})
+    : _cache = cache,
+      _dio = createDio(
+        settings: settings,
+        receiveTimeout: const Duration(seconds: 15),
+      );
 
   static const cacheBoxName = 'soundcloud_cache';
   static const _clientIdKey = 'clientIdAt';
@@ -48,9 +46,7 @@ class SoundCloudService {
     });
   }
 
-  Future<String?> _loadClientId({
-    required bool force,
-  }) async {
+  Future<String?> _loadClientId({required bool force}) async {
     if (!force && _freshFromCache()) {
       final cached = _cache.get('clientId') as String?;
 
@@ -67,10 +63,7 @@ class SoundCloudService {
         _clientId = id;
 
         await _cache.put('clientId', id);
-        await _cache.put(
-          _clientIdKey,
-          DateTime.now().millisecondsSinceEpoch,
-        );
+        await _cache.put(_clientIdKey, DateTime.now().millisecondsSinceEpoch);
 
         return id;
       }
@@ -97,8 +90,7 @@ class SoundCloudService {
       DateTime.fromMillisecondsSinceEpoch(at),
     );
 
-    return age >= Duration.zero &&
-        age < AppConfig.soundcloudClientIdTtl;
+    return age >= Duration.zero && age < AppConfig.soundcloudClientIdTtl;
   }
 
   Future<String?> _scrapeClientId() async {
@@ -106,9 +98,7 @@ class SoundCloudService {
       Uri.parse('https://soundcloud.com/'),
       options: Options(
         responseType: ResponseType.plain,
-        headers: const {
-          'accept': 'text/html',
-        },
+        headers: const {'accept': 'text/html'},
       ),
     );
 
@@ -135,8 +125,7 @@ class SoundCloudService {
 
       if (uri == null) continue;
 
-      final resolved = Uri.parse('https://soundcloud.com/')
-          .resolveUri(uri);
+      final resolved = Uri.parse('https://soundcloud.com/').resolveUri(uri);
 
       if (resolved.host != 'a-v2.sndcdn.com' &&
           resolved.host != 'soundcloud.com') {
@@ -161,9 +150,7 @@ class SoundCloudService {
           Uri.parse(url),
           options: Options(
             responseType: ResponseType.plain,
-            headers: const {
-              'accept': '*/*',
-            },
+            headers: const {'accept': '*/*'},
           ),
         );
 
@@ -184,10 +171,7 @@ class SoundCloudService {
     return null;
   }
 
-  Future<List<Track>> search(
-    String query, {
-    int limit = 30,
-  }) async {
+  Future<List<Track>> search(String query, {int limit = 30}) async {
     final trimmed = query.trim();
 
     if (trimmed.isEmpty) return const [];
@@ -209,9 +193,7 @@ class SoundCloudService {
 
         final response = await _dio.getUri<String>(
           uri,
-          options: Options(
-            responseType: ResponseType.plain,
-          ),
+          options: Options(responseType: ResponseType.plain),
         );
 
         final status = response.statusCode ?? 0;
@@ -233,10 +215,7 @@ class SoundCloudService {
 
         return await parseJson(
           body,
-          (raw) => parseSearchBody(
-            raw,
-            limit: limit,
-          ),
+          (raw) => parseSearchBody(raw, limit: limit),
         );
       } catch (_) {
         return const [];
@@ -257,8 +236,7 @@ class SoundCloudService {
 
     final cached = _streamCache[normalizedId];
 
-    if (cached != null &&
-        cached.expiresAt.isAfter(DateTime.now())) {
+    if (cached != null && cached.expiresAt.isAfter(DateTime.now())) {
       return List<String>.unmodifiable(cached.urls);
     }
 
@@ -270,18 +248,12 @@ class SoundCloudService {
 
     for (var attempt = 0; attempt < 2; attempt++) {
       try {
-        final uri = Uri.parse('$_api/tracks/$normalizedId').replace(
-          queryParameters: {
-            'client_id': id,
-            'app_locale': 'ru',
-          },
-        );
+        final uri = Uri.parse('$_api/tracks/$normalizedId')
+            .replace(queryParameters: {'client_id': id, 'app_locale': 'ru'});
 
         final response = await _dio.getUri<String>(
           uri,
-          options: Options(
-            responseType: ResponseType.plain,
-          ),
+          options: Options(responseType: ResponseType.plain),
         );
 
         final status = response.statusCode ?? 0;
@@ -305,19 +277,12 @@ class SoundCloudService {
           return const [];
         }
 
-        final parsed = await parseJson(
-          body,
-          parseTranscodings,
-        );
+        final parsed = await parseJson(body, parseTranscodings);
 
         final result = <String>[];
 
         for (final transcoding in parsed.urls.take(8)) {
-          final url = await _signedUrl(
-            transcoding,
-            id,
-            parsed.authorization,
-          );
+          final url = await _signedUrl(transcoding, id, parsed.authorization);
 
           if (url != null && !result.contains(url)) {
             result.add(url);
@@ -327,9 +292,7 @@ class SoundCloudService {
         if (result.isNotEmpty) {
           _streamCache[normalizedId] = _CachedStream(
             List<String>.unmodifiable(result),
-            DateTime.now().add(
-              AppConfig.soundcloudStreamCacheTtl,
-            ),
+            DateTime.now().add(AppConfig.soundcloudStreamCacheTtl),
           );
         }
 
@@ -360,20 +323,15 @@ class SoundCloudService {
         final query = <String, String>{
           ...original.queryParameters,
           'client_id': id,
-          if (authorization != null &&
-              authorization.isNotEmpty)
+          if (authorization != null && authorization.isNotEmpty)
             'track_authorization': authorization,
         };
 
-        final uri = original.replace(
-          queryParameters: query,
-        );
+        final uri = original.replace(queryParameters: query);
 
         final response = await _dio.getUri<dynamic>(
           uri,
-          options: Options(
-            responseType: ResponseType.json,
-          ),
+          options: Options(responseType: ResponseType.json),
         );
 
         final status = response.statusCode ?? 0;
@@ -406,8 +364,7 @@ class SoundCloudService {
         if (url is String && url.isNotEmpty) {
           final streamUri = Uri.tryParse(url);
 
-          if (streamUri == null ||
-              streamUri.scheme != 'https') {
+          if (streamUri == null || streamUri.scheme != 'https') {
             return null;
           }
 
@@ -442,13 +399,7 @@ class SoundCloudService {
       }
     }
 
-    final found = pickBest(
-      track,
-      await search(
-        _queryFor(track),
-        limit: 10,
-      ),
-    );
+    final found = pickBest(track, await search(_queryFor(track), limit: 10));
 
     if (found == null) return const [];
 
@@ -456,12 +407,9 @@ class SoundCloudService {
   }
 
   static String _normalizeTrackId(String id) {
-    final normalized = id.startsWith('sc:')
-        ? id.substring(3)
-        : id;
+    final normalized = id.startsWith('sc:') ? id.substring(3) : id;
 
-    if (normalized.isEmpty ||
-        !RegExp(r'^\d+$').hasMatch(normalized)) {
+    if (normalized.isEmpty || !RegExp(r'^\d+$').hasMatch(normalized)) {
       return '';
     }
 
@@ -495,10 +443,7 @@ class SoundCloudService {
 }
 
 class _CachedStream {
-  const _CachedStream(
-    this.urls,
-    this.expiresAt,
-  );
+  const _CachedStream(this.urls, this.expiresAt);
 
   final List<String> urls;
   final DateTime expiresAt;
@@ -513,10 +458,7 @@ int _asInt(dynamic value) {
 }
 
 /// Разбор SoundCloud Search API.
-List<Track> parseSearchBody(
-  String body, {
-  int limit = 30,
-}) {
+List<Track> parseSearchBody(String body, {int limit = 30}) {
   final json = jsonDecode(body);
 
   final collection = json is Map ? json['collection'] : null;
@@ -543,11 +485,10 @@ List<Track> parseSearchBody(
 
     final user = item['user'];
 
-    final artist = user is Map
-        ? _asString(user['username'])
-        : null;
+    final artist = user is Map ? _asString(user['username']) : null;
 
-    final artwork = _asString(item['artwork_url']) ??
+    final artwork =
+        _asString(item['artwork_url']) ??
         (user is Map ? _asString(user['avatar_url']) : null);
 
     out.add(
@@ -555,9 +496,7 @@ List<Track> parseSearchBody(
         id: 'sc:$trackId',
         title: _asString(item['title']) ?? 'Без названия',
         artist: (artist ?? 'SoundCloud').trim(),
-        duration: Duration(
-          milliseconds: _asInt(item['duration']),
-        ),
+        duration: Duration(milliseconds: _asInt(item['duration'])),
         thumbnailUrl: artwork,
         source: TrackSource.soundcloud,
       ),
@@ -568,40 +507,26 @@ List<Track> parseSearchBody(
 }
 
 /// Получение доступных аудиотранскодингов.
-({
-  String? authorization,
-  List<String> urls,
-}) parseTranscodings(String body) {
+({String? authorization, List<String> urls}) parseTranscodings(String body) {
   final json = jsonDecode(body);
 
   if (json is! Map) {
-    return (
-      authorization: null,
-      urls: <String>[],
-    );
+    return (authorization: null, urls: <String>[]);
   }
 
   final authorization = _asString(json['track_authorization']);
   final policy = _asString(json['policy']);
 
   if (policy == 'BLOCK' || policy == 'SNIP') {
-    return (
-      authorization: authorization,
-      urls: <String>[],
-    );
+    return (authorization: authorization, urls: <String>[]);
   }
 
   final media = json['media'];
 
-  final transcodings = media is Map
-      ? media['transcodings']
-      : null;
+  final transcodings = media is Map ? media['transcodings'] : null;
 
   if (transcodings is! List) {
-    return (
-      authorization: authorization,
-      urls: <String>[],
-    );
+    return (authorization: authorization, urls: <String>[]);
   }
 
   final progressive = <String>[];
@@ -613,8 +538,7 @@ List<Track> parseSearchBody(
     if (format is! Map) continue;
 
     final protocol = _asString(format['protocol']);
-    final mime = (_asString(format['mime_type']) ?? '')
-        .toLowerCase();
+    final mime = (_asString(format['mime_type']) ?? '').toLowerCase();
 
     if (!mime.startsWith('audio/')) continue;
 
@@ -639,10 +563,7 @@ List<Track> parseSearchBody(
 ///
 /// Важно: совпадение только исполнителя и длительности
 /// не считается достаточным. Название тоже должно совпасть.
-Track? pickBest(
-  Track target,
-  List<Track> candidates,
-) {
+Track? pickBest(Track target, List<Track> candidates) {
   if (candidates.isEmpty) return null;
 
   final title = _norm(target.title);
@@ -658,7 +579,8 @@ Track? pickBest(
     final candidateTitle = _norm(candidate.title);
     final candidateArtist = _norm(candidate.artist);
 
-    final titleMatches = candidateTitle == title ||
+    final titleMatches =
+        candidateTitle == title ||
         candidateTitle.contains(title) ||
         title.contains(candidateTitle);
 
@@ -667,16 +589,14 @@ Track? pickBest(
     var score = 20.0;
 
     if (artist.isNotEmpty &&
-        (candidateArtist.contains(artist) ||
-            candidateTitle.contains(artist))) {
+        (candidateArtist.contains(artist) || candidateTitle.contains(artist))) {
       score += 10;
     }
 
     final candidateDuration = candidate.duration.inSeconds;
 
     if (wantedDuration > 0 && candidateDuration > 0) {
-      final difference =
-          (candidateDuration - wantedDuration).abs();
+      final difference = (candidateDuration - wantedDuration).abs();
 
       if (difference <= 5) {
         score += 10;
@@ -699,9 +619,6 @@ Track? pickBest(
 String _norm(String value) {
   return value
       .toLowerCase()
-      .replaceAll(
-        RegExp(r'[^\p{L}\p{N}]+', unicode: true),
-        ' ',
-      )
+      .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), ' ')
       .trim();
 }
