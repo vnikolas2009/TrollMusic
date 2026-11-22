@@ -41,6 +41,16 @@ UI-заметки: AppColors.appBarBackground делает SliverAppBar проз
 Ползунок плеера: shared/widgets/scrubber.dart + core/utils/seek_math.dart;
 позицию слушает только _SeekBar.
 
+Анимации на пружинах (DesignBookmark)
+
+core/motion/spring.dart: Spring (полунеявный Эйлер, 4 подшага, dt не
+больше 1/30 с), SpringLoop (Ticker) и SpringTokens (значения из
+tokens.css). core/motion/rubber.dart: резиновое сопротивление.
+core/utils/read_along.dart: деление строки на слова и индекс слова по
+доле строки. Виджеты: shared/widgets/read_along_text.dart (используется
+в lyrics_screen для активной строки), spring_switch.dart и
+rubber_dock.dart (пока нигде не используются). Тесты: test/motion_test.dart.
+
 1. Проект
 
 TrollMusic — Flutter-приложение для iOS и Android.

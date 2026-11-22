@@ -10,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../data/models/lyrics.dart';
 import '../../data/models/track.dart';
+import '../../shared/widgets/read_along_text.dart';
 import 'aurora_background.dart';
 
 const _defaultAurora = Color(0xFF3A4570);
@@ -280,24 +281,11 @@ class _LyricLine extends StatelessWidget {
 
     Widget child;
     if (active) {
-      child = TweenAnimationBuilder<double>(
-        tween: Tween<double>(end: progress),
-        duration: const Duration(milliseconds: 240),
-        builder: (context, p, text) => ShaderMask(
-          blendMode: BlendMode.srcIn,
-          shaderCallback: (rect) => LinearGradient(
-            colors: const [Colors.white, Colors.white, Color(0x66FFFFFF), Color(0x66FFFFFF)],
-            stops: [
-              0,
-              (p - 0.04).clamp(0.0, 1.0).toDouble(),
-              (p + 0.04).clamp(0.0, 1.0).toDouble(),
-              1,
-            ],
-          ).createShader(rect),
-          child: text,
-        ),
-        child: Text(label, style: _style),
-      );
+      // Read along: за читаемым словом едет пилюля на пружинах. У пустой
+      // строки («♪») слов для подсветки нет, её рисуем обычным текстом.
+      child = text.trim().isEmpty
+          ? Text(label, style: _style)
+          : ReadAlongText(text: text, progress: progress, style: _style);
     } else {
       // Без blur: удалённые строки просто плавно гаснут, но остаются читаемыми.
       final dist = distance.abs();
