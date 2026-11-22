@@ -22,104 +22,62 @@ jobs:
       name: ${{ steps.v.outputs.name }}
       code: ${{ steps.v.outputs.code }}
       tag: ${{ steps.v.outputs.tag }}
-
     steps:
-      - name: Generate version
-        id: v
-        shell: bash
+      - id: v
         run: |
           VERSION_NAME="1.0.$(( ${{ github.run_number }} - 1 ))"
           echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION_NAME+${{ github.run_number }}"
 
   android:
     name: Android APK
     needs: [version]
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v5
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Setup Android SDK
-        shell: bash
         run: |
-          set -euo pipefail
+          SDKMAN="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
+          yes | "$SDKMAN" --licenses > /dev/null 2>&1 || true
+          "$SDKMAN" "platform-tools" "platforms;android-37.0" \
+            "build-tools;37.0.0" > /dev/null 2>&1 || true
+          "$SDKMAN" "ndk;28.2.13676358" > /dev/null 2>&1 || true
+          "$SDKMAN" --list_installed | head -20
 
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)"
-          fi
-
-          if [ ! -x "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager not found"
-            exit 1
-          fi
-
-          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-
-          "$SDKMANAGER" --install \
-            "platform-tools" \
-            "platforms;android-37.0" \
-            "build-tools;36.0.0" \
-            "ndk;28.2.13676358"
-
-          if [ ! -d "$ANDROID_HOME/platforms/android-37.0" ]; then
-            echo "::error::Android API 37.0 was not installed"
-            exit 1
-          fi
-
-          if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
-            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
-          fi
-
-          echo "Installed Android platforms:"
-          ls -la "$ANDROID_HOME/platforms"
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
       - name: Set version
-        shell: bash
         run: |
           sed -i -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
           grep '^version:' pubspec.yaml
 
-      - name: Get dependencies
-        run: flutter pub get
+      - run: flutter pub get
 
       - name: Build APK
         run: |
           flutter build apk --release \
-            --build-name="${{ needs.version.outputs.name }}" \
-            --build-number="${{ needs.version.outputs.code }}"
+            --build-name=${{ needs.version.outputs.name }} \
+            --build-number=${{ needs.version.outputs.code }}
 
-      - name: Prepare APK
-        shell: bash
+      - name: Rename artifact
         run: |
-          set -euo pipefail
-
           mkdir -p dist
-
           cp build/app/outputs/flutter-apk/app-release.apk \
             "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-android.apk"
 
-          ls -lh dist/
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: android
           path: dist/*.apk
@@ -129,100 +87,35 @@ jobs:
     name: iOS IPA (unsigned)
     needs: [version]
     runs-on: macos-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
       - name: Set version
-        shell: bash
         run: |
           sed -i '' -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
           grep '^version:' pubspec.yaml
 
-      - name: Get dependencies
-        run: flutter pub get
+      - run: flutter pub get
 
-      - name: Configure iOS project
-        run: flutter build ios --config-only --release --no-codesign
-
-      - name: Resolve Xcode packages
+      - name: Build iOS
         run: |
-          xcodebuild \
-            -resolvePackageDependencies \
-            -workspace ios/Runner.xcworkspace \
-            -scheme Runner
-
-      - name: Build iOS with Xcode
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          rm -rf build/ios/derived
-
-          xcodebuild \
-            -workspace ios/Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath build/ios/derived \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            build
-
-          APP_PATH="build/ios/derived/Build/Products/Release-iphoneos/Runner.app"
-
-          if [ ! -d "$APP_PATH" ]; then
-            echo "::error::Runner.app was not created"
-            exit 1
-          fi
-
-          if [ ! -f "$APP_PATH/Info.plist" ]; then
-            echo "::error::Info.plist is missing"
-            find build/ios/derived/Build/Products -maxdepth 5 -print
-            exit 1
-          fi
-
-          EXECUTABLE=$(/usr/libexec/PlistBuddy \
-            -c "Print :CFBundleExecutable" "$APP_PATH/Info.plist")
-
-          if [ ! -f "$APP_PATH/$EXECUTABLE" ]; then
-            echo "::error::App executable is missing"
-            exit 1
-          fi
-
-          echo "iOS app built successfully"
-          echo "Executable: $EXECUTABLE"
+          flutter build ios --release --no-codesign \
+            --build-name=${{ needs.version.outputs.name }} \
+            --build-number=${{ needs.version.outputs.code }}
 
       - name: Package IPA
-        shell: bash
         run: |
-          set -euo pipefail
+          mkdir -p dist Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa" Payload
 
-          APP_PATH="build/ios/derived/Build/Products/Release-iphoneos/Runner.app"
-
-          rm -rf Payload dist
-          mkdir -p Payload dist
-
-          cp -R "$APP_PATH" Payload/
-
-          ditto -c -k --sequesterRsrc --keepParent \
-            Payload \
-            "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa"
-
-          ls -lh dist/
-
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: ios
           path: dist/*.ipa
@@ -232,10 +125,8 @@ jobs:
     name: Publish
     needs: [version, android, ios]
     runs-on: ubuntu-latest
-
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
@@ -243,37 +134,28 @@ jobs:
       - name: Push to releases branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
         run: |
           set -euo pipefail
-
           cd "$RUNNER_TEMP"
           rm -rf releases-repo
           git init -q releases-repo
           cd releases-repo
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git remote add origin \
-            "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
-
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           if git fetch --depth=1 origin releases; then
             git checkout -q -B releases FETCH_HEAD
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           else
             git checkout -q --orphan releases
           fi
-
           cp "$GITHUB_WORKSPACE"/dist/* .
-
           echo "${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}" > latest-version.txt
-
           git add -A
           git commit -q -m "release ${{ needs.version.outputs.tag }}"
           git push -q --force origin releases
 
-      - name: Create GitHub Release
+      - name: GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version.outputs.tag }}
