@@ -6,7 +6,7 @@ abstract final class AppConfig {
   /// в настройках или через `--dart-define=TROLL_API_BASE=https://...`.
   static const defaultApiBase = String.fromEnvironment(
     'TROLL_API_BASE',
-    defaultValue: 'https://trollmusic.vercel.app',
+    defaultValue: 'https://trollmusic-plum.vercel.app',
   );
 
   static const connectTimeout = Duration(seconds: 8);
