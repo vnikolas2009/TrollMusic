@@ -22,6 +22,25 @@ API/OAuth. 10. Не утверждай, что тесты прошли, если
 задач без прямого указания. 12. В отчёте перечисли изменённые файлы,
 проверки и оставшиеся риски.
 
+Источники музыки (добавлено)
+
+Сервисы: core/network/yandex/yandex_music_service.dart (префикс id
+`ym:`), core/network/vk/vk_music_service.dart (`vk:`),
+core/network/audius/audius_service.dart (`au:`). Парсеры вынесены в
+чистые функции и покрыты test/new_sources_test.dart. Резолвер
+(`AudioResolverService`) сначала пробует родной источник трека
+(`_resolveNative`), затем SoundCloud/YouTube. Токены Яндекса и VK
+вводит пользователь (Settings.yandexToken / vkToken, провайдер
+serviceTokensProvider); в коде и репозитории токенов нет. Без токена
+VK недоступен, Яндекс отдаёт только метаданные. Переключатель
+источника: MusicSource (порядок значений менять нельзя, в Hive хранится
+индекс) и shared/widgets/source_switcher.dart.
+
+UI-заметки: AppColors.appBarBackground делает SliverAppBar прозрачным,
+пока контент не под ним (иначе чёрная плашка закрывает градиент).
+Ползунок плеера: shared/widgets/scrubber.dart + core/utils/seek_math.dart;
+позицию слушает только _SeekBar.
+
 1. Проект
 
 TrollMusic — Flutter-приложение для iOS и Android.

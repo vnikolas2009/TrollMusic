@@ -59,6 +59,22 @@ abstract final class AppConfig {
     'RapCaviar',
   ];
 
+  /// Запросы для подборки Яндекс Музыки, если чарт недоступен.
+  static const yandexQueries = <String>[
+    'хиты 2026',
+    'русский рэп новинки',
+    'поп хиты',
+    'rock hits',
+  ];
+
+  /// Запросы для подборки VK Музыки.
+  static const vkQueries = <String>[
+    'хиты 2026',
+    'русские хиты',
+    'новинки музыки',
+    'top hits',
+  ];
+
   static const trendingQueries = <String>[
     'top hits 2026 official audio',
     'хиты 2026 русские песни',

@@ -46,15 +46,23 @@ const moodMixes = <MoodMix>[
       ['classical music best', 'piano classical', 'orchestra masterpieces']),
 ];
 
-/// Ключ — `youtube:chill` / `spotify:chill`.
+/// Ключ — `youtube:chill` / `spotify:chill` / `yandex:chill` и т. д.
 final moodTracksProvider =
     FutureProvider.family<List<Track>, String>((ref, key) async {
   final parts = key.split(':');
   final mood = moodMixes.firstWhere((m) => m.id == parts.last);
-  if (parts.first == MusicSource.spotify.name) {
-    return ref.watch(musicRepositoryProvider).spotifyMix(mood.queries, limit: 30);
-  }
-  return ref.watch(musicRepositoryProvider).youtubeMix(mood.queries, limit: 30);
+  final repo = ref.watch(musicRepositoryProvider);
+  final source = MusicSource.values.firstWhere(
+    (s) => s.name == parts.first,
+    orElse: () => MusicSource.youtube,
+  );
+  return switch (source) {
+    MusicSource.spotify => repo.spotifyMix(mood.queries, limit: 30),
+    MusicSource.yandex => repo.yandexMix(mood.queries, limit: 30),
+    MusicSource.vk => repo.vkMix(mood.queries, limit: 30),
+    MusicSource.audius => repo.audiusMix(mood.queries, limit: 30),
+    MusicSource.youtube => repo.youtubeMix(mood.queries, limit: 30),
+  };
 });
 
 /// Горизонтальная лента «Настроение и жанры».

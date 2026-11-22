@@ -11,7 +11,7 @@ import '../../core/theme/app_motion.dart';
 import '../../data/models/playlist.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/entrance.dart';
-import '../../shared/widgets/pill_toggle.dart';
+import '../../shared/widgets/source_switcher.dart';
 import '../../shared/widgets/track_tile.dart';
 import '../playlist/playlist_screen.dart';
 
@@ -173,9 +173,27 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
     try {
       final repo = ref.read(musicRepositoryProvider);
-      final results = ref.read(musicSourceProvider) == MusicSource.spotify
-          ? await repo.searchSpotify(trimmed)
-          : await repo.searchYouTube(trimmed);
+      final source = ref.read(musicSourceProvider);
+
+      // VK без токена не запрашивается вовсе: объясняем, что нужно сделать.
+      if (source == MusicSource.vk && !ref.read(serviceTokensProvider).hasVk) {
+        if (!mounted) return;
+        setState(() {
+          _results = const [];
+          _error = 'VK Музыка требует личный токен. '
+              'Добавьте его в Настройки → VK Музыка.';
+          _loading = false;
+        });
+        return;
+      }
+
+      final results = switch (source) {
+        MusicSource.spotify => await repo.searchSpotify(trimmed),
+        MusicSource.youtube => await repo.searchYouTube(trimmed),
+        MusicSource.yandex => await repo.searchYandex(trimmed),
+        MusicSource.vk => await repo.searchVk(trimmed),
+        MusicSource.audius => await repo.searchAudius(trimmed),
+      };
       if (!mounted) return;
       setState(() {
         _results = results;
@@ -201,26 +219,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       slivers: [
         SliverAppBar(
           pinned: true,
-          backgroundColor: AppColors.background.withValues(alpha: 0.92),
+          backgroundColor: AppColors.appBarBackground,
           surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
           title: const Text('Поиск'),
         ),
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: PillToggle(
-                labels: [for (final s in MusicSource.values) s.label],
-                index: source.index,
-                onChanged: (i) {
-                  ref
-                      .read(musicSourceProvider.notifier)
-                      .select(MusicSource.values[i]);
-                  final q = _controller.text.trim();
-                  if (q.isNotEmpty) _search(q);
-                },
-              ),
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SourceSwitcher(
+              selected: source,
+              onChanged: (value) {
+                ref.read(musicSourceProvider.notifier).select(value);
+                final q = _controller.text.trim();
+                if (q.isNotEmpty) _search(q);
+              },
             ),
           ),
         ),

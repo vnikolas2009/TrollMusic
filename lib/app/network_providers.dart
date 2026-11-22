@@ -2,10 +2,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../core/config/app_config.dart';
+import '../core/network/audius/audius_service.dart';
 import '../core/network/http_client.dart';
 import '../core/network/lyrics/lyrics_client.dart';
 import '../core/network/soundcloud/soundcloud_service.dart';
 import '../core/network/spotify/spotify_client.dart';
+import '../core/network/vk/vk_music_service.dart';
+import '../core/network/yandex/yandex_music_service.dart';
 import '../core/network/youtube/innertube_service.dart';
 import '../core/storage/settings.dart';
 import '../data/models/track.dart';
@@ -29,10 +32,25 @@ final innerTubeServiceProvider = Provider<InnerTubeService>(
   (ref) => InnerTubeService(settings: ref.watch(settingsProvider)),
 );
 
+final yandexMusicServiceProvider = Provider<YandexMusicService>(
+  (ref) => YandexMusicService(settings: ref.watch(settingsProvider)),
+);
+
+final vkMusicServiceProvider = Provider<VkMusicService>(
+  (ref) => VkMusicService(settings: ref.watch(settingsProvider)),
+);
+
+final audiusServiceProvider = Provider<AudiusService>(
+  (ref) => AudiusService(settings: ref.watch(settingsProvider)),
+);
+
 final audioResolverProvider = Provider<AudioResolverService>(
   (ref) => AudioResolverService(
     soundcloud: ref.watch(soundCloudServiceProvider),
     innerTube: ref.watch(innerTubeServiceProvider),
+    yandex: ref.watch(yandexMusicServiceProvider),
+    vk: ref.watch(vkMusicServiceProvider),
+    audius: ref.watch(audiusServiceProvider),
   ),
 );
 

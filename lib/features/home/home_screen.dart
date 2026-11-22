@@ -16,7 +16,7 @@ import '../playlist/playlist_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../app/source_provider.dart';
 import '../../core/utils/spotify_link.dart';
-import '../../shared/widgets/pill_toggle.dart';
+import '../../shared/widgets/source_switcher.dart';
 import 'music_sections.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -28,6 +28,7 @@ class HomeScreen extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final daily = buildDailyPick(tracks, settings.recentIds);
     final source = ref.watch(musicSourceProvider);
+    final tokens = ref.watch(serviceTokensProvider);
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
@@ -36,8 +37,11 @@ class HomeScreen extends ConsumerWidget {
       slivers: [
         SliverAppBar(
           pinned: true,
-          backgroundColor: AppColors.background.withValues(alpha: 0.92),
+          // Прозрачная, пока контент не под ней: иначе верх экрана — чёрная
+          // плашка, закрывающая градиент фона.
+          backgroundColor: AppColors.appBarBackground,
           surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
           title: const Row(
             children: [
               _BrandMark(),
@@ -60,34 +64,69 @@ class HomeScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: PillToggle(
-                    labels: [for (final s in MusicSource.values) s.label],
-                    index: source.index,
-                    onChanged: (i) => ref
-                        .read(musicSourceProvider.notifier)
-                        .select(MusicSource.values[i]),
-                  ),
+                padding: const EdgeInsets.only(top: 4, bottom: 12),
+                child: SourceSwitcher(
+                  selected: source,
+                  onChanged: (value) =>
+                      ref.read(musicSourceProvider.notifier).select(value),
                 ),
               ),
-              if (source == MusicSource.spotify) ...[
-                const _SpotifyLinkField(),
-                _TrendingSection(
-                  provider: spotifyTrendingProvider,
-                  title: 'Популярное в Spotify',
-                  subtitle: 'Чарты и хиты',
-                ),
-              ] else ...[
-                if (daily.isNotEmpty)
-                  Entrance(index: 0, child: _DailyPick(tracks: daily)),
-                _TrendingSection(
-                  provider: trendingProvider,
-                  title: 'Популярная музыка',
-                  subtitle: 'YouTube Music · сейчас слушают',
-                ),
-              ],
+              ...switch (source) {
+                MusicSource.spotify => <Widget>[
+                    const _SpotifyLinkField(),
+                    _TrendingSection(
+                      provider: spotifyTrendingProvider,
+                      title: 'Популярное в Spotify',
+                      subtitle: 'Чарты и хиты',
+                    ),
+                  ],
+                MusicSource.youtube => <Widget>[
+                    if (daily.isNotEmpty)
+                      Entrance(index: 0, child: _DailyPick(tracks: daily)),
+                    _TrendingSection(
+                      provider: trendingProvider,
+                      title: 'Популярная музыка',
+                      subtitle: 'YouTube Music · сейчас слушают',
+                    ),
+                  ],
+                MusicSource.yandex => <Widget>[
+                    _TrendingSection(
+                      provider: yandexTrendingProvider,
+                      title: 'Чарт Яндекс Музыки',
+                      subtitle: tokens.hasYandex
+                          ? 'Прямой звук с вашим токеном'
+                          : 'Звук подбирается на других источниках',
+                    ),
+                  ],
+                MusicSource.vk => <Widget>[
+                    if (tokens.hasVk)
+                      _TrendingSection(
+                        provider: vkTrendingProvider,
+                        title: 'VK Музыка',
+                        subtitle: 'Подборка из вашего аккаунта',
+                      )
+                    else
+                      _ConnectCard(
+                        title: 'Подключите VK Музыку',
+                        message:
+                            'VK отдаёт музыку только по личному токену. '
+                            'Добавьте его в настройках — без токена этот '
+                            'источник недоступен.',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SettingsScreen(),
+                          ),
+                        ),
+                      ),
+                  ],
+                MusicSource.audius => <Widget>[
+                    _TrendingSection(
+                      provider: audiusTrendingProvider,
+                      title: 'Тренды Audius',
+                      subtitle: 'Независимые артисты · за неделю',
+                    ),
+                  ],
+              },
               if (tracks.isNotEmpty)
                 Entrance(index: 2, child: _Recent(tracks: tracks)),
               Entrance(index: 3, child: const MoodSection()),
@@ -226,6 +265,67 @@ class _TrendingSection extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Карточка «подключите источник»: показывается, когда для источника нужен
+/// личный токен, а он ещё не введён.
+class _ConnectCard extends StatelessWidget {
+  const _ConnectCard({
+    required this.title,
+    required this.message,
+    required this.onTap,
+  });
+
+  final String title;
+  final String message;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceAlt.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.outline),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.link_rounded, color: AppColors.accent, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              message,
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.45,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton(onPressed: onTap, child: const Text('Открыть настройки')),
+          ],
+        ),
+      ),
     );
   }
 }

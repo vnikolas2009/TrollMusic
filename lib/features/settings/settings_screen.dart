@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/network_providers.dart';
 import '../../app/providers.dart';
+import '../../app/source_provider.dart';
 import '../../app/theme_controller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/audio_pick.dart';
@@ -246,6 +247,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
+          const _Section('Источники музыки'),
+          _TokenField(
+            label: 'Яндекс Музыка · OAuth-токен',
+            help: 'Необязательно. Поиск и чарты работают без токена; с токеном '
+                'треки играют напрямую из Яндекс Музыки (нужна ваша подписка). '
+                'Токен хранится только на этом устройстве и отправляется '
+                'только в Яндекс.',
+            initial: ref.read(serviceTokensProvider).yandex,
+            onSave: ref.read(serviceTokensProvider.notifier).setYandex,
+          ),
+          _TokenField(
+            label: 'VK Музыка · токен',
+            help: 'Нужен для VK Музыки. VK разрешает методы музыки не всем '
+                'токенам, поэтому доступ не гарантирован. Токен хранится '
+                'только на этом устройстве и отправляется только в VK.',
+            initial: ref.read(serviceTokensProvider).vk,
+            onSave: ref.read(serviceTokensProvider.notifier).setVk,
+          ),
+          ListTile(
+            leading: const Icon(Icons.public_rounded),
+            title: const Text('Audius'),
+            subtitle: Text(
+              'Открытый каталог независимых артистов — токен не нужен',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ),
           const _Section('Кэш и хранилище'),
           ListTile(
             title: const Text('Занято на устройстве'),
@@ -273,6 +300,99 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 );
               },
               child: const Text('Очистить'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Поле личного токена: скрыто по умолчанию, сохраняется кнопкой или Enter.
+class _TokenField extends StatefulWidget {
+  const _TokenField({
+    required this.label,
+    required this.help,
+    required this.initial,
+    required this.onSave,
+  });
+
+  final String label;
+  final String help;
+  final String initial;
+  final ValueChanged<String> onSave;
+
+  @override
+  State<_TokenField> createState() => _TokenFieldState();
+}
+
+class _TokenFieldState extends State<_TokenField> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial);
+  bool _obscure = true;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save([String? _]) {
+    final value = _controller.text.trim();
+    widget.onSave(value);
+    FocusScope.of(context).unfocus();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(value.isEmpty ? 'Токен удалён' : 'Токен сохранён')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _controller,
+            obscureText: _obscure,
+            autocorrect: false,
+            enableSuggestions: false,
+            textInputAction: TextInputAction.done,
+            onSubmitted: _save,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              labelText: widget.label,
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: 20,
+                    ),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.check_rounded, size: 22),
+                    onPressed: _save,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              widget.help,
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.4,
+                color: AppColors.textTertiary,
+              ),
             ),
           ),
         ],

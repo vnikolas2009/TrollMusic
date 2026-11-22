@@ -97,6 +97,12 @@ final durationProvider = StreamProvider<Duration?>(
   (ref) => ref.watch(audioHandlerProvider).durationStream,
 );
 
+/// Докачанная часть трека для серой полосы на ползунке. Слушать только в
+/// узких виджетах (как и `positionProvider`).
+final bufferedPositionProvider = StreamProvider<Duration>(
+  (ref) => ref.watch(audioHandlerProvider).bufferedPositionStream,
+);
+
 final audioErrorsProvider = StreamProvider<String>(
   (ref) => ref.watch(audioHandlerProvider).errors,
 );

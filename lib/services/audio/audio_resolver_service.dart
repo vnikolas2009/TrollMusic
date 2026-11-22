@@ -1,5 +1,8 @@
 import '../../core/config/app_config.dart';
+import '../../core/network/audius/audius_service.dart';
 import '../../core/network/soundcloud/soundcloud_service.dart';
+import '../../core/network/vk/vk_music_service.dart';
+import '../../core/network/yandex/yandex_music_service.dart';
 import '../../core/network/youtube/innertube_service.dart';
 import '../../core/utils/track_match.dart';
 import '../../data/models/track.dart';
@@ -8,11 +11,20 @@ class AudioResolverService {
   AudioResolverService({
     required SoundCloudService soundcloud,
     required InnerTubeService innerTube,
+    YandexMusicService? yandex,
+    VkMusicService? vk,
+    AudiusService? audius,
   })  : _soundcloud = soundcloud,
-        _innerTube = innerTube;
+        _innerTube = innerTube,
+        _yandex = yandex,
+        _vk = vk,
+        _audius = audius;
 
   final SoundCloudService _soundcloud;
   final InnerTubeService _innerTube;
+  final YandexMusicService? _yandex;
+  final VkMusicService? _vk;
+  final AudiusService? _audius;
 
   static final _videoId = RegExp(
     r'^[A-Za-z0-9_-]{11}$',
@@ -107,6 +119,56 @@ class AudioResolverService {
     );
   }
 
+  Future<List<Track>> searchYandex(String query, {int limit = 30}) async {
+    final service = _yandex;
+    if (service == null) return const [];
+    try {
+      return await service.search(query, limit: limit);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<Track>> yandexChart({int limit = 30}) async {
+    final service = _yandex;
+    if (service == null) return const [];
+    try {
+      return await service.chart(limit: limit);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<Track>> searchVk(String query, {int limit = 30}) async {
+    final service = _vk;
+    if (service == null) return const [];
+    try {
+      return await service.search(query, limit: limit);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<Track>> searchAudius(String query, {int limit = 30}) async {
+    final service = _audius;
+    if (service == null) return const [];
+    try {
+      return await service.search(query, limit: limit);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<Track>> audiusTrending({int limit = 30, String? genre}) async {
+    final service = _audius;
+    if (service == null) return const [];
+    try {
+      return await service.trending(limit: limit, genre: genre);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<List<Track>> trending() async {
     final youtube = await searchYouTube(
       'популярная музыка 2026',
@@ -137,7 +199,10 @@ class AudioResolverService {
     final soundCloudFirst =
         track.source != TrackSource.youtube;
 
-    final urls = <String>[];
+    // Собственный источник трека (Audius / Яндекс / VK) — первым; если он
+    // недоступен (нет токена, подписки, сети), ниже идёт подбор на
+    // SoundCloud и YouTube.
+    final urls = <String>[...await _resolveNative(track)];
 
     if (soundCloudFirst) {
       urls.addAll(
@@ -158,6 +223,24 @@ class AudioResolverService {
     }
 
     return _dedupe(urls);
+  }
+
+  /// Прямая ссылка из родного источника трека.
+  Future<List<String>> _resolveNative(Track track) async {
+    try {
+      switch (track.source) {
+        case TrackSource.audius:
+          return await _audius?.audioUrls(track.id) ?? const [];
+        case TrackSource.yandex:
+          return await _yandex?.audioUrls(track.id) ?? const [];
+        case TrackSource.vk:
+          return await _vk?.audioUrls(track.id) ?? const [];
+        default:
+          return const [];
+      }
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// Получение нескольких SoundCloud-потоков.

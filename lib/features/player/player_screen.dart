@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:ui' show FontFeature;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palette_generator/palette_generator.dart';
 
@@ -10,9 +12,11 @@ import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/utils/seek_math.dart';
 import '../../data/models/track.dart';
 import '../../services/audio/audio_handler.dart';
 import '../../shared/widgets/press_scale.dart';
+import '../../shared/widgets/scrubber.dart';
 import '../artist/artist_screen.dart';
 import '../lyrics/lyrics_screen.dart';
 
@@ -166,7 +170,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                             child: Column(
                               children: [
                                 const SizedBox(height: 12),
-                                _Artwork(track: track),
+                                // На паузе обложка чуть уменьшается, при
+                                // воспроизведении пружинно возвращается.
+                                AnimatedScale(
+                                  scale: playing ? 1 : 0.9,
+                                  duration: AppMotion.slow,
+                                  curve: playing
+                                      ? AppMotion.press
+                                      : AppMotion.emphasized,
+                                  child: _Artwork(track: track),
+                                ),
                                 const SizedBox(height: 26),
                                 Row(
                                   children: [
@@ -622,6 +635,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         TrackSource.spotify => 'Spotify',
         TrackSource.local => 'Локальный файл',
         TrackSource.downloaded => 'Скачанный',
+        TrackSource.yandex => 'Яндекс Музыка',
+        TrackSource.vk => 'VK Музыка',
+        TrackSource.audius => 'Audius',
       };
 
   void _showSleepTimer() {
@@ -727,34 +743,83 @@ class _StreamErrorBanner extends StatelessWidget {
 /// Ползунок и таймеры: единственная часть экрана, которая слушает
 /// `positionProvider`/`durationProvider`, поэтому остальной экран не
 /// перестраивается на каждый тик позиции.
-class _SeekBar extends ConsumerWidget {
+class _SeekBar extends ConsumerStatefulWidget {
   const _SeekBar({required this.fallbackDuration});
 
   final Duration fallbackDuration;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_SeekBar> createState() => _SeekBarState();
+}
+
+class _SeekBarState extends ConsumerState<_SeekBar> {
+  /// Позиция предпросмотра во время перетаскивания: время слева следует
+  /// за пальцем, а не за плеером.
+  Duration? _scrub;
+
+  @override
+  Widget build(BuildContext context) {
     final position = ref.watch(positionProvider).value ?? Duration.zero;
-    final duration = ref.watch(durationProvider).value ?? fallbackDuration;
-    final maxMs = duration.inMilliseconds == 0 ? 1 : duration.inMilliseconds;
-    final labelStyle = TextStyle(fontSize: 11, color: AppColors.textSecondary);
+    final buffered =
+        ref.watch(bufferedPositionProvider).value ?? Duration.zero;
+    final reported = ref.watch(durationProvider).value;
+    final duration = (reported == null || reported <= Duration.zero)
+        ? widget.fallbackDuration
+        : reported;
+
+    final shown = _scrub ?? position;
+    final remaining = duration > shown ? duration - shown : Duration.zero;
+    final labelStyle = TextStyle(
+      fontSize: 11.5,
+      fontWeight: FontWeight.w600,
+      color: AppColors.textSecondary,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+
     return RepaintBoundary(
       child: Column(
         children: [
-          Slider(
-            value: position.inMilliseconds.clamp(0, maxMs).toDouble(),
-            max: maxMs.toDouble(),
-            onChanged: (v) => ref
-                .read(audioHandlerProvider)
-                .seek(Duration(milliseconds: v.toInt())),
+          Scrubber(
+            position: position,
+            duration: duration,
+            buffered: buffered,
+            onScrub: (value) => setState(() => _scrub = value),
+            onSeek: (value) => ref.read(audioHandlerProvider).seek(value),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 2),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(formatDuration(position), style: labelStyle),
-                Text(formatDuration(duration), style: labelStyle),
+                Text(formatDuration(shown), style: labelStyle),
+                _SkipButton(
+                  icon: Icons.replay_10_rounded,
+                  tooltip: 'Назад на 10 секунд',
+                  onTap: () => ref.read(audioHandlerProvider).seek(
+                        shiftPosition(
+                          position,
+                          const Duration(seconds: -10),
+                          duration,
+                        ),
+                      ),
+                ),
+                _SkipButton(
+                  icon: Icons.forward_10_rounded,
+                  tooltip: 'Вперёд на 10 секунд',
+                  onTap: () => ref.read(audioHandlerProvider).seek(
+                        shiftPosition(
+                          position,
+                          const Duration(seconds: 10),
+                          duration,
+                        ),
+                      ),
+                ),
+                Text(
+                  duration > Duration.zero
+                      ? '-${formatDuration(remaining)}'
+                      : '--:--',
+                  style: labelStyle,
+                ),
               ],
             ),
           ),
@@ -822,6 +887,37 @@ class _Artwork extends StatelessWidget {
         color: AppColors.surfaceHigh,
         child: Icon(Icons.music_note_rounded, size: 64, color: AppColors.textSecondary),
       );
+}
+
+/// Компактная кнопка «±10 секунд» с пружинным нажатием.
+class _SkipButton extends StatelessWidget {
+  const _SkipButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: PressScale(
+        scale: 0.86,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(icon, size: 24, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
 }
 
 class _PlayButton extends StatefulWidget {

@@ -12,8 +12,13 @@
 ## Возможности
 
 ### Каталог и поиск
-- Поиск по SoundCloud и YouTube, история запросов, поиск по медиатеке.
+- Поиск по SoundCloud, YouTube, Яндекс Музыке, Audius и (с личным токеном) VK Музыке, история запросов, поиск по медиатеке.
+- Переключатель источника на главной и в поиске: Spotify, YouTube Music, Яндекс Музыка, VK Музыка, Audius.
+- **Audius** играет напрямую без ключей. **Яндекс Музыка**: поиск и чарт без токена, прямой звук с личным OAuth-токеном (Настройки → Источники музыки), иначе подбор на SoundCloud/YouTube. **VK Музыка** работает только с личным токеном, и VK может закрыть доступ к методам музыки для конкретного токена.
 - Импорт плейлистов и альбомов Spotify по ссылке без ключей и OAuth. Spotify-треки воспроизводятся через подбор совпадения на SoundCloud/YouTube.
+
+### Плеер
+- Ползунок таймкода (`shared/widgets/scrubber.dart`): seek один раз при отпускании, подсказка времени, буфер, ±10 секунд, пружинные анимации.
 
 ### Главная
 - Станции по артистам, миксы, «Подборка дня», недавно слушанное, тренды при пустой медиатеке.
@@ -59,7 +64,7 @@ Flutter · just_audio · audio_service · audio_session · dio · hive_flutter �
 api/             # Vercel: /api/spotify/token, /api/spotify/import
 lib/
   app/           # оболочка, провайдеры, сетевые зависимости
-  core/          # конфиг, тема, сеть (DoH, SoundCloud, InnerTube, Spotify, LRCLIB), хранилище
+  core/          # конфиг, тема, сеть (DoH, SoundCloud, InnerTube, Spotify, Яндекс, VK, Audius, LRCLIB), хранилище
   data/          # модели (Track, Playlist, Lyrics), репозитории
   services/      # аудио (резолвер, обработчик), скачивание, импорт/хранилище
   features/      # home, search, library, playlist, artist, player, lyrics, create, settings

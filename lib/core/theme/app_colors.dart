@@ -195,6 +195,19 @@ abstract final class AppColors {
     );
   }
 
+  /// Фон закреплённого `SliverAppBar`.
+  ///
+  /// Пока контент не прокручен под панель, она полностью прозрачна и виден
+  /// градиент [backdrop]. Раньше здесь был почти непрозрачный `background`,
+  /// из-за чего верх экрана выглядел чёрной плашкой поверх градиента.
+  /// Когда контент заезжает под панель (`scrolledUnder`), панель получает
+  /// фон, чтобы заголовок оставался читаемым.
+  static WidgetStateColor get appBarBackground => WidgetStateColor.resolveWith(
+        (states) => states.contains(WidgetState.scrolledUnder)
+            ? _p.background.withValues(alpha: 0.94)
+            : const Color(0x00000000),
+      );
+
   /// Тон обложки для подложки экрана плеера: в тёмной теме — как есть,
   /// в светлой — мягкий оттенок, чтобы тёмный текст оставался читаемым.
   static Color tinted(Color cover) => _p.isDark

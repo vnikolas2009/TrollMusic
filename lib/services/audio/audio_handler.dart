@@ -89,6 +89,7 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   AudioPlayer get player => _player;
   Stream<Duration> get positionStream => _player.positionStream;
   Stream<Duration?> get durationStream => _player.durationStream;
+  Stream<Duration> get bufferedPositionStream => _player.bufferedPositionStream;
 
   Future<void> init() async {
     final session = await AudioSession.instance;

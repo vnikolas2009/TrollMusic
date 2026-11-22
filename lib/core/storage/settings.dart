@@ -75,6 +75,17 @@ class Settings {
   set spotifyClientSecret(String value) =>
       _box.put('spotifyClientSecret', value.trim());
 
+  /// OAuth-токен Яндекс Музыки пользователя (необязателен: без него поиск
+  /// и чарты работают, а звук подбирается на других источниках).
+  String get yandexToken => (_box.get('yandexToken') as String? ?? '').trim();
+
+  set yandexToken(String value) => _box.put('yandexToken', value.trim());
+
+  /// Токен пользователя для VK API (`audio.*`). Без него VK Музыка недоступна.
+  String get vkToken => (_box.get('vkToken') as String? ?? '').trim();
+
+  set vkToken(String value) => _box.put('vkToken', value.trim());
+
   // ---------------------------------------------------------------- звук
 
   /// Качество звука: Низкое / Среднее / Высокое / Авто (по умолчанию Авто).

@@ -6,8 +6,11 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'app/app.dart';
 import 'app/network_providers.dart';
 import 'app/providers.dart';
+import 'core/network/audius/audius_service.dart';
 import 'core/network/lyrics/lyrics_client.dart';
 import 'core/network/soundcloud/soundcloud_service.dart';
+import 'core/network/vk/vk_music_service.dart';
+import 'core/network/yandex/yandex_music_service.dart';
 import 'core/network/youtube/innertube_service.dart';
 import 'core/storage/settings.dart';
 import 'data/repositories/library_repository.dart';
@@ -27,7 +30,16 @@ Future<void> main() async {
   final lyrics = LyricsClient();
   final soundCloud = SoundCloudService(settings: settings, cache: soundCloudCache);
   final innerTube = InnerTubeService(settings: settings);
-  final resolver = AudioResolverService(soundcloud: soundCloud, innerTube: innerTube);
+  final yandex = YandexMusicService(settings: settings);
+  final vk = VkMusicService(settings: settings);
+  final audius = AudiusService(settings: settings);
+  final resolver = AudioResolverService(
+    soundcloud: soundCloud,
+    innerTube: innerTube,
+    yandex: yandex,
+    vk: vk,
+    audius: audius,
+  );
 
   final storage = await StorageService.open(library: library, lyrics: lyrics);
   final downloads = DownloadService(
@@ -58,6 +70,9 @@ Future<void> main() async {
       settingsProvider.overrideWithValue(settings),
       soundCloudServiceProvider.overrideWithValue(soundCloud),
       innerTubeServiceProvider.overrideWithValue(innerTube),
+      yandexMusicServiceProvider.overrideWithValue(yandex),
+      vkMusicServiceProvider.overrideWithValue(vk),
+      audiusServiceProvider.overrideWithValue(audius),
       audioResolverProvider.overrideWithValue(resolver),
       lyricsClientProvider.overrideWithValue(lyrics),
       servicesProvider.overrideWithValue(

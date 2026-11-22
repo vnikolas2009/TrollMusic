@@ -56,8 +56,9 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
       slivers: [
         SliverAppBar(
           pinned: true,
-          backgroundColor: AppColors.background.withValues(alpha: 0.92),
+          backgroundColor: AppColors.appBarBackground,
           surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
           title: const Text('Создать'),
           actions: [
             IconButton(
