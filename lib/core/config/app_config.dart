@@ -2,66 +2,63 @@ abstract final class AppConfig {
   static const appName = 'TrollMusic';
   static const appVersion = '2.0.0';
 
-  /// Базовый URL своего Vercel-деплоя (`/api/spotify/*`). Переопределяется
-  /// в настройках или через `--dart-define=TROLL_API_BASE=https://...`.
+  /// Vercel backend.
   static const defaultApiBase = String.fromEnvironment(
     'TROLL_API_BASE',
     defaultValue: 'https://trollmusic-plum.vercel.app',
   );
 
-  static const connectTimeout = Duration(seconds: 8);
+  static const connectTimeout = Duration(seconds: 10);
   static const requestTimeout = Duration(seconds: 20);
-  static const playbackTimeout = Duration(seconds: 12);
+  static const playbackTimeout = Duration(seconds: 15);
+  static const dohTimeout = Duration(seconds: 5);
 
-  /// DNS-over-HTTPS: запросы идут на IP-адреса, поэтому системный DNS
-  /// (и его подмена у провайдера) не участвует.
+  /// DoH JSON endpoints.
+  ///
+  /// Оба сервера поддерживают JSON-формат,
+  /// который используется DohResolver.
   static const dohEndpoints = <String>[
-  'https://dns.google/resolve',
-  'https://dns.quad9.net/dns-query',
- ];
-  static const dohTimeout = Duration(seconds: 4);
+    'https://dns.google/resolve',
+    'https://cloudflare-dns.com/dns-query',
+  ];
 
-  /// Время жизни `client_id` SoundCloud в кэше.
-  static const soundcloudClientIdTtl = Duration(hours: 24);
+  static const soundcloudClientIdTtl = Duration(hours: 12);
+  static const soundcloudStreamCacheTtl = Duration(minutes: 20);
 
-  /// За сколько до конца трека резолвится следующий.
   static const prefetchBefore = Duration(seconds: 15);
 
-  /// Ширина декодирования обложек (логические пиксели × DPR считает виджет).
   static const coverCacheWidth = 600;
   static const thumbCacheWidth = 160;
 
-  /// Заголовки, максимально похожие на обычный клиент.
   static const defaultHeaders = <String, String>{
     'user-agent':
-        'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 '
-            '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 13; Pixel 7) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/124.0.0.0 Mobile Safari/537.36',
     'accept': 'application/json, text/plain, */*',
     'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
   };
 
   static const spotifyWebUserAgent =
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-      '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+      'AppleWebKit/537.36 (KHTML, like Gecko) '
+      'Chrome/124.0.0.0 Safari/537.36';
 
   static const audioBitrates = <int>[128, 192, 256, 320];
   static const defaultBitrate = 192;
 
-  /// Версии клиентов InnerTube. Если YouTube перестанет их принимать,
-  /// достаточно обновить значения здесь.
+  /// InnerTube client versions.
   static const androidVrVersion = '1.65.10';
   static const androidSdklessVersion = '20.10.38';
   static const ytMusicClientVersion = '1.20250310.01.00';
 
-  /// Запросы для блока «Популярное в Spotify».
   static const spotifyQueries = <String>[
     'Top 50 Global',
-    'Today\'s Top Hits',
+    "Today's Top Hits",
     'Russian Top Hits',
     'RapCaviar',
   ];
 
-  /// Запросы для блока «Популярная музыка» на главной (только музыка).
   static const trendingQueries = <String>[
     'top hits 2026 official audio',
     'хиты 2026 русские песни',
