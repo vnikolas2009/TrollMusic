@@ -1,3 +1,5 @@
+import 'dart:ui' show FontFeature;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -235,7 +237,9 @@ class _DownloadProgressBanner extends StatelessWidget {
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: AppColors.accent,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+                    fontFeatures: const [
+                      FontFeature.tabularFigures(),
+                    ],
                   ),
                 ),
                 IconButton(
