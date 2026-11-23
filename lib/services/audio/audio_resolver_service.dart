@@ -169,16 +169,22 @@ class AudioResolverService {
     }
   }
 
-  Future<List<Track>> trending() async {
-    final youtube = await searchYouTube(
-      'популярная музыка 2026',
+  /// Подборка для главной. YouTube и SoundCloud опрашиваются одновременно:
+  /// если YouTube медленный или заблокирован (в РФ он часто режется),
+  /// через [youtubeWait] берём SoundCloud, а не ждём таймаут.
+  Future<List<Track>> trending({
+    Duration youtubeWait = const Duration(seconds: 6),
+  }) async {
+    final soundcloud = searchSoundCloud('популярная музыка');
+    final youtube = searchYouTube('популярная музыка 2026').timeout(
+      youtubeWait,
+      onTimeout: () => const <Track>[],
     );
 
-    if (youtube.isNotEmpty) return youtube;
+    final fromYoutube = await youtube;
+    if (fromYoutube.isNotEmpty) return fromYoutube;
 
-    return searchSoundCloud(
-      'популярная музыка',
-    );
+    return soundcloud;
   }
 
   /// Сбрасывает кэш после ошибки воспроизведения.

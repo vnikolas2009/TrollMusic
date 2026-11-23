@@ -18,8 +18,12 @@ abstract final class AppConfig {
   /// Оба сервера поддерживают JSON-формат,
   /// который используется DohResolver.
   static const dohEndpoints = <String>[
+    // Адреса-литералы первыми: их не нужно резолвить, поэтому подмена DNS
+    // провайдером на самих DoH-серверах не мешает.
+    'https://8.8.8.8/resolve',
     'https://dns.google/resolve',
     'https://cloudflare-dns.com/dns-query',
+    'https://dns.quad9.net:5053/dns-query',
   ];
 
   static const soundcloudClientIdTtl = Duration(hours: 12);

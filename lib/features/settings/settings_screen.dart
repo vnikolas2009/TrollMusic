@@ -9,6 +9,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/audio_pick.dart';
 import '../../core/utils/formatters.dart';
 import '../../shared/widgets/spring_switch.dart';
+import 'network_diagnostics_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -274,6 +275,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
               ],
+            ),
+          ),
+          const _Section('Сеть'),
+          ListTile(
+            leading: const Icon(Icons.network_check_rounded),
+            title: const Text('Диагностика сети'),
+            subtitle: const Text('Какие серверы доступны с вашего интернета'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const NetworkDiagnosticsScreen(),
+              ),
             ),
           ),
           const _Section('Источники музыки'),

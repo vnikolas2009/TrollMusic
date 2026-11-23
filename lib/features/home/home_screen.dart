@@ -9,6 +9,7 @@ import '../../core/utils/formatters.dart';
 import '../../core/utils/track_groups.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/brand_wordmark.dart';
+import '../settings/network_diagnostics_screen.dart';
 import '../../shared/widgets/cover_art.dart';
 import '../../shared/widgets/entrance.dart';
 import '../../shared/widgets/press_scale.dart';
@@ -347,6 +348,16 @@ class _LoadFailed extends StatelessWidget {
               ),
             ),
             TextButton(onPressed: onRetry, child: const Text('Повторить')),
+            IconButton(
+              tooltip: 'Диагностика сети',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const NetworkDiagnosticsScreen(),
+                ),
+              ),
+              icon: Icon(Icons.network_check_rounded,
+                  color: AppColors.textSecondary),
+            ),
           ],
         ),
       ),
