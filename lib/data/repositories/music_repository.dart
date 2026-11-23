@@ -115,7 +115,10 @@ class MusicRepository {
     final results = await Future.wait([
       for (final q in queries) _safeList(spotify.search(q, limit: 15)),
     ]);
-    return _interleave(results, limit);
+    final mixed = _interleave(results, limit);
+    if (mixed.isNotEmpty) return mixed;
+    // Spotify недоступен (в ряде стран заблокирован) — подборка из YouTube Music.
+    return youtubeMix(queries, limit: limit);
   }
 
   List<Track> _interleave(List<List<Track>> results, int limit) {
