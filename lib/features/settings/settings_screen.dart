@@ -6,9 +6,8 @@ import '../../app/providers.dart';
 import '../../app/source_provider.dart';
 import '../../app/theme_controller.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/utils/audio_pick.dart';
-import '../../core/utils/formatters.dart';
 import '../../shared/widgets/spring_switch_tile.dart';
+import 'storage_meter.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -18,7 +17,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  int _cacheBytes = 0;
+  StorageMeterData? _storageData;
   bool _loadingCache = true;
 
   @override
@@ -28,22 +27,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _loadCache() async {
-    final bytes = await ref.read(storageProvider).usedBytes();
-    if (!mounted) return;
+    try {
+      final data = await StorageMeterData.load(
+        ref.read(storageProvider),
+      );
 
-    setState(() {
-      _cacheBytes = bytes;
-      _loadingCache = false;
-    });
+      if (!mounted) return;
+
+      setState(() {
+        _storageData = data;
+        _loadingCache = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _loadingCache = false;
+      });
+    }
   }
 
   Future<void> _confirmClearCache() async {
-    final downloads = ref.read(downloadProvider);
-
-    if (downloads.activeCount > 0) {
-      downloads.cancelAll();
-    }
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -67,14 +71,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     if (confirmed != true) return;
 
-    await ref.read(storageProvider).clearCache();
-    await _loadCache();
+    final downloads = ref.read(downloadProvider);
 
-    if (!mounted) return;
+    if (downloads.activeCount > 0) {
+      downloads.cancelAll();
+    }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Кэш очищен')),
-    );
+    try {
+      await ref.read(storageProvider).clearCache();
+      await _loadCache();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Кэш очищен')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Не удалось очистить кэш: $error'),
+        ),
+      );
+    }
   }
 
   static const _qualityLabels = {
@@ -355,12 +375,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const _Section('Кэш и хранилище'),
 
+          StorageMeter(
+            data: _storageData,
+            loading: _loadingCache,
+            onRefresh: _loadCache,
+          ),
+
           ListTile(
-            title: const Text('Занято на устройстве'),
+            leading: const Icon(Icons.delete_outline_rounded),
+            title: const Text('Очистить кэш'),
             subtitle: Text(
-              _loadingCache
-                  ? 'Подсчёт...'
-                  : formatBytes(_cacheBytes),
+              'Удалить скачанные файлы, обложки и тексты',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,
@@ -368,9 +393,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             trailing: TextButton(
               onPressed: _confirmClearCache,
-              child: const Text('Очистить кэш'),
+              child: const Text('Очистить'),
             ),
           ),
+
+          const _Section('История прослушивания'),
 
           ListTile(
             title: const Text('История прослушивания'),
