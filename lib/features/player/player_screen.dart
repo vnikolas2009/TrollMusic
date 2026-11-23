@@ -12,6 +12,7 @@ import '../../core/theme/app_motion.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/track.dart';
 import '../../services/audio/audio_handler.dart';
+import '../../shared/widgets/jelly_slider.dart';
 import '../../shared/widgets/press_scale.dart';
 import '../artist/artist_screen.dart';
 import '../lyrics/lyrics_screen.dart';
@@ -329,7 +330,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                 const SizedBox(height: 24),
                               ],
                             ),
-                        ),
+                          ),
                   ),
                 ),
               ],
@@ -477,7 +478,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             children: [
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('Скорость', style: TextStyle(fontWeight: FontWeight.w700)),
+                child: Text(
+                  'Скорость',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
               for (final value in options)
                 ListTile(
@@ -516,7 +520,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Добавить в плейлист', style: TextStyle(fontWeight: FontWeight.w700)),
+              child: Text(
+                'Добавить в плейлист',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
             Flexible(
               child: ListView.builder(
@@ -525,7 +532,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 itemBuilder: (context, i) {
                   final playlist = playlists[i];
                   return ListTile(
-                    title: Text(playlist.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    title: Text(
+                      playlist.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     subtitle: Text(
                       '${playlist.tracks.length} треков',
                       style: const TextStyle(fontSize: 11),
@@ -582,10 +593,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               if (track.album.isNotEmpty) _infoRow('Альбом', track.album),
               _infoRow('Длительность', duration),
               _infoRow('Источник', _sourceLabel(track.source)),
-              if (track.bitrate != null) _infoRow('Битрейт', '${track.bitrate} kbps'),
+              if (track.bitrate != null)
+                _infoRow('Битрейт', '${track.bitrate} kbps'),
               _infoRow(
                 'Офлайн',
-                track.localPath != null && track.localPath!.isNotEmpty ? 'Да' : 'Нет',
+                track.localPath != null && track.localPath!.isNotEmpty
+                    ? 'Да'
+                    : 'Нет',
               ),
               _infoRow('ID', track.id),
             ],
@@ -635,7 +649,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Таймер сна', style: TextStyle(fontWeight: FontWeight.w700)),
+              child: Text(
+                'Таймер сна',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
             for (final minutes in options)
               ListTile(
@@ -666,7 +683,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Кроссфейд', style: TextStyle(fontWeight: FontWeight.w700)),
+              child: Text(
+                'Кроссфейд',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
             for (final seconds in <int>[0, 3, 6, 10, 12])
               ListTile(
@@ -725,7 +745,7 @@ class _StreamErrorBanner extends StatelessWidget {
 }
 
 /// Ползунок и таймеры: единственная часть экрана, которая слушает
-/// `positionProvider`/`durationProvider`, поэтому остальной экран не
+/// positionProvider/durationProvider, поэтому остальной экран не
 /// перестраивается на каждый тик позиции.
 class _SeekBar extends ConsumerWidget {
   const _SeekBar({required this.fallbackDuration});
@@ -736,25 +756,36 @@ class _SeekBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final position = ref.watch(positionProvider).value ?? Duration.zero;
     final duration = ref.watch(durationProvider).value ?? fallbackDuration;
-    final maxMs = duration.inMilliseconds == 0 ? 1 : duration.inMilliseconds;
-    final labelStyle = TextStyle(fontSize: 11, color: AppColors.textSecondary);
+
     return RepaintBoundary(
       child: Column(
         children: [
-          Slider(
-            value: position.inMilliseconds.clamp(0, maxMs).toDouble(),
-            max: maxMs.toDouble(),
-            onChanged: (v) => ref
-                .read(audioHandlerProvider)
-                .seek(Duration(milliseconds: v.toInt())),
+          JellySlider(
+            position: position,
+            duration: duration,
+            onChanged: (value) {
+              ref.read(audioHandlerProvider).seek(value);
+            },
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(formatDuration(position), style: labelStyle),
-                Text(formatDuration(duration), style: labelStyle),
+                Text(
+                  formatDuration(position),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  formatDuration(duration),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ],
             ),
           ),
@@ -820,7 +851,11 @@ class _Artwork extends StatelessWidget {
 
   Widget _placeholder() => Container(
         color: AppColors.surfaceHigh,
-        child: Icon(Icons.music_note_rounded, size: 64, color: AppColors.textSecondary),
+        child: Icon(
+          Icons.music_note_rounded,
+          size: 64,
+          color: AppColors.textSecondary,
+        ),
       );
 }
 
@@ -882,7 +917,11 @@ class _PlayButtonState extends State<_PlayButton> {
 }
 
 class _LyricsCard extends StatelessWidget {
-  const _LyricsCard({required this.trackId, required this.hasLyrics, required this.onTap});
+  const _LyricsCard({
+    required this.trackId,
+    required this.hasLyrics,
+    required this.onTap,
+  });
 
   final String trackId;
   final bool hasLyrics;
@@ -962,7 +1001,10 @@ class QueueView extends ConsumerWidget {
         final items = snapshot.data ?? const <MediaItem>[];
         if (items.isEmpty) {
           return Center(
-            child: Text('Очередь пуста', style: TextStyle(color: AppColors.textSecondary)),
+            child: Text(
+              'Очередь пуста',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           );
         }
         final current = audio.player.currentIndex ?? 0;
@@ -989,11 +1031,13 @@ class QueueView extends ConsumerWidget {
                           title: const Text('Очистить очередь?'),
                           actions: [
                             TextButton(
-                              onPressed: () => Navigator.pop(dialogContext, false),
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, false),
                               child: const Text('Отмена'),
                             ),
                             TextButton(
-                              onPressed: () => Navigator.pop(dialogContext, true),
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, true),
                               child: const Text('Очистить'),
                             ),
                           ],
@@ -1011,7 +1055,8 @@ class QueueView extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: items.length,
                 onReorder: (oldIndex, newIndex) {
-                  final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
+                  final target =
+                      newIndex > oldIndex ? newIndex - 1 : newIndex;
                   audio.reorder(oldIndex, target);
                 },
                 itemBuilder: (context, i) {
@@ -1021,7 +1066,8 @@ class QueueView extends ConsumerWidget {
                     key: ValueKey('${item.id}-$i'),
                     leading: Icon(
                       active ? Icons.graphic_eq_rounded : Icons.drag_handle,
-                      color: active ? AppColors.accent : AppColors.textSecondary,
+                      color:
+                          active ? AppColors.accent : AppColors.textSecondary,
                       size: 18,
                     ),
                     title: Text(
@@ -1030,26 +1076,37 @@ class QueueView extends ConsumerWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-                        color: active ? AppColors.accent : AppColors.textPrimary,
+                        fontWeight:
+                            active ? FontWeight.w700 : FontWeight.w400,
+                        color:
+                            active ? AppColors.accent : AppColors.textPrimary,
                       ),
                     ),
                     subtitle: Text(
                       item.artist ?? '',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           formatDuration(item.duration ?? Duration.zero),
-                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         IconButton(
                           iconSize: 18,
-                          icon: Icon(Icons.close, color: AppColors.textSecondary),
+                          icon: Icon(
+                            Icons.close,
+                            color: AppColors.textSecondary,
+                          ),
                           onPressed: () => audio.removeFromQueue(i),
                         ),
                       ],
