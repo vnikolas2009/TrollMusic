@@ -9,8 +9,10 @@ import '../features/home/home_screen.dart';
 import '../features/library/library_screen.dart';
 import '../features/player/player_screen.dart';
 import '../features/search/search_screen.dart';
+import '../features/settings/settings_screen.dart';
 import '../shared/widgets/mini_player.dart';
-import '../shared/widgets/troll_bottom_nav.dart';
+import '../shared/widgets/rubber_dock.dart';
+import 'tab_provider.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
@@ -20,13 +22,20 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  int _index = 0;
-
   static const _tabs = <Widget>[
     HomeScreen(),
     SearchScreen(),
     LibraryScreen(),
     CreateScreen(),
+    SettingsScreen(),
+  ];
+
+  static const _dockTabs = <RubberDockTab>[
+    RubberDockTab(icon: Icons.home_rounded, label: 'Главная'),
+    RubberDockTab(icon: Icons.search_rounded, label: 'Поиск'),
+    RubberDockTab(icon: Icons.library_music_rounded, label: 'Медиатека'),
+    RubberDockTab(icon: Icons.add_box_rounded, label: 'Создать'),
+    RubberDockTab(icon: Icons.settings_rounded, label: 'Настройки'),
   ];
 
   void _openPlayer(BuildContext context) {
@@ -67,30 +76,37 @@ class _AppShellState extends ConsumerState<AppShell> {
           .showSnackBar(SnackBar(content: Text(message)));
     });
 
+    final index = ref.watch(selectedTabProvider);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: DecoratedBox(
         decoration: AppColors.backdrop,
         child: SafeArea(
           bottom: false,
-          // IndexedStack сохраняет состояние вкладок и рисует только активную.
-          child: IndexedStack(index: _index, children: _tabs),
+          child: Column(
+            children: [
+              // IndexedStack сохраняет состояние вкладок и рисует только активную.
+              Expanded(child: IndexedStack(index: index, children: _tabs)),
+              // Мини-плеер один на все вкладки: стоит над доком, как только
+              // загружен трек.
+              MiniPlayer(
+                onTap: track == null ? null : () => _openPlayer(context),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 8 + bottomInset),
+                // Без карточки-панели: док занимает только свою высоту.
+                child: RubberDock(
+                  tabs: _dockTabs,
+                  selected: index,
+                  panelHeight: 1,
+                  onSelected: ref.read(selectedTabProvider.notifier).select,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          MiniPlayer(
-            onTap: track == null ? null : () => _openPlayer(context),
-          ),
-          TrollBottomNav(
-            index: _index,
-            onChanged: (i) {
-              if (i == _index) return;
-              setState(() => _index = i);
-            },
-          ),
-        ],
       ),
     );
   }

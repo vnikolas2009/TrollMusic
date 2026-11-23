@@ -8,6 +8,7 @@ import '../../app/theme_controller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/audio_pick.dart';
 import '../../core/utils/formatters.dart';
+import '../../shared/widgets/spring_switch.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -89,7 +90,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final audio = ref.read(audioHandlerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Настройки')),
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: AppColors.appBarBackground,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        title: const Text('Настройки'),
+      ),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
@@ -203,24 +211,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               if (picked != null) themeCtl.setAccent(picked);
             },
           ),
-          SwitchListTile(
+          ListTile(
             title: const Text('Градиентный фон'),
             subtitle: const Text('Едва заметный градиент от акцентного цвета'),
-            value: theme.gradient,
-            onChanged: themeCtl.setGradient,
+            trailing: SpringSwitch(
+              value: theme.gradient,
+              semanticLabel: 'Градиентный фон',
+              onChanged: themeCtl.setGradient,
+            ),
+            onTap: () {
+              final next = !(theme.gradient);
+              (themeCtl.setGradient)(next);
+            },
           ),
-          SwitchListTile(
+          ListTile(
             title: const Text('Чёрный AMOLED'),
             subtitle: const Text('Чисто чёрный фон в тёмной теме'),
-            value: theme.amoled,
-            onChanged: themeCtl.setAmoled,
+            trailing: SpringSwitch(
+              value: theme.amoled,
+              semanticLabel: 'Чёрный AMOLED',
+              onChanged: themeCtl.setAmoled,
+            ),
+            onTap: () {
+              final next = !(theme.amoled);
+              (themeCtl.setAmoled)(next);
+            },
           ),
           const _Section('Воспроизведение'),
-          SwitchListTile(
+          ListTile(
             title: const Text('Без пауз (gapless)'),
             subtitle: const Text('Следующий трек подготавливается заранее'),
-            value: settings.gaplessEnabled,
-            onChanged: (v) => setState(() => settings.gaplessEnabled = v),
+            trailing: SpringSwitch(
+              value: settings.gaplessEnabled,
+              semanticLabel: 'Без пауз (gapless)',
+              onChanged: (v) => setState(() => settings.gaplessEnabled = v),
+            ),
+            onTap: () {
+              final next = !(settings.gaplessEnabled);
+              ((v) => setState(() => settings.gaplessEnabled = v))(next);
+            },
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

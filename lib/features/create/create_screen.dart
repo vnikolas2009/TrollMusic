@@ -11,7 +11,6 @@ import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/track_tile.dart';
 import 'backup_screen.dart';
 import 'track_edit_sheet.dart';
-import '../settings/settings_screen.dart';
 
 class CreateScreen extends ConsumerStatefulWidget {
   const CreateScreen({super.key});
@@ -60,15 +59,6 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
           surfaceTintColor: Colors.transparent,
           scrolledUnderElevation: 0,
           title: const Text('Создать'),
-          actions: [
-            IconButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              ),
-              icon: const Icon(Icons.settings_outlined),
-            ),
-            const SizedBox(width: 4),
-          ],
         ),
         SliverToBoxAdapter(
           child: Padding(

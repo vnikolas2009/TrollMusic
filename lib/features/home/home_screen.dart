@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/network_providers.dart';
 import '../../app/providers.dart';
+import '../../app/tab_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/track_groups.dart';
@@ -13,7 +14,6 @@ import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/station_card.dart';
 import '../playlist/playlist_screen.dart';
-import '../settings/settings_screen.dart';
 import '../../app/source_provider.dart';
 import '../../core/utils/spotify_link.dart';
 import '../../shared/widgets/source_switcher.dart';
@@ -49,15 +49,6 @@ class HomeScreen extends ConsumerWidget {
               Text('TrollMusic'),
             ],
           ),
-          actions: [
-            IconButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              ),
-              icon: const Icon(Icons.settings_outlined),
-            ),
-            const SizedBox(width: 4),
-          ],
         ),
         SliverToBoxAdapter(
           child: Column(
@@ -112,11 +103,9 @@ class HomeScreen extends ConsumerWidget {
                             'VK отдаёт музыку только по личному токену. '
                             'Добавьте его в настройках — без токена этот '
                             'источник недоступен.',
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const SettingsScreen(),
-                          ),
-                        ),
+                        onTap: () => ref
+                            .read(selectedTabProvider.notifier)
+                            .select(AppTab.settings),
                       ),
                   ],
                 MusicSource.audius => <Widget>[

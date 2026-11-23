@@ -49,7 +49,7 @@ tokens.css). core/motion/rubber.dart: резиновое сопротивлен�
 core/utils/read_along.dart: деление строки на слова и индекс слова по
 доле строки. Виджеты: shared/widgets/read_along_text.dart (используется
 в lyrics_screen для активной строки), spring_switch.dart и
-rubber_dock.dart (пока нигде не используются). Тесты: test/motion_test.dart.
+rubber_dock.dart. Rubber dock — нижняя навигация в app_shell.dart (5 вкладок: Главная, Поиск, Медиатека, Создать, Настройки; TrollBottomNav удалён), spring_switch — переключатели в настройках. Оболочка: Column(IndexedStack вкладок, MiniPlayer, RubberDock) — мини-плеер над доком на всех вкладках. Тесты: test/motion_test.dart, test/tab_provider_test.dart.
 
 1. Проект
 
@@ -78,6 +78,7 @@ lib/
 │   ├── app.dart, app_shell.dart      # MaterialApp и оболочка
 │   ├── providers.dart                # Библиотека, плеер, загрузки, UI streams
 │   ├── network_providers.dart        # Dio, сетевые сервисы, repositories
+│   ├── tab_provider.dart              # Текущая вкладка дока (selectedTabProvider, AppTab)
 │   ├── source_provider.dart           # Выбранный источник каталога
 │   └── theme_controller.dart
 ├── core/

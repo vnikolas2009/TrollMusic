@@ -16,7 +16,6 @@ import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/track_tile.dart';
 import '../create/track_edit_sheet.dart';
 import '../playlist/playlist_screen.dart';
-import '../settings/settings_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -80,12 +79,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   ),
                 ),
                 icon: const Icon(Icons.playlist_add_rounded),
-              ),
-              IconButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                ),
-                icon: const Icon(Icons.settings_outlined),
               ),
             ],
           ),
