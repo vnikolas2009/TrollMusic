@@ -1,4 +1,4 @@
-name: Merge Branches into Main
+name: Merge Sources Branch into Main
 
 on:
   workflow_dispatch:
@@ -7,16 +7,19 @@ permissions:
   contents: write
 
 concurrency:
-  group: merge-branches-to-main
+  group: merge-sources-into-main
   cancel-in-progress: false
 
+env:
+  FLUTTER_VERSION: 3.50.1
+
 jobs:
-  merge:
-    name: Merge branches into main
+  merge-and-validate:
+    name: Merge source integrations and validate
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
           ref: main
@@ -28,71 +31,52 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Fetch all branches
+      - name: Fetch source branch
         run: |
-          git fetch origin --prune
+          git fetch origin main feat/sources-yandex-vk-audius-player
 
-      - name: Create backup of main
+      - name: Create backup
         run: |
-          BACKUP="backup/main-before-merge-${GITHUB_RUN_ID}"
+          BACKUP="backup/main-before-sources-merge-${GITHUB_RUN_ID}"
           git branch "$BACKUP" origin/main
           git push origin "$BACKUP"
-          echo "Backup created: $BACKUP"
+          echo "Backup: $BACKUP"
 
-      - name: Merge available branches
-        shell: bash
+      - name: Merge source integrations
         run: |
           set -euo pipefail
+          git checkout -B main origin/main
+          git merge --no-ff --no-edit -X ours origin/feat/sources-yandex-vk-audius-player
 
-          git checkout main
-          git reset --hard origin/main
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
 
-          BRANCHES=(
-            "feat/sources-yandex-vk-audius-player"
-            "feat/spotify-first"
-            "refactor/streaming-theme-music-home"
-            "releases"
-          )
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
 
-          for BRANCH in "${BRANCHES[@]}"; do
-            echo ""
-            echo "======================================"
-            echo "Checking branch: $BRANCH"
-            echo "======================================"
+      - name: Resolve dependencies
+        run: flutter pub get
 
-            if ! git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
-              echo "Branch does not exist. Skipping."
-              continue
-            fi
+      - name: Analyze Dart code
+        run: flutter analyze
 
-            if ! git merge-base HEAD "origin/$BRANCH" >/dev/null 2>&1; then
-              echo "No common history. Skipping."
-              continue
-            fi
+      - name: Build Android APK
+        run: flutter build apk --release
 
-            AHEAD=$(git rev-list --count "HEAD..origin/$BRANCH")
-
-            if [ "$AHEAD" -eq 0 ]; then
-              echo "No new commits. Skipping."
-              continue
-            fi
-
-            echo "New commits to merge: $AHEAD"
-
-            if ! git merge --no-ff --no-edit "origin/$BRANCH"; then
-              echo "::error::Merge conflict in branch $BRANCH"
-              git merge --abort || true
-              exit 1
-            fi
-
-            echo "Successfully merged: $BRANCH"
-          done
-
-      - name: Push merged main
+      - name: Push validated merge to main
         run: |
           git push origin HEAD:main
 
       - name: Summary
         run: |
-          echo "All compatible branches processed."
-          echo "Main has been updated."
+          echo "Source branch merged into main."
+          echo "Flutter analyze passed."
+          echo "Android APK build passed."
+          echo "Validated merge pushed to main."
