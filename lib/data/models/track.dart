@@ -16,6 +16,9 @@ class Track {
     this.source = TrackSource.youtube,
     this.bitrate,
     this.albumId,
+    this.sourcePath,
+    this.sourceSize,
+    this.sourceModifiedAtMs,
   });
 
   final String id;
@@ -32,6 +35,15 @@ class Track {
   final TrackSource source;
   final int? bitrate;
   final String? albumId;
+
+  /// Исходный путь файла, из которого импортирован трек.
+  final String? sourcePath;
+
+  /// Размер исходного файла в байтах.
+  final int? sourceSize;
+
+  /// Время последнего изменения исходного файла.
+  final int? sourceModifiedAtMs;
 
   bool get isOffline => localPath != null;
 
@@ -52,6 +64,9 @@ class Track {
     TrackSource? source,
     int? bitrate,
     String? albumId,
+    String? sourcePath,
+    int? sourceSize,
+    int? sourceModifiedAtMs,
   }) {
     return Track(
       id: id ?? this.id,
@@ -68,6 +83,10 @@ class Track {
       source: source ?? this.source,
       bitrate: bitrate ?? this.bitrate,
       albumId: albumId ?? this.albumId,
+      sourcePath: sourcePath ?? this.sourcePath,
+      sourceSize: sourceSize ?? this.sourceSize,
+      sourceModifiedAtMs:
+          sourceModifiedAtMs ?? this.sourceModifiedAtMs,
     );
   }
 
@@ -86,6 +105,9 @@ class Track {
         'source': source.name,
         'bitrate': bitrate,
         'albumId': albumId,
+        'sourcePath': sourcePath,
+        'sourceSize': sourceSize,
+        'sourceModifiedAtMs': sourceModifiedAtMs,
       };
 
   factory Track.fromJson(Map<String, dynamic> json) => Track(
@@ -93,7 +115,9 @@ class Track {
         title: json['title'] as String? ?? '',
         artist: json['artist'] as String? ?? '',
         album: json['album'] as String? ?? '',
-        duration: Duration(milliseconds: (json['durationMs'] as num?)?.toInt() ?? 0),
+        duration: Duration(
+          milliseconds: (json['durationMs'] as num?)?.toInt() ?? 0,
+        ),
         thumbnailUrl: json['thumbnailUrl'] as String?,
         streamUrl: json['streamUrl'] as String?,
         localPath: json['localPath'] as String?,
@@ -106,6 +130,10 @@ class Track {
         ),
         bitrate: (json['bitrate'] as num?)?.toInt(),
         albumId: json['albumId'] as String?,
+        sourcePath: json['sourcePath'] as String?,
+        sourceSize: (json['sourceSize'] as num?)?.toInt(),
+        sourceModifiedAtMs:
+            (json['sourceModifiedAtMs'] as num?)?.toInt(),
       );
 
   @override
