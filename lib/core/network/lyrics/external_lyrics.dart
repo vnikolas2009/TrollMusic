@@ -85,7 +85,11 @@ String? pickGeniusUrl(
   required String artist,
   required String title,
 }) {
-  final hits = json is Map ? (json['response'] as Map?)?['hits'] : null;
+  dynamic hits;
+  if (json is Map) {
+    final response = json['response'];
+    if (response is Map) hits = response['hits'];
+  }
   if (hits is! List) return null;
 
   final wantTitle = _norm(title);
