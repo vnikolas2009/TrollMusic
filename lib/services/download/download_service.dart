@@ -28,9 +28,9 @@ class DownloadProgress {
 
   double get fraction {
     if (total <= 0) {
-      return state == DownloadState.done ? 1 : 0;
+      return state == DownloadState.done ? 1.0 : 0.0;
     }
-    return (received / total).clamp(0.0, 1.0);
+    return (received / total).clamp(0.0, 1.0).toDouble();
   }
 }
 
@@ -52,11 +52,11 @@ class DownloadBatchProgress {
   final List<String> currentTitles;
   final bool canceled;
 
-  int get remaining => (total - completed).clamp(0, total);
+  int get remaining => (total - completed).clamp(0, total).toInt();
 
   double get fraction {
-    if (total <= 0) return 0;
-    return (completed / total).clamp(0.0, 1.0);
+    if (total <= 0) return 0.0;
+    return (completed / total).clamp(0.0, 1.0).toDouble();
   }
 
   int get percent => (fraction * 100).round();
