@@ -187,13 +187,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         return;
       }
 
-      final results = switch (source) {
+      var results = switch (source) {
         MusicSource.spotify => await repo.searchSpotify(trimmed),
         MusicSource.youtube => await repo.searchYouTube(trimmed),
         MusicSource.yandex => await repo.searchYandex(trimmed),
         MusicSource.vk => await repo.searchVk(trimmed),
         MusicSource.audius => await repo.searchAudius(trimmed),
       };
+      // Выбранный источник ничего не вернул (часто — заблокирован у
+      // провайдера): ищем в Audius, он доступен и без VPN.
+      if (results.isEmpty && source != MusicSource.audius) {
+        results = await repo.searchAudius(trimmed);
+      }
       if (!mounted) return;
       setState(() {
         _results = results;
