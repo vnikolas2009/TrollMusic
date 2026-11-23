@@ -7,7 +7,8 @@ import '../http_client.dart';
 enum LyricsSource {
   lrclib('LRCLIB', 'синхронизированные тексты'),
   lyricsOvh('Lyrics.ovh', 'обычный текст, без ключа'),
-  genius('Genius', 'нужен токен в настройках');
+  genius('Genius', 'нужен токен в настройках'),
+  lyricsify('Lyricsify', 'тексты с таймкодами (LRC)');
 
   const LyricsSource(this.label, this.hint);
 
@@ -41,6 +42,49 @@ class ExternalLyricsClient {
       return null;
     }
   }
+
+  /// Lyricsify: поиск по сайту и разбор страницы песни. Своего API у сайта
+  /// нет, поэтому разбор «по месту»: ищем строки с таймкодами `[мм:сс.хх]`.
+  /// Если сайт отдал защитную страницу, вернётся `null`.
+  Future<String?> lyricsify({
+    required String artist,
+    required String title,
+  }) async {
+    try {
+      final search = await _dio.getUri<String>(
+        Uri.https('www.lyricsify.com', '/search', {'q': '$artist $title'.trim()}),
+        options: _htmlOptions,
+      );
+      if (search.statusCode != 200) return null;
+      final path =
+          pickLyricsifyPath(search.data ?? '', artist: artist, title: title);
+      if (path == null) return null;
+      return lyricsifyUrl('https://www.lyricsify.com$path');
+    } on DioException {
+      return null;
+    }
+  }
+
+  /// Импорт по готовой ссылке на страницу песни Lyricsify.
+  Future<String?> lyricsifyUrl(String url) async {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || !uri.host.endsWith('lyricsify.com')) return null;
+    try {
+      final page = await _dio.getUri<String>(
+        uri.replace(scheme: 'https'),
+        options: _htmlOptions,
+      );
+      if (page.statusCode != 200) return null;
+      return extractLrcFromHtml(page.data ?? '');
+    } on DioException {
+      return null;
+    }
+  }
+
+  static final _htmlOptions = Options(
+    responseType: ResponseType.plain,
+    headers: {'accept': 'text/html'},
+  );
 
   /// Поиск через официальный API Genius (нужен клиентский токен), затем
   /// разбор страницы песни. Genius иногда отдаёт страницу-заглушку ботам,
@@ -167,4 +211,44 @@ String htmlToText(String html) {
       .join('\n')
       .replaceAll(RegExp(r'\n{3,}'), '\n\n')
       .trim();
+}
+
+/// Выбирает со страницы поиска Lyricsify ссылку на песню
+/// (`/lyric/...` или `/lyrics/...`), подходящую по названию, иначе первую.
+String? pickLyricsifyPath(
+  String html, {
+  required String artist,
+  required String title,
+}) {
+  final links = RegExp(
+    "href=[\"'](/lyrics?/[^\"'#?\\s]+)[\"']",
+    caseSensitive: false,
+  ).allMatches(html).map((m) => m.group(1)!).toList();
+  if (links.isEmpty) return null;
+
+  final wantTitle = _norm(title);
+  final wantArtist = _norm(artist.split(',').first);
+  for (final path in links) {
+    final slug =
+        _norm(Uri.decodeComponent(path).replaceAll(RegExp(r'[-_/]'), ' '));
+    if (slug.contains(wantTitle) &&
+        (wantArtist.isEmpty || slug.contains(wantArtist))) {
+      return path;
+    }
+  }
+  return links.first;
+}
+
+/// Достаёт из HTML строки с таймкодами и собирает LRC. Нужно не меньше
+/// трёх таких строк, иначе это не текст песни (например, защитная страница).
+String? extractLrcFromHtml(String html) {
+  final text = htmlToText(html);
+  final lines = <String>[];
+  final stamp = RegExp(r'^\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]');
+  for (final raw in text.split('\n')) {
+    final line = raw.trim();
+    if (stamp.hasMatch(line)) lines.add(line);
+  }
+  if (lines.length < 3) return null;
+  return lines.join('\n');
 }

@@ -51,4 +51,29 @@ void main() {
     );
     expect(pickGeniusUrl(null, artist: 'a', title: 'b'), isNull);
   });
+
+  test('extractLrcFromHtml берёт строки с таймкодами, иначе null', () {
+    const html = '<div>[00:01.00] one<br/>[00:05.50] two<br/>'
+        'noise<br/>[01:02.3] three<br/></div>';
+    expect(
+      extractLrcFromHtml(html),
+      '[00:01.00] one\n[00:05.50] two\n[01:02.3] three',
+    );
+    expect(extractLrcFromHtml('<html>Just a moment...</html>'), isNull);
+    expect(extractLrcFromHtml('<p>[00:01.00] only one</p>'), isNull);
+  });
+
+  test('pickLyricsifyPath выбирает ссылку по названию', () {
+    const html = '<a href="/lyrics/other/song">x</a>'
+        '<a href="/lyrics/coldplay/yellow">y</a>';
+    expect(
+      pickLyricsifyPath(html, artist: 'Coldplay', title: 'Yellow'),
+      '/lyrics/coldplay/yellow',
+    );
+    expect(
+      pickLyricsifyPath(html, artist: 'Nobody', title: 'Nothing'),
+      '/lyrics/other/song',
+    );
+    expect(pickLyricsifyPath('<p/>', artist: 'a', title: 'b'), isNull);
+  });
 }

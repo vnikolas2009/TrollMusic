@@ -74,6 +74,7 @@ class ImportService {
         ? [source]
         : const [
             LyricsSource.lrclib,
+            LyricsSource.lyricsify,
             LyricsSource.lyricsOvh,
             LyricsSource.genius,
           ];
@@ -88,6 +89,15 @@ class ImportService {
               synced: lyrics.synced,
               source: candidate,
             );
+          }
+        case LyricsSource.lyricsify:
+          final lrc = await _external?.lyricsify(
+            artist: track.artist.split(',').first,
+            title: track.title,
+          );
+          if (lrc != null) {
+            await _storage.saveLyricsText(track.id, lrc);
+            return LyricsUpdate(found: true, synced: true, source: candidate);
           }
         case LyricsSource.lyricsOvh:
           final text = await _external?.lyricsOvh(
@@ -111,6 +121,14 @@ class ImportService {
       }
     }
     return const LyricsUpdate(found: false, synced: false);
+  }
+
+  /// Импорт текста по ссылке на страницу песни Lyricsify.
+  Future<bool> importLyricsifyUrl(String trackId, String url) async {
+    final lrc = await _external?.lyricsifyUrl(url);
+    if (lrc == null) return false;
+    await _storage.saveLyricsText(trackId, lrc);
+    return true;
   }
 
   Future<void> saveManualLyrics(String trackId, String text) =>

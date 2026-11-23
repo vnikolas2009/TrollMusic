@@ -154,6 +154,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     // `null` — автопоиск по всем источникам, `_custom` — свой текст.
     const custom = -1;
     const auto = -2;
+    const url = -3;
     return PopupMenuButton<int>(
       color: AppColors.surfaceAlt,
       icon: const Icon(Icons.more_vert_rounded),
@@ -162,6 +163,10 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         if (track == null) return;
         if (value == custom) {
           await _editOwn(context, raw);
+          return;
+        }
+        if (value == url) {
+          await _importUrl(context);
           return;
         }
         final source = value == auto ? null : LyricsSource.values[value];
@@ -203,6 +208,16 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           ),
         const PopupMenuDivider(),
         const PopupMenuItem(
+          value: url,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.link_rounded),
+            title: Text('Импорт по ссылке'),
+            subtitle: Text('Страница песни на Lyricsify'),
+          ),
+        ),
+        const PopupMenuItem(
           value: custom,
           child: ListTile(
             dense: true,
@@ -214,6 +229,54 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         ),
       ],
     );
+  }
+
+  /// Импорт по ссылке на страницу песни Lyricsify.
+  Future<void> _importUrl(BuildContext context) async {
+    final controller = TextEditingController();
+    final link = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        backgroundColor: AppColors.surfaceAlt,
+        title: const Text('Импорт из Lyricsify'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            hintText: 'https://www.lyricsify.com/lyrics/…',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, controller.text),
+            child: const Text('Импортировать'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (link == null || link.trim().isEmpty) return;
+
+    final ok = await ref
+        .read(importProvider)
+        .importLyricsifyUrl(widget.trackId, link);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Текст импортирован'
+              : 'Не удалось взять текст со страницы. Если сайт не открывается '
+                  'или закрыт защитой, вставьте текст через «Свой текст».',
+        ),
+      ),
+    );
+    if (ok) setState(() {});
   }
 
   /// Ввод своего текста. Если в нём есть таймкоды `[мм:сс.хх]`, строки
