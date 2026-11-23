@@ -104,6 +104,8 @@ Future<DiagResult> probe(
       target.url,
       options: Options(
         responseType: ResponseType.plain,
+        // Редирект — тоже ответ сервера: цепочки не следуем.
+        followRedirects: false,
         receiveTimeout: timeout,
         sendTimeout: timeout,
         headers: const {'accept': '*/*'},

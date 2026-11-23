@@ -169,22 +169,24 @@ class AudioResolverService {
     }
   }
 
-  /// Подборка для главной. YouTube и SoundCloud опрашиваются одновременно:
-  /// если YouTube медленный или заблокирован (в РФ он часто режется),
-  /// через [youtubeWait] берём SoundCloud, а не ждём таймаут.
+  /// Подборка для главной. Источники опрашиваются одновременно, каждый
+  /// получает своё окно: в РФ YouTube и SoundCloud часто режутся, и тогда
+  /// главная должна быстро перейти к тому, что отвечает (Audius).
   Future<List<Track>> trending({
-    Duration youtubeWait = const Duration(seconds: 6),
+    Duration wait = const Duration(seconds: 6),
   }) async {
-    final soundcloud = searchSoundCloud('популярная музыка');
-    final youtube = searchYouTube('популярная музыка 2026').timeout(
-      youtubeWait,
-      onTimeout: () => const <Track>[],
-    );
+    Future<List<Track>> limited(Future<List<Track>> f) =>
+        f.timeout(wait, onTimeout: () => const <Track>[]);
 
-    final fromYoutube = await youtube;
-    if (fromYoutube.isNotEmpty) return fromYoutube;
+    final youtube = limited(searchYouTube('популярная музыка 2026'));
+    final soundcloud = limited(searchSoundCloud('популярная музыка'));
+    final audius = limited(audiusTrending());
 
-    return soundcloud;
+    for (final source in [youtube, soundcloud, audius]) {
+      final tracks = await source;
+      if (tracks.isNotEmpty) return tracks;
+    }
+    return const [];
   }
 
   /// Сбрасывает кэш после ошибки воспроизведения.
@@ -244,6 +246,19 @@ class AudioResolverService {
         default:
           return const [];
       }
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<String>> _resolveAudiusMatch(Track track) async {
+    final service = _audius;
+    if (service == null) return const [];
+    try {
+      final candidates = await service.search(_queryFor(track), limit: 10);
+      final best = pickBestMatch(track, candidates);
+      if (best == null) return const [];
+      return await service.audioUrls(best.id);
     } catch (_) {
       return const [];
     }
