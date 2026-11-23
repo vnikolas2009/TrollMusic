@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/track_groups.dart';
 import '../../data/models/track.dart';
+import '../../shared/widgets/brand_wordmark.dart';
 import '../../shared/widgets/cover_art.dart';
 import '../../shared/widgets/entrance.dart';
 import '../../shared/widgets/press_scale.dart';
@@ -46,7 +47,7 @@ class HomeScreen extends ConsumerWidget {
             children: [
               _BrandMark(),
               SizedBox(width: 10),
-              Text('TrollMusic'),
+              BrandWordmark(fontSize: 21),
             ],
           ),
         ),

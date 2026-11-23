@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_shell.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
+import 'brand_wordmark.dart';
 
 class SplashGate extends StatefulWidget {
   const SplashGate({super.key});
@@ -70,14 +71,7 @@ class _SplashGateState extends State<SplashGate>
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'TrollMusic',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.8,
-                  ),
-                ),
+                const BrandWordmark(fontSize: 30),
                 const SizedBox(height: 6),
                 Text(
                   'музыка без границ',

@@ -403,3 +403,5 @@ Android.
 архитектурных изменений обновляй этот документ.
 
 Сеть: DohResolver опрашивает DoH-серверы параллельно (A и AAAA независимы), IPv4 идёт первым; connect() реально перебирает адреса с таймаутом и при неудаче берёт системный DNS. Главная для Spotify при недоступном Spotify показывает подборку YouTube Music.
+
+Оформление: shared/widgets/brand_wordmark.dart (надпись), aurora_background.dart (фон под вкладками в app_shell.dart), tool/gen_icon.py (иконки).
