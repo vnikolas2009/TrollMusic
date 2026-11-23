@@ -10,8 +10,10 @@ import '../features/library/library_screen.dart';
 import '../features/player/player_screen.dart';
 import '../features/search/search_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../shared/widgets/aurora_background.dart';
 import '../shared/widgets/mini_player.dart';
 import '../shared/widgets/rubber_dock.dart';
+import 'tab_provider.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
@@ -21,8 +23,6 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  int _index = 0;
-
   static const _tabs = <Widget>[
     HomeScreen(),
     SearchScreen(),
@@ -31,18 +31,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     SettingsScreen(),
   ];
 
-  static final _dockTabs = <RubberDockTab>[
+  static const _dockTabs = <RubberDockTab>[
     RubberDockTab(icon: Icons.home_rounded, label: 'Главная'),
     RubberDockTab(icon: Icons.search_rounded, label: 'Поиск'),
-    RubberDockTab(
-      icon: Icons.library_music_rounded,
-      label: 'Медиатека',
-    ),
+    RubberDockTab(icon: Icons.library_music_rounded, label: 'Медиатека'),
     RubberDockTab(icon: Icons.add_rounded, label: 'Создать'),
-    RubberDockTab(
-      icon: Icons.settings_rounded,
-      label: 'Настройки',
-    ),
+    RubberDockTab(icon: Icons.settings_rounded, label: 'Настройки'),
   ];
 
   void _openPlayer(BuildContext context) {
@@ -84,44 +78,39 @@ class _AppShellState extends ConsumerState<AppShell> {
       );
     });
 
+    final index = ref.watch(selectedTabProvider);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: DecoratedBox(
         decoration: AppColors.backdrop,
-        child: SafeArea(
+        child: AuroraBackground(
+          child: SafeArea(
           bottom: false,
-          child: IndexedStack(
-            index: _index,
-            children: _tabs,
+          child: Column(
+            children: [
+              // IndexedStack сохраняет состояние вкладок и рисует только активную.
+              Expanded(child: IndexedStack(index: index, children: _tabs)),
+              // Мини-плеер один на все вкладки: стоит над доком, как только
+              // загружен трек.
+              MiniPlayer(
+                onTap: () => _openPlayer(context),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 8 + bottomInset),
+                // Без карточки-панели: док занимает только свою высоту.
+                child: RubberDock(
+                  tabs: _dockTabs,
+                  selected: index,
+                  panelHeight: 1,
+                  onSelected: ref.read(selectedTabProvider.notifier).select,
+                ),
+              ),
+            ],
           ),
         ),
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Один общий мини-плеер для всех вкладок.
-          MiniPlayer(
-            onTap: () => _openPlayer(context),
-          ),
-
-          Padding(
-            padding: EdgeInsets.only(
-              bottom: bottomInset + 8,
-            ),
-            child: RubberDock(
-              tabs: _dockTabs,
-              selected: _index,
-              onSelected: (i) {
-                if (i == _index) return;
-                setState(() => _index = i);
-              },
-              // Используем док только для навигации.
-              panelHeight: 1,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

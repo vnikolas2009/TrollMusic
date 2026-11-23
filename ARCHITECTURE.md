@@ -22,6 +22,35 @@ API/OAuth. 10. Не утверждай, что тесты прошли, если
 задач без прямого указания. 12. В отчёте перечисли изменённые файлы,
 проверки и оставшиеся риски.
 
+Источники музыки (добавлено)
+
+Сервисы: core/network/yandex/yandex_music_service.dart (префикс id
+`ym:`), core/network/vk/vk_music_service.dart (`vk:`),
+core/network/audius/audius_service.dart (`au:`). Парсеры вынесены в
+чистые функции и покрыты test/new_sources_test.dart. Резолвер
+(`AudioResolverService`) сначала пробует родной источник трека
+(`_resolveNative`), затем SoundCloud/YouTube. Токены Яндекса и VK
+вводит пользователь (Settings.yandexToken / vkToken, провайдер
+serviceTokensProvider); в коде и репозитории токенов нет. Без токена
+VK недоступен, Яндекс отдаёт только метаданные. Переключатель
+источника: MusicSource (порядок значений менять нельзя, в Hive хранится
+индекс) и shared/widgets/source_switcher.dart.
+
+UI-заметки: AppColors.appBarBackground делает SliverAppBar прозрачным,
+пока контент не под ним (иначе чёрная плашка закрывает градиент).
+Ползунок плеера: shared/widgets/scrubber.dart + core/utils/seek_math.dart;
+позицию слушает только _SeekBar.
+
+Анимации на пружинах (DesignBookmark)
+
+core/motion/spring.dart: Spring (полунеявный Эйлер, 4 подшага, dt не
+больше 1/30 с), SpringLoop (Ticker) и SpringTokens (значения из
+tokens.css). core/motion/rubber.dart: резиновое сопротивление.
+core/utils/read_along.dart: деление строки на слова и индекс слова по
+доле строки. Виджеты: shared/widgets/read_along_text.dart (используется
+в lyrics_screen для активной строки), spring_switch.dart и
+rubber_dock.dart. Rubber dock — нижняя навигация в app_shell.dart (5 вкладок: Главная, Поиск, Медиатека, Создать, Настройки; TrollBottomNav удалён), spring_switch — переключатели в настройках. Оболочка: Column(IndexedStack вкладок, MiniPlayer, RubberDock) — мини-плеер над доком на всех вкладках. Тесты: test/motion_test.dart, test/tab_provider_test.dart.
+
 1. Проект
 
 TrollMusic — Flutter-приложение для iOS и Android.
@@ -49,6 +78,7 @@ lib/
 │   ├── app.dart, app_shell.dart      # MaterialApp и оболочка
 │   ├── providers.dart                # Библиотека, плеер, загрузки, UI streams
 │   ├── network_providers.dart        # Dio, сетевые сервисы, repositories
+│   ├── tab_provider.dart              # Текущая вкладка дока (selectedTabProvider, AppTab)
 │   ├── source_provider.dart           # Выбранный источник каталога
 │   └── theme_controller.dart
 ├── core/
@@ -371,3 +401,11 @@ Android.
 
 Последнее сверение структуры: ветка main. После существенных
 архитектурных изменений обновляй этот документ.
+
+Сеть: DohResolver опрашивает DoH-серверы параллельно (A и AAAA независимы), IPv4 идёт первым; connect() реально перебирает адреса с таймаутом и при неудаче берёт системный DNS. Главная для Spotify при недоступном Spotify показывает подборку YouTube Music.
+
+Оформление: shared/widgets/brand_wordmark.dart (надпись), aurora_background.dart (фон под вкладками в app_shell.dart), tool/gen_icon.py (иконки).
+
+Диагностика: core/network/diagnostics.dart + features/settings/network_diagnostics_screen.dart. Тексты: core/network/lyrics/external_lyrics.dart (Lyrics.ovh, Genius), выбор источника — ImportService.findLyricsOnline.
+
+Обход блокировок по SNI (опционально, Settings.bypassDpi): core/network/split_proxy.dart — локальный CONNECT-прокси, режет первый TLS-пакет; подключается в configureProxy (http_client.dart). Покрывает только запросы через Dio, не сам плеер.

@@ -89,6 +89,7 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   AudioPlayer get player => _player;
   Stream<Duration> get positionStream => _player.positionStream;
   Stream<Duration?> get durationStream => _player.durationStream;
+  Stream<Duration> get bufferedPositionStream => _player.bufferedPositionStream;
 
   Future<void> init() async {
     final session = await AudioSession.instance;
@@ -136,6 +137,15 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     _player.setLoopMode(_loopModeOf(_repeat.value));
     _player.setShuffleModeEnabled(_shuffleEnabled.value);
     _player.setSpeed(settings.playbackSpeed.clamp(0.5, 2.0));
+    setSkipSilence(settings.skipSilence);
+  }
+
+  /// Пропуск тишины; платформы без поддержки молча игнорируют вызов.
+  Future<void> setSkipSilence(bool enabled) async {
+    _settings?.skipSilence = enabled;
+    try {
+      await _player.setSkipSilenceEnabled(enabled);
+    } catch (_) {}
   }
 
   Future<void> restoreLastPlayed() async {

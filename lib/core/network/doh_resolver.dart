@@ -68,54 +68,77 @@ class DohResolver {
 
   Future<List<InternetAddress>> _resolve(String host) async {
     final addresses = <InternetAddress>[];
-
     var minTtl = 900;
 
-    for (final endpoint in _endpoints) {
-      try {
-        final results = await Future.wait([
-          _query(endpoint, host, 'A'),
-          _query(endpoint, host, 'AAAA'),
-        ]).timeout(AppConfig.dohTimeout);
+    // Все DoH-серверы опрашиваются одновременно, берём первый непустой
+    // ответ. A и AAAA независимы: если AAAA не пришёл, A всё равно годится.
+    // Раньше серверы шли по очереди, и при заблокированном DoH запрос
+    // ждал 2 × 5 с до системного DNS.
+    final answers = await Future.wait([
+      for (final endpoint in _endpoints)
+        _resolveVia(endpoint, host).timeout(
+          AppConfig.dohTimeout,
+          onTimeout: () => (addresses: <InternetAddress>[], ttl: 300),
+        ),
+    ]);
 
-        for (final result in results) {
-          addresses.addAll(result.addresses);
-
-          if (result.addresses.isNotEmpty &&
-              result.ttl < minTtl) {
-            minTtl = result.ttl;
-          }
-        }
-
-        if (addresses.isNotEmpty) {
-          break;
-        }
-      } catch (_) {
-        // Переходим к следующему DoH-серверу.
-      }
+    for (final answer in answers) {
+      if (answer.addresses.isEmpty) continue;
+      addresses.addAll(answer.addresses);
+      if (answer.ttl < minTtl) minTtl = answer.ttl;
     }
 
     final unique = <String, InternetAddress>{};
-
     for (final address in addresses) {
       unique[address.address] = address;
     }
 
     if (unique.isNotEmpty) {
-      final result = unique.values.toList();
-
+      final result = _ipv4First(unique.values);
       _cache[host] = _Entry(
         result,
-        DateTime.now().add(
-          Duration(seconds: minTtl.clamp(60, 900)),
-        ),
+        DateTime.now().add(Duration(seconds: minTtl.clamp(60, 900))),
       );
-
       return result;
     }
 
-    // Последняя попытка — системный DNS.
-    return InternetAddress.lookup(host);
+    // DoH недоступен (например, заблокирован) — системный DNS.
+    return _ipv4First(await InternetAddress.lookup(host));
+  }
+
+  Future<({List<InternetAddress> addresses, int ttl})> _resolveVia(
+    String endpoint,
+    String host,
+  ) async {
+    final parts = await Future.wait([
+      _safeQuery(endpoint, host, 'A'),
+      _safeQuery(endpoint, host, 'AAAA'),
+    ]);
+    final all = [for (final part in parts) ...part.addresses];
+    var ttl = 900;
+    for (final part in parts) {
+      if (part.addresses.isNotEmpty && part.ttl < ttl) ttl = part.ttl;
+    }
+    return (addresses: all, ttl: ttl);
+  }
+
+  Future<({List<InternetAddress> addresses, int ttl})> _safeQuery(
+    String endpoint,
+    String host,
+    String type,
+  ) async {
+    try {
+      return await _query(endpoint, host, type);
+    } catch (_) {
+      return (addresses: <InternetAddress>[], ttl: 300);
+    }
+  }
+
+  /// IPv4 первым: у многих сетей и VPN IPv6 «подвешивает» соединение.
+  static List<InternetAddress> _ipv4First(Iterable<InternetAddress> list) {
+    final v4 = list.where((a) => a.type == InternetAddressType.IPv4);
+    final rest = list.where((a) => a.type != InternetAddressType.IPv4);
+    return [...v4, ...rest];
   }
 
   Future<({List<InternetAddress> addresses, int ttl})> _query(
@@ -248,6 +271,12 @@ class DohResolver {
   /// Подключение по IP, сохраняя исходный Uri.
   ///
   /// TLS/SNI продолжает использовать исходное доменное имя.
+  ///
+  /// Адреса перебираются по-настоящему: каждый ждёт установки соединения
+  /// ([perAddressTimeout]), и при неудаче берётся следующий. Если не ответил
+  /// ни один адрес из DoH (устаревший или подменённый ответ), пробуем адреса
+  /// системного DNS. Раньше `startConnect` возвращал задачу сразу, ошибка
+  /// всплывала позже, и запасные адреса не использовались никогда.
   Future<ConnectionTask<Socket>> connect(
     Uri uri,
     String? proxyHost,
@@ -255,33 +284,61 @@ class DohResolver {
   ) async {
     // Если используется прокси, подключаемся к нему.
     if (proxyHost != null && proxyPort != null) {
-      return Socket.startConnect(
-        proxyHost,
-        proxyPort,
-      );
+      return Socket.startConnect(proxyHost, proxyPort);
     }
 
-    final addresses = await lookup(uri.host);
+    var cancelled = false;
+    final socket = _connectAny(uri.host, uri.port, () => cancelled);
+    return ConnectionTask.fromSocket(socket, () => cancelled = true);
+  }
 
+  /// Готовый сокет к [host]:[port] с тем же перебором адресов.
+  Future<Socket> connectHost(String host, int port) =>
+      _connectAny(host, port, () => false);
+
+  static const perAddressTimeout = Duration(seconds: 6);
+  static const _maxAttempts = 6;
+
+  Future<Socket> _connectAny(
+    String host,
+    int port,
+    bool Function() cancelled,
+  ) async {
     Object? lastError;
+    final tried = <String>{};
 
-    for (final address in addresses) {
-      try {
-        final task = await Socket.startConnect(
-          address,
-          uri.port,
-        ).timeout(AppConfig.connectTimeout);
-
-        return task;
-      } catch (error) {
-        lastError = error;
+    Future<Socket?> tryAll(Iterable<InternetAddress> addresses) async {
+      for (final address in addresses) {
+        if (cancelled() || tried.length >= _maxAttempts) return null;
+        if (!tried.add(address.address)) continue;
+        try {
+          return await Socket.connect(
+            address,
+            port,
+            timeout: perAddressTimeout,
+          );
+        } catch (error) {
+          lastError = error;
+        }
       }
+      return null;
     }
 
-    throw lastError ??
-        SocketException(
-          'DoH: no addresses for ${uri.host}',
-        );
+    final viaDoh = await tryAll(await lookup(host));
+    if (viaDoh != null) return viaDoh;
+
+    // Ответ из кэша мог устареть: сбрасываем и пробуем системный DNS.
+    removeFromCache(host);
+    try {
+      final viaSystem = await tryAll(
+        _ipv4First(await InternetAddress.lookup(host)),
+      );
+      if (viaSystem != null) return viaSystem;
+    } catch (error) {
+      lastError = error;
+    }
+
+    throw lastError ?? SocketException('Не удалось подключиться к $host');
   }
 
   void clearCache() {

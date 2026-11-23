@@ -2,6 +2,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models/playlist.dart';
+import 'network_providers.dart';
 import '../data/models/track.dart';
 import '../data/repositories/library_repository.dart';
 import '../services/audio/audio_handler.dart';
@@ -41,6 +42,8 @@ final importProvider = Provider<ImportService>(
   (ref) => ImportService(
     library: ref.watch(libraryProvider),
     storage: ref.watch(storageProvider),
+    external: ref.watch(externalLyricsProvider),
+    geniusToken: () => ref.read(settingsProvider).geniusToken,
   ),
 );
 
@@ -95,6 +98,12 @@ final positionProvider = StreamProvider<Duration>(
 
 final durationProvider = StreamProvider<Duration?>(
   (ref) => ref.watch(audioHandlerProvider).durationStream,
+);
+
+/// Докачанная часть трека для серой полосы на ползунке. Слушать только в
+/// узких виджетах (как и `positionProvider`).
+final bufferedPositionProvider = StreamProvider<Duration>(
+  (ref) => ref.watch(audioHandlerProvider).bufferedPositionStream,
 );
 
 final audioErrorsProvider = StreamProvider<String>(

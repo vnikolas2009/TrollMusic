@@ -636,6 +636,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         TrackSource.spotify => 'Spotify',
         TrackSource.local => 'Локальный файл',
         TrackSource.downloaded => 'Скачанный',
+        TrackSource.yandex => 'Яндекс Музыка',
+        TrackSource.vk => 'VK Музыка',
+        TrackSource.audius => 'Audius',
       };
 
   void _showSleepTimer() {

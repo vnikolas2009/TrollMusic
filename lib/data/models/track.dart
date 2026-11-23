@@ -1,4 +1,15 @@
-enum TrackSource { youtube, spotify, soundcloud, local, downloaded }
+/// Источник трека. В JSON хранится по имени, поэтому новые значения
+/// добавляются в конец и не ломают старые записи.
+enum TrackSource {
+  youtube,
+  spotify,
+  soundcloud,
+  local,
+  downloaded,
+  yandex,
+  vk,
+  audius,
+}
 
 class Track {
   const Track({

@@ -75,6 +75,22 @@ class Settings {
   set spotifyClientSecret(String value) =>
       _box.put('spotifyClientSecret', value.trim());
 
+  /// OAuth-токен Яндекс Музыки пользователя (необязателен: без него поиск
+  /// и чарты работают, а звук подбирается на других источниках).
+  String get yandexToken => (_box.get('yandexToken') as String? ?? '').trim();
+
+  set yandexToken(String value) => _box.put('yandexToken', value.trim());
+
+  /// Токен пользователя для VK API (`audio.*`). Без него VK Музыка недоступна.
+  /// Клиентский токен Genius (genius.com/api-clients) для поиска текстов.
+  String get geniusToken => (_box.get('geniusToken') as String? ?? '').trim();
+
+  set geniusToken(String value) => _box.put('geniusToken', value.trim());
+
+  String get vkToken => (_box.get('vkToken') as String? ?? '').trim();
+
+  set vkToken(String value) => _box.put('vkToken', value.trim());
+
   // ---------------------------------------------------------------- звук
 
   /// Качество звука: Низкое / Среднее / Высокое / Авто (по умолчанию Авто).
@@ -114,8 +130,8 @@ class Settings {
   // ----------------------------------------------------------------- тема
 
   /// 0 — системная, 1 — светлая, 2 — тёмная (порядок `ThemeMode`).
-  /// Выбранный источник каталога: 0 — Spotify (по умолчанию), 1 — YouTube Music.
-  int get musicSourceIndex => (_box.get('musicSource', defaultValue: 0) as num).toInt();
+  /// Выбранный источник каталога: 0 — Spotify, 1 — YouTube Music (по умолчанию: работает без бэкенда).
+  int get musicSourceIndex => (_box.get('musicSource', defaultValue: 1) as num).toInt();
 
   set musicSourceIndex(int value) => _box.put('musicSource', value);
 
@@ -147,6 +163,16 @@ class Settings {
 
   void rememberMatch(String spotifyTrackId, String videoId) =>
       _box.put('spMatch:$spotifyTrackId', videoId);
+
+  /// Обход блокировок по SNI (локальный прокси, режущий TLS ClientHello).
+  bool get bypassDpi => _box.get('bypassDpi', defaultValue: false) as bool;
+
+  set bypassDpi(bool value) => _box.put('bypassDpi', value);
+
+  /// Пропуск тишины в треках (Android).
+  bool get skipSilence => _box.get('skipSilence', defaultValue: false) as bool;
+
+  set skipSilence(bool value) => _box.put('skipSilence', value);
 
   int get crossfadeSeconds => _box.get('crossfadeSeconds', defaultValue: 0) as int;
 

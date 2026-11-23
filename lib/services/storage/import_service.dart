@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
+import '../../core/network/lyrics/external_lyrics.dart';
 import '../../data/models/track.dart';
 import '../../data/repositories/library_repository.dart';
 import 'storage_service.dart';
@@ -11,8 +12,15 @@ class ImportService {
   ImportService({
     required LibraryRepository library,
     required StorageService storage,
+    ExternalLyricsClient? external,
+    String Function()? geniusToken,
   })  : _library = library,
-        _storage = storage;
+        _storage = storage,
+        _external = external,
+        _geniusToken = geniusToken;
+
+  final ExternalLyricsClient? _external;
+  final String Function()? _geniusToken;
 
   final LibraryRepository _library;
   final StorageService _storage;
@@ -203,13 +211,71 @@ class ImportService {
     );
   }
 
-  Future<LyricsUpdate> findLyricsOnline(Track track) async {
-    final lyrics = await _storage.fetchLyricsFromLrclib(track);
+  /// Ищет текст. Без [source] перебирает LRCLIB → Lyrics.ovh → Genius
+  /// (последний — только если в настройках задан токен).
+  Future<LyricsUpdate> findLyricsOnline(
+    Track track, {
+    LyricsSource? source,
+  }) async {
+    final order = source != null
+        ? [source]
+        : const [
+            LyricsSource.lrclib,
+            LyricsSource.lyricsify,
+            LyricsSource.lyricsOvh,
+            LyricsSource.genius,
+          ];
 
-    return LyricsUpdate(
-      found: lyrics != null && !lyrics.isEmpty,
-      synced: lyrics?.synced ?? false,
-    );
+    for (final candidate in order) {
+      switch (candidate) {
+        case LyricsSource.lrclib:
+          final lyrics = await _storage.fetchLyricsFromLrclib(track);
+          if (lyrics != null && !lyrics.isEmpty) {
+            return LyricsUpdate(
+              found: true,
+              synced: lyrics.synced,
+              source: candidate,
+            );
+          }
+        case LyricsSource.lyricsify:
+          final lrc = await _external?.lyricsify(
+            artist: track.artist.split(',').first,
+            title: track.title,
+          );
+          if (lrc != null) {
+            await _storage.saveLyricsText(track.id, lrc);
+            return LyricsUpdate(found: true, synced: true, source: candidate);
+          }
+        case LyricsSource.lyricsOvh:
+          final text = await _external?.lyricsOvh(
+            artist: track.artist.split(',').first,
+            title: track.title,
+          );
+          if (text != null) {
+            await _storage.saveLyricsText(track.id, text);
+            return LyricsUpdate(found: true, synced: false, source: candidate);
+          }
+        case LyricsSource.genius:
+          final text = await _external?.genius(
+            token: _geniusToken?.call() ?? '',
+            artist: track.artist.split(',').first,
+            title: track.title,
+          );
+          if (text != null) {
+            await _storage.saveLyricsText(track.id, text);
+            return LyricsUpdate(found: true, synced: false, source: candidate);
+          }
+      }
+    }
+    return const LyricsUpdate(found: false, synced: false);
+  }
+
+  /// Импорт текста по ссылке на страницу песни Lyricsify.
+  Future<bool> importLyricsifyUrl(String trackId, String url) async {
+    final lrc = await _external?.lyricsifyUrl(url);
+    if (lrc == null) return false;
+    await _storage.saveLyricsText(trackId, lrc);
+    return true;
   }
 
   Future<void> saveManualLyrics(
@@ -254,8 +320,10 @@ class LyricsUpdate {
   const LyricsUpdate({
     required this.found,
     required this.synced,
+    this.source,
   });
 
   final bool found;
   final bool synced;
+  final LyricsSource? source;
 }

@@ -6,6 +6,7 @@ import 'package:dio/io.dart';
 import '../config/app_config.dart';
 import '../storage/settings.dart';
 import 'doh_resolver.dart';
+import 'split_proxy.dart';
 
 /// Создаёт Dio с DNS-over-HTTPS и опциональным HTTP-прокси.
 Dio createDio({
@@ -56,6 +57,13 @@ HttpClientAdapter buildHttpClientAdapter(
 void configureProxy(HttpClient client, Settings? settings) {
   final raw = settings?.httpProxy.trim() ?? '';
   if (raw.isNotEmpty && _applyManualProxy(client, raw)) return;
+  if (settings?.bypassDpi ?? false) {
+    // Локальный прокси режет TLS ClientHello, чтобы фильтр по SNI не сработал.
+    client.findProxy = (uri) => uri.scheme == 'https' && SplitProxy.shared.running
+        ? 'PROXY 127.0.0.1:${SplitProxy.shared.port}'
+        : 'DIRECT';
+    return;
+  }
   if (settings?.useSystemProxy ?? true) {
     try {
       client.findProxy = HttpClient.findProxyFromEnvironment;

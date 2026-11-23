@@ -8,6 +8,11 @@ import '../../app/theme_controller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/spring_switch_tile.dart';
 import 'storage_meter.dart';
+import '../../core/utils/audio_pick.dart';
+import '../../core/utils/formatters.dart';
+import '../../shared/widgets/spring_switch.dart';
+import '../../core/network/split_proxy.dart';
+import 'network_diagnostics_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -111,6 +116,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     AudioQuality.auto: 'Высокое по Wi-Fi, среднее по мобильной сети',
   };
 
+  Future<void> _setBypass(bool value) async {
+    ref.read(settingsProvider).bypassDpi = value;
+    if (value) {
+      await SplitProxy.shared.start();
+    } else {
+      await SplitProxy.shared.stop();
+    }
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
@@ -119,7 +134,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final audio = ref.read(audioHandlerProvider);
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: AppColors.appBarBackground,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         title: const Text('Настройки'),
       ),
       body: ListView(
@@ -338,29 +358,76 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
-
+          ListTile(
+            title: const Text('Пропуск тишины'),
+            subtitle: const Text('Убирает паузы в начале и конце треков (Android)'),
+            trailing: SpringSwitch(
+              value: settings.skipSilence,
+              semanticLabel: 'Пропуск тишины',
+              onChanged: (v) {
+                audio.setSkipSilence(v);
+                setState(() {});
+              },
+            ),
+            onTap: () {
+              audio.setSkipSilence(!settings.skipSilence);
+              setState(() {});
+            },
+          ),
+          const _Section('Тексты песен'),
+          _TokenField(
+            label: 'Genius · клиентский токен',
+            help: 'Необязательно. Тексты ищутся в LRCLIB (с таймкодами) и '
+                'Lyrics.ovh без ключа; с токеном Genius добавляется третьим '
+                'источником. Токен хранится только на этом устройстве.',
+            initial: ref.read(settingsProvider).geniusToken,
+            onSave: (v) => ref.read(settingsProvider).geniusToken = v,
+          ),
+          const _Section('Сеть'),
+          ListTile(
+            leading: const Icon(Icons.shield_outlined),
+            title: const Text('Обход блокировок (экспериментально)'),
+            subtitle: const Text(
+              'Режет TLS-пакет, чтобы фильтр по имени сайта его не увидел. '
+              'Работает не у всех провайдеров; после включения перезапустите '
+              'приложение и проверьте диагностику.',
+            ),
+            trailing: SpringSwitch(
+              value: settings.bypassDpi,
+              semanticLabel: 'Обход блокировок',
+              onChanged: _setBypass,
+            ),
+            onTap: () => _setBypass(!settings.bypassDpi),
+          ),
+          ListTile(
+            leading: const Icon(Icons.network_check_rounded),
+            title: const Text('Диагностика сети'),
+            subtitle: const Text('Какие серверы доступны с вашего интернета'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const NetworkDiagnosticsScreen(),
+              ),
+            ),
+          ),
           const _Section('Источники музыки'),
-
           _TokenField(
             label: 'Яндекс Музыка · OAuth-токен',
-            help: 'Необязательно. Поиск и чарты работают без токена; '
-                'с токеном треки играют напрямую из Яндекс Музыки '
-                '(нужна ваша подписка). Токен хранится только на '
-                'этом устройстве и отправляется только в Яндекс.',
+            help: 'Необязательно. Поиск и чарты работают без токена; с токеном '
+                'треки играют напрямую из Яндекс Музыки (нужна ваша подписка). '
+                'Токен хранится только на этом устройстве и отправляется '
+                'только в Яндекс.',
             initial: ref.read(serviceTokensProvider).yandex,
             onSave: ref.read(serviceTokensProvider.notifier).setYandex,
           ),
-
           _TokenField(
             label: 'VK Музыка · токен',
-            help: 'Нужен для VK Музыки. VK разрешает методы музыки '
-                'не всем токенам, поэтому доступ не гарантирован. '
-                'Токен хранится только на этом устройстве и '
-                'отправляется только в VK.',
+            help: 'Нужен для VK Музыки. VK разрешает методы музыки не всем '
+                'токенам, поэтому доступ не гарантирован. Токен хранится '
+                'только на этом устройстве и отправляется только в VK.',
             initial: ref.read(serviceTokensProvider).vk,
             onSave: ref.read(serviceTokensProvider.notifier).setVk,
           ),
-
           ListTile(
             leading: const Icon(Icons.public_rounded),
             title: const Text('Audius'),
@@ -428,6 +495,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
+/// Поле личного токена: скрыто по умолчанию, сохраняется кнопкой или Enter.
 class _TokenField extends StatefulWidget {
   const _TokenField({
     required this.label,
@@ -459,16 +527,10 @@ class _TokenFieldState extends State<_TokenField> {
 
   void _save([String? _]) {
     final value = _controller.text.trim();
-
     widget.onSave(value);
     FocusScope.of(context).unfocus();
-
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          value.isEmpty ? 'Токен удалён' : 'Токен сохранён',
-        ),
-      ),
+      SnackBar(content: Text(value.isEmpty ? 'Токен удалён' : 'Токен сохранён')),
     );
   }
 
@@ -499,15 +561,10 @@ class _TokenFieldState extends State<_TokenField> {
                           : Icons.visibility_off_outlined,
                       size: 20,
                     ),
-                    onPressed: () {
-                      setState(() => _obscure = !_obscure);
-                    },
+                    onPressed: () => setState(() => _obscure = !_obscure),
                   ),
                   IconButton(
-                    icon: const Icon(
-                      Icons.check_rounded,
-                      size: 22,
-                    ),
+                    icon: const Icon(Icons.check_rounded, size: 22),
                     onPressed: _save,
                   ),
                 ],
