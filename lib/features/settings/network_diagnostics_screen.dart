@@ -36,6 +36,9 @@ class _NetworkDiagnosticsScreenState
     });
     final dio = ref.read(dioProvider);
     await Future.wait([
+      probeAudiusStream(dio).then((result) {
+        if (mounted) setState(() => _results[result.target.name] = result);
+      }),
       for (final target in _targets)
         probe(dio, target).then((result) {
           if (mounted) setState(() => _results[target.name] = result);
@@ -45,10 +48,7 @@ class _NetworkDiagnosticsScreenState
   }
 
   Future<void> _copy() async {
-    final ordered = [
-      for (final t in _targets)
-        if (_results[t.name] != null) _results[t.name]!,
-    ];
+    final ordered = _results.values.toList();
     await Clipboard.setData(ClipboardData(text: formatReport(ordered)));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -85,6 +85,7 @@ class _NetworkDiagnosticsScreenState
           ),
           const SizedBox(height: 12),
           for (final target in _targets) _row(target),
+          _row(const DiagTarget('Audius (аудио)', '', 'сам аудиофайл Audius')),
         ],
       ),
     );

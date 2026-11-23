@@ -149,3 +149,61 @@ String formatReport(List<DiagResult> results) {
   }
   return buffer.toString().trimRight();
 }
+
+/// Проверка настоящего аудио: берём трек из трендов Audius и качаем
+/// первый килобайт потока. Показывает, играет ли музыка, а не только
+/// открывается ли API.
+Future<DiagResult> probeAudiusStream(Dio dio) async {
+  const target = DiagTarget(
+    'Audius (аудио)',
+    'https://api.audius.co/v1/tracks/…/stream',
+    'сам аудиофайл Audius',
+  );
+  final watch = Stopwatch()..start();
+  try {
+    final list = await dio.get<dynamic>(
+      'https://api.audius.co/v1/tracks/trending',
+      queryParameters: const {'limit': '1', 'app_name': 'TrollMusic'},
+      options: Options(receiveTimeout: const Duration(seconds: 8)),
+    );
+    final data = list.data;
+    final items = data is Map ? data['data'] : null;
+    final first = items is List && items.isNotEmpty ? items.first : null;
+    final id = first is Map ? first['id']?.toString() : null;
+    if (id == null) {
+      return DiagResult(
+        target: target,
+        reachable: false,
+        elapsed: watch.elapsed,
+        error: 'каталог не вернул треков (HTTP ${list.statusCode})',
+      );
+    }
+
+    final stream = await dio.get<List<int>>(
+      'https://api.audius.co/v1/tracks/$id/stream',
+      queryParameters: const {'app_name': 'TrollMusic'},
+      options: Options(
+        responseType: ResponseType.bytes,
+        receiveTimeout: const Duration(seconds: 12),
+        headers: const {'range': 'bytes=0-1023'},
+      ),
+    );
+    final code = stream.statusCode;
+    final bytes = stream.data?.length ?? 0;
+    final ok = (code == 200 || code == 206) && bytes > 0;
+    return DiagResult(
+      target: target,
+      reachable: ok,
+      elapsed: watch.elapsed,
+      status: code,
+      error: ok ? null : 'поток не отдал данные (HTTP $code, $bytes байт)',
+    );
+  } catch (error) {
+    return DiagResult(
+      target: target,
+      reachable: false,
+      elapsed: watch.elapsed,
+      error: describeNetworkError(error),
+    );
+  }
+}
