@@ -164,6 +164,11 @@ class Settings {
   void rememberMatch(String spotifyTrackId, String videoId) =>
       _box.put('spMatch:$spotifyTrackId', videoId);
 
+  /// Обход блокировок по SNI (локальный прокси, режущий TLS ClientHello).
+  bool get bypassDpi => _box.get('bypassDpi', defaultValue: false) as bool;
+
+  set bypassDpi(bool value) => _box.put('bypassDpi', value);
+
   /// Пропуск тишины в треках (Android).
   bool get skipSilence => _box.get('skipSilence', defaultValue: false) as bool;
 

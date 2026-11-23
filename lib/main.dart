@@ -17,6 +17,7 @@ import 'data/repositories/library_repository.dart';
 import 'services/audio/audio_handler.dart';
 import 'services/audio/audio_resolver_service.dart';
 import 'services/download/download_service.dart';
+import 'core/network/split_proxy.dart';
 import 'services/storage/storage_service.dart';
 
 Future<void> main() async {
@@ -24,6 +25,7 @@ Future<void> main() async {
 
   await Hive.initFlutter();
   final settings = await Settings.open();
+  if (settings.bypassDpi) await SplitProxy.shared.start();
   final soundCloudCache = await Hive.openBox<dynamic>(SoundCloudService.cacheBoxName);
   final library = await LibraryRepository.open();
 

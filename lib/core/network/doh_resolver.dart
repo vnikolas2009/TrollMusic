@@ -292,6 +292,10 @@ class DohResolver {
     return ConnectionTask.fromSocket(socket, () => cancelled = true);
   }
 
+  /// Готовый сокет к [host]:[port] с тем же перебором адресов.
+  Future<Socket> connectHost(String host, int port) =>
+      _connectAny(host, port, () => false);
+
   static const perAddressTimeout = Duration(seconds: 6);
   static const _maxAttempts = 6;
 

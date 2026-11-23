@@ -67,9 +67,19 @@ List<DiagTarget> diagnosticTargets(String apiBase) => [
         'https://cloudflare-dns.com/dns-query?name=example.com&type=A',
         'DNS-over-HTTPS',
       ),
+      const DiagTarget(
+        'SoundCloud (сайт)',
+        'https://soundcloud.com/',
+        'запасной адрес SoundCloud',
+      ),
+      const DiagTarget(
+        'SoundCloud (медиа)',
+        'https://cf-hls-media.sndcdn.com/',
+        'сами аудиофайлы SoundCloud',
+      ),
       DiagTarget(
         'Бэкенд (Vercel)',
-        apiBase,
+        '$apiBase/api/spotify/token',
         'только метаданные Spotify; плееру не нужен',
       ),
     ];

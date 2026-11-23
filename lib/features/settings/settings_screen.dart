@@ -9,6 +9,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/audio_pick.dart';
 import '../../core/utils/formatters.dart';
 import '../../shared/widgets/spring_switch.dart';
+import '../../core/network/split_proxy.dart';
 import 'network_diagnostics_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -82,6 +83,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     AudioQuality.high: 'Максимум, что отдаёт источник',
     AudioQuality.auto: 'Высокое по Wi‑Fi, среднее по мобильной сети',
   };
+
+  Future<void> _setBypass(bool value) async {
+    ref.read(settingsProvider).bypassDpi = value;
+    if (value) {
+      await SplitProxy.shared.start();
+    } else {
+      await SplitProxy.shared.stop();
+    }
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -303,6 +314,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onSave: (v) => ref.read(settingsProvider).geniusToken = v,
           ),
           const _Section('Сеть'),
+          ListTile(
+            leading: const Icon(Icons.shield_outlined),
+            title: const Text('Обход блокировок (экспериментально)'),
+            subtitle: const Text(
+              'Режет TLS-пакет, чтобы фильтр по имени сайта его не увидел. '
+              'Работает не у всех провайдеров; после включения перезапустите '
+              'приложение и проверьте диагностику.',
+            ),
+            trailing: SpringSwitch(
+              value: settings.bypassDpi,
+              semanticLabel: 'Обход блокировок',
+              onChanged: _setBypass,
+            ),
+            onTap: () => _setBypass(!settings.bypassDpi),
+          ),
           ListTile(
             leading: const Icon(Icons.network_check_rounded),
             title: const Text('Диагностика сети'),

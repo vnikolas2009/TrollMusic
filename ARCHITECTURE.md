@@ -407,3 +407,5 @@ Android.
 Оформление: shared/widgets/brand_wordmark.dart (надпись), aurora_background.dart (фон под вкладками в app_shell.dart), tool/gen_icon.py (иконки).
 
 Диагностика: core/network/diagnostics.dart + features/settings/network_diagnostics_screen.dart. Тексты: core/network/lyrics/external_lyrics.dart (Lyrics.ovh, Genius), выбор источника — ImportService.findLyricsOnline.
+
+Обход блокировок по SNI (опционально, Settings.bypassDpi): core/network/split_proxy.dart — локальный CONNECT-прокси, режет первый TLS-пакет; подключается в configureProxy (http_client.dart). Покрывает только запросы через Dio, не сам плеер.
