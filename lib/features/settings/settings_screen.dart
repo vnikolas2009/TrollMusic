@@ -277,6 +277,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
+          const _Section('Тексты песен'),
+          _TokenField(
+            label: 'Genius · клиентский токен',
+            help: 'Необязательно. Тексты ищутся в LRCLIB (с таймкодами) и '
+                'Lyrics.ovh без ключа; с токеном Genius добавляется третьим '
+                'источником. Токен хранится только на этом устройстве.',
+            initial: ref.read(settingsProvider).geniusToken,
+            onSave: (v) => ref.read(settingsProvider).geniusToken = v,
+          ),
           const _Section('Сеть'),
           ListTile(
             leading: const Icon(Icons.network_check_rounded),

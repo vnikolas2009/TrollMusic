@@ -6,6 +6,7 @@ import 'package:palette_generator/palette_generator.dart';
 
 import '../../app/network_providers.dart';
 import '../../app/providers.dart';
+import '../../core/network/lyrics/external_lyrics.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../data/models/lyrics.dart';
@@ -108,7 +109,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         ),
         actions: [
           if (lyrics.synced) _offsetMenu(),
-          if (lyrics.isEmpty) _findButton(context, track),
+          _lyricsMenu(context, track, raw),
         ],
       ),
       body: Stack(
@@ -149,19 +150,139 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     );
   }
 
-  Widget _findButton(BuildContext context, Track? track) {
-    return TextButton(
-      onPressed: () async {
+  Widget _lyricsMenu(BuildContext context, Track? track, String? raw) {
+    // `null` — автопоиск по всем источникам, `_custom` — свой текст.
+    const custom = -1;
+    const auto = -2;
+    return PopupMenuButton<int>(
+      color: AppColors.surfaceAlt,
+      icon: const Icon(Icons.more_vert_rounded),
+      tooltip: 'Текст песни',
+      onSelected: (value) async {
         if (track == null) return;
-        final result = await ref.read(importProvider).findLyricsOnline(track);
+        if (value == custom) {
+          await _editOwn(context, raw);
+          return;
+        }
+        final source = value == auto ? null : LyricsSource.values[value];
+        final result = await ref
+            .read(importProvider)
+            .findLyricsOnline(track, source: source);
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.found ? 'Текст найден' : 'Текст не найден')),
+          SnackBar(
+            content: Text(
+              result.found
+                  ? 'Текст найден${result.source == null ? '' : ' · ${result.source!.label}'}'
+                  : 'Текст не найден',
+            ),
+          ),
         );
         setState(() {});
       },
-      child: const Text('Найти'),
+      itemBuilder: (_) => [
+        const PopupMenuItem(
+          value: auto,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.search_rounded),
+            title: Text('Найти автоматически'),
+          ),
+        ),
+        for (final source in LyricsSource.values)
+          PopupMenuItem(
+            value: source.index,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.library_books_outlined),
+              title: Text(source.label),
+              subtitle: Text(source.hint),
+            ),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: custom,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.edit_note_rounded),
+            title: Text('Свой текст'),
+            subtitle: Text('Вставьте текст или LRC с таймкодами'),
+          ),
+        ),
+      ],
     );
+  }
+
+  /// Ввод своего текста. Если в нём есть таймкоды `[мм:сс.хх]`, строки
+  /// будут подсвечиваться синхронно.
+  Future<void> _editOwn(BuildContext context, String? current) async {
+    final controller = TextEditingController(text: current ?? '');
+    final saved = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceAlt,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheet) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + MediaQuery.viewInsetsOf(sheet).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Свой текст',
+              style: Theme.of(sheet).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Обычный текст или LRC: [00:12.50] строка',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              minLines: 8,
+              maxLines: 14,
+              keyboardType: TextInputType.multiline,
+              decoration: const InputDecoration(
+                hintText: 'Вставьте текст песни…',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(sheet),
+                  child: const Text('Отмена'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => Navigator.pop(sheet, controller.text),
+                  child: const Text('Сохранить'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    final text = saved?.trim();
+    if (text == null || text.isEmpty) return;
+    await ref.read(importProvider).saveManualLyrics(widget.trackId, text);
+    if (mounted) setState(() {});
   }
 
   Widget _body(Lyrics lyrics) {
@@ -170,7 +291,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         child: Padding(
           padding: EdgeInsets.all(32),
           child: Text(
-            'Текст не найден.\nНажмите «Найти» — поиск в LRCLIB по названию и исполнителю.',
+            'Текст не найден.\nОткройте меню ⋮ вверху: поиск в LRCLIB, Lyrics.ovh, Genius или «Свой текст».',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white70, height: 1.6),
           ),

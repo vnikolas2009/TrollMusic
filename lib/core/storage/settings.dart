@@ -82,6 +82,11 @@ class Settings {
   set yandexToken(String value) => _box.put('yandexToken', value.trim());
 
   /// Токен пользователя для VK API (`audio.*`). Без него VK Музыка недоступна.
+  /// Клиентский токен Genius (genius.com/api-clients) для поиска текстов.
+  String get geniusToken => (_box.get('geniusToken') as String? ?? '').trim();
+
+  set geniusToken(String value) => _box.put('geniusToken', value.trim());
+
   String get vkToken => (_box.get('vkToken') as String? ?? '').trim();
 
   set vkToken(String value) => _box.put('vkToken', value.trim());

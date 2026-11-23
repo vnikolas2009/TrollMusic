@@ -2,6 +2,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models/playlist.dart';
+import 'network_providers.dart';
 import '../data/models/track.dart';
 import '../data/repositories/library_repository.dart';
 import '../services/audio/audio_handler.dart';
@@ -41,6 +42,8 @@ final importProvider = Provider<ImportService>(
   (ref) => ImportService(
     library: ref.watch(libraryProvider),
     storage: ref.watch(storageProvider),
+    external: ref.watch(externalLyricsProvider),
+    geniusToken: () => ref.read(settingsProvider).geniusToken,
   ),
 );
 

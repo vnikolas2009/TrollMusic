@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../core/config/app_config.dart';
 import '../core/network/audius/audius_service.dart';
 import '../core/network/http_client.dart';
+import '../core/network/lyrics/external_lyrics.dart';
 import '../core/network/lyrics/lyrics_client.dart';
 import '../core/network/soundcloud/soundcloud_service.dart';
 import '../core/network/spotify/spotify_client.dart';
@@ -59,6 +60,10 @@ final spotifyClientProvider = Provider<SpotifyClient>(
 );
 
 final lyricsClientProvider = Provider<LyricsClient>((ref) => LyricsClient());
+
+final externalLyricsProvider = Provider<ExternalLyricsClient>(
+  (ref) => ExternalLyricsClient(dio: ref.watch(dioProvider)),
+);
 
 final musicRepositoryProvider = Provider<MusicRepository>(
   (ref) => MusicRepository(
