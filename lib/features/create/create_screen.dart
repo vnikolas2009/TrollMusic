@@ -25,29 +25,90 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
 
   Future<void> _import() async {
     await PermissionService.requestAudioFiles();
+
+    if (!mounted) return;
+
     setState(() => _busy = true);
+
     try {
-      final imported = await ref.read(importProvider).pickAndImportAudio();
+      final imported =
+          await ref.read(importProvider).pickAndImportAudio();
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(imported.isEmpty
-              ? 'Файлы не выбраны'
-              : 'Импортировано треков: ${imported.length}'),
+          content: Text(
+            imported.isEmpty
+                ? 'Файлы не выбраны'
+                : 'Импортировано треков: ${imported.length}',
+          ),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка импорта: $e')));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка импорта: $e')),
+      );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _scanFolder({
+    required bool fullRescan,
+  }) async {
+    if (_busy) return;
+
+    setState(() => _busy = true);
+
+    try {
+      final result = await ref.read(importProvider).scanFolder(
+            fullRescan: fullRescan,
+          );
+
+      if (!mounted) return;
+
+      if (result == null) {
+        return;
+      }
+
+      final message = [
+        'Проверено: ${result.scanned}',
+        'Добавлено: ${result.added}',
+        'Обновлено: ${result.updated}',
+        'Пропущено: ${result.skipped}',
+        if (result.errors > 0) 'Ошибок: ${result.errors}',
+      ].join(' · ');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка сканирования: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final local = ref.watch(localTracksProvider).value ?? const <Track>[];
+    final local =
+        ref.watch(localTracksProvider).value ?? const <Track>[];
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
@@ -62,7 +123,9 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
           actions: [
             IconButton(
               onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const SettingsScreen(),
+                ),
               ),
               icon: const Icon(Icons.settings_outlined),
             ),
@@ -80,7 +143,8 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                   child: _ActionCard(
                     icon: Icons.upload_file_rounded,
                     title: 'Импортировать аудио',
-                    subtitle: 'MP3, M4A, FLAC, WAV с памяти устройства',
+                    subtitle:
+                        'MP3, M4A, FLAC, WAV и другие форматы',
                     onTap: _busy ? null : _import,
                     busy: _busy,
                   ),
@@ -89,20 +153,52 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                 Entrance(
                   index: 1,
                   child: _ActionCard(
-                    icon: Icons.cloud_download_outlined,
-                    title: 'Импорт плейлиста Spotify',
-                    subtitle: 'Вставьте ссылку — треки появятся в медиатеке',
-                    onTap: () => _importSpotify(context),
+                    icon: Icons.folder_open_rounded,
+                    title: 'Быстрое сканирование',
+                    subtitle:
+                        'Найти новые и изменённые треки в папке',
+                    onTap: _busy
+                        ? null
+                        : () => _scanFolder(fullRescan: false),
+                    busy: _busy,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Entrance(
                   index: 2,
                   child: _ActionCard(
+                    icon: Icons.refresh_rounded,
+                    title: 'Полное сканирование',
+                    subtitle:
+                        'Повторно прочитать все аудиофайлы в папке',
+                    onTap: _busy
+                        ? null
+                        : () => _scanFolder(fullRescan: true),
+                    busy: _busy,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Entrance(
+                  index: 3,
+                  child: _ActionCard(
+                    icon: Icons.cloud_download_outlined,
+                    title: 'Импорт плейлиста Spotify',
+                    subtitle:
+                        'Вставьте ссылку — треки появятся в медиатеке',
+                    onTap: _busy ? null : () => _importSpotify(context),
+                    busy: _busy,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Entrance(
+                  index: 4,
+                  child: _ActionCard(
                     icon: Icons.swap_vert_rounded,
                     title: 'Экспорт / импорт медиатеки',
-                    subtitle: 'JSON-резервная копия всей библиотеки',
-                    onTap: () => _openBackup(context),
+                    subtitle:
+                        'JSON-резервная копия всей библиотеки',
+                    onTap: _busy ? null : () => _openBackup(context),
+                    busy: _busy,
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -147,32 +243,38 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
           itemCount: local.length,
           itemBuilder: (context, i) {
             final track = local[i];
+
             return TrackTile(
               title: track.title,
               artist: track.artist,
               coverUrl: track.thumbnailUrl,
               coverPath: track.artworkPath,
-              downloaded:
-                  track.localPath != null && track.localPath!.isNotEmpty,
+              downloaded: track.localPath != null &&
+                  track.localPath!.isNotEmpty,
               index: i,
               onTap: () => ref
                   .read(audioHandlerProvider)
                   .playTrack(track, contextQueue: local),
               onMenu: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => TrackEditSheet(trackId: track.id),
+                  builder: (_) => TrackEditSheet(
+                    trackId: track.id,
+                  ),
                 ),
               ),
             );
           },
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 44)),
+        const SliverToBoxAdapter(
+          child: SizedBox(height: 44),
+        ),
       ],
     );
   }
 
   Future<void> _importSpotify(BuildContext context) async {
     final controller = TextEditingController();
+
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -182,7 +284,8 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
           controller: controller,
           autofocus: true,
           decoration: const InputDecoration(
-            hintText: 'https://open.spotify.com/playlist/...',
+            hintText:
+                'https://open.spotify.com/playlist/...',
           ),
         ),
         actions: [
@@ -201,33 +304,55 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
         ],
       ),
     );
+
     controller.dispose();
   }
 
   Future<void> _performSpotifyImport(String url) async {
+    if (_busy) return;
+
     setState(() => _busy = true);
+
     try {
       final repo = ref.read(musicRepositoryProvider);
       final playlist = await repo.spotifyPlaylist(url);
-      if (playlist == null) throw StateError('Неверная ссылка');
+
+      if (playlist == null) {
+        throw StateError('Неверная ссылка');
+      }
+
       await ref.read(libraryProvider).savePlaylist(playlist);
       await ref.read(libraryProvider).saveTracks(playlist.tracks);
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Импортировано: ${playlist.tracks.length} треков')),
+        SnackBar(
+          content: Text(
+            'Импортировано: ${playlist.tracks.length} треков',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Не удалось импортировать: $e')));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Не удалось импортировать: $e'),
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
   void _openBackup(BuildContext context) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const BackupScreen()),
+      MaterialPageRoute(
+        builder: (_) => const BackupScreen(),
+      ),
     );
   }
 }
@@ -268,7 +393,11 @@ class _ActionCard extends StatelessWidget {
                 color: AppColors.accent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(13),
               ),
-              child: Icon(icon, size: 21, color: AppColors.accent),
+              child: Icon(
+                icon,
+                size: 21,
+                color: AppColors.accent,
+              ),
             ),
             const SizedBox(width: 13),
             Expanded(
@@ -298,7 +427,9 @@ class _ActionCard extends StatelessWidget {
               const SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                ),
               )
             else
               Icon(
