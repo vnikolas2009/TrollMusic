@@ -164,6 +164,11 @@ class Settings {
   void rememberMatch(String spotifyTrackId, String videoId) =>
       _box.put('spMatch:$spotifyTrackId', videoId);
 
+  /// Пропуск тишины в треках (Android).
+  bool get skipSilence => _box.get('skipSilence', defaultValue: false) as bool;
+
+  set skipSilence(bool value) => _box.put('skipSilence', value);
+
   int get crossfadeSeconds => _box.get('crossfadeSeconds', defaultValue: 0) as int;
 
   set crossfadeSeconds(int value) => _box.put('crossfadeSeconds', value);

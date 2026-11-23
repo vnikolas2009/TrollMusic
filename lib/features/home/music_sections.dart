@@ -99,7 +99,7 @@ class MoodSection extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceAlt.withValues(alpha: 0.95),
+                    color: AppColors.surfaceAlt,
                     borderRadius: BorderRadius.circular(22),
                     border: Border.all(color: AppColors.outline),
                   ),

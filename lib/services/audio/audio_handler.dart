@@ -137,6 +137,15 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     _player.setLoopMode(_loopModeOf(_repeat.value));
     _player.setShuffleModeEnabled(_shuffleEnabled.value);
     _player.setSpeed(settings.playbackSpeed.clamp(0.5, 2.0));
+    setSkipSilence(settings.skipSilence);
+  }
+
+  /// Пропуск тишины; платформы без поддержки молча игнорируют вызов.
+  Future<void> setSkipSilence(bool enabled) async {
+    _settings?.skipSilence = enabled;
+    try {
+      await _player.setSkipSilenceEnabled(enabled);
+    } catch (_) {}
   }
 
   Future<void> restoreLastPlayed() async {

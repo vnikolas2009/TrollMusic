@@ -280,7 +280,7 @@ class _ConnectCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: AppColors.surfaceAlt.withValues(alpha: 0.95),
+          color: AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.outline),
         ),
@@ -333,7 +333,7 @@ class _LoadFailed extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface.withValues(alpha: 0.95),
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.outline),
         ),

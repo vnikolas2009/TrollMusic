@@ -50,7 +50,7 @@ class _AuroraBackgroundState extends State<AuroraBackground>
               painter: _AuroraPainter(
                 animation: _controller,
                 color: AppColors.accent,
-                strength: AppPalette.current.isDark ? 0.16 : 0.10,
+                strength: AppPalette.current.isDark ? 0.09 : 0.06,
               ),
             ),
           ),

@@ -277,6 +277,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
+          ListTile(
+            title: const Text('Пропуск тишины'),
+            subtitle: const Text('Убирает паузы в начале и конце треков (Android)'),
+            trailing: SpringSwitch(
+              value: settings.skipSilence,
+              semanticLabel: 'Пропуск тишины',
+              onChanged: (v) {
+                audio.setSkipSilence(v);
+                setState(() {});
+              },
+            ),
+            onTap: () {
+              audio.setSkipSilence(!settings.skipSilence);
+              setState(() {});
+            },
+          ),
           const _Section('Тексты песен'),
           _TokenField(
             label: 'Genius · клиентский токен',
