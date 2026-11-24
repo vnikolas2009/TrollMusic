@@ -47,6 +47,8 @@ jobs:
 
       - name: Setup Android SDK
         run: |
+          set -euo pipefail
+
           SDKMAN="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
 
           yes | "$SDKMAN" --licenses > /dev/null 2>&1 || true
@@ -66,7 +68,10 @@ jobs:
 
       - name: Set version
         run: |
+          set -euo pipefail
+
           sed -i -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
+
           grep '^version:' pubspec.yaml
 
       - name: Get dependencies
@@ -74,6 +79,8 @@ jobs:
 
       - name: Build APK
         run: |
+          set -euo pipefail
+
           flutter build apk --release \
             --build-name=${{ needs.version.outputs.name }} \
             --build-number=${{ needs.version.outputs.code }}
@@ -82,10 +89,16 @@ jobs:
         run: |
           set -euo pipefail
 
+          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
+
+          test -s "$APK_PATH"
+
           mkdir -p dist
 
-          cp build/app/outputs/flutter-apk/app-release.apk \
+          cp "$APK_PATH" \
             "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-android.apk"
+
+          ls -lh dist/
 
       - uses: actions/upload-artifact@v4
         with:
@@ -109,7 +122,10 @@ jobs:
 
       - name: Set version
         run: |
+          set -euo pipefail
+
           sed -i '' -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
+
           grep '^version:' pubspec.yaml
 
       - name: Get dependencies
@@ -117,59 +133,90 @@ jobs:
 
       - name: Build iOS
         run: |
-          set +e
+          set -euo pipefail
 
           flutter build ios --release --no-codesign \
             --build-name=${{ needs.version.outputs.name }} \
             --build-number=${{ needs.version.outputs.code }}
 
-          BUILD_STATUS=$?
-
-          set -e
-
           APP_PATH="build/ios/iphoneos/Runner.app"
 
-          if [ -d "$APP_PATH" ] && [ -f "$APP_PATH/Runner" ]; then
-            echo "Runner.app exists."
-            echo "Checking application executable..."
+          test -d "$APP_PATH"
+          test -f "$APP_PATH/Info.plist"
+          test -f "$APP_PATH/Runner"
 
-            file "$APP_PATH/Runner"
-
-            echo "iOS application build output is available."
-          else
-            echo "iOS build failed."
-            echo "Runner.app was not generated."
-            exit "$BUILD_STATUS"
-          fi
+          echo "iOS application built successfully."
 
       - name: Package IPA
         run: |
           set -euo pipefail
 
           APP_PATH="build/ios/iphoneos/Runner.app"
+          PACKAGE_DIR="$RUNNER_TEMP/ipa-package"
+          IPA_PATH="$GITHUB_WORKSPACE/dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa"
 
-          if [ ! -d "$APP_PATH" ]; then
-            echo "Runner.app not found."
+          echo "Checking application..."
+
+          test -d "$APP_PATH"
+          test -f "$APP_PATH/Info.plist"
+          test -f "$APP_PATH/Runner"
+
+          plutil -lint "$APP_PATH/Info.plist"
+
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_PATH/Info.plist")
+
+          if [ "$EXECUTABLE" != "Runner" ]; then
+            echo "Unexpected executable: $EXECUTABLE"
             exit 1
           fi
 
-          if [ ! -f "$APP_PATH/Runner" ]; then
-            echo "Runner executable not found."
+          echo "Checking Flutter frameworks..."
+
+          if [ ! -d "$APP_PATH/Frameworks" ]; then
+            echo "Frameworks directory is missing."
             exit 1
           fi
 
-          mkdir -p dist Payload
+          rm -rf "$PACKAGE_DIR"
+          rm -rf "$GITHUB_WORKSPACE/dist"
 
-          cp -R "$APP_PATH" Payload/
+          mkdir -p "$PACKAGE_DIR/Payload"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
 
-          cd Payload
-          zip -qry "../dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa" Runner.app
-          cd ..
+          echo "Copying Runner.app..."
 
-          test -s "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa"
+          cp -R "$APP_PATH" "$PACKAGE_DIR/Payload/Runner.app"
 
-          echo "IPA package created:"
-          ls -lh dist/
+          echo "Creating IPA..."
+
+          cd "$PACKAGE_DIR"
+
+          /usr/bin/ditto -c -k --norsrc --keepParent \
+            Payload "$IPA_PATH"
+
+          test -s "$IPA_PATH"
+
+          echo "Validating IPA archive..."
+
+          unzip -t "$IPA_PATH"
+
+          unzip -Z1 "$IPA_PATH" > "$RUNNER_TEMP/ipa_contents.txt"
+
+          grep -q '^Payload/Runner.app/Info.plist$' \
+            "$RUNNER_TEMP/ipa_contents.txt"
+
+          grep -q '^Payload/Runner.app/Runner$' \
+            "$RUNNER_TEMP/ipa_contents.txt"
+
+          grep -q '^Payload/Runner.app/Frameworks/' \
+            "$RUNNER_TEMP/ipa_contents.txt"
+
+          echo "IPA structure:"
+          unzip -Z1 "$IPA_PATH" | head -40
+
+          echo "IPA successfully packaged."
+
+          ls -lh "$IPA_PATH"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -195,8 +242,25 @@ jobs:
           echo "Release files:"
           ls -lh dist/
 
-          test -n "$(find dist -maxdepth 1 -type f -name '*.apk' -print -quit)"
-          test -n "$(find dist -maxdepth 1 -type f -name '*.ipa' -print -quit)"
+          APK=$(find dist -maxdepth 1 -type f -name '*.apk' -print -quit)
+          IPA=$(find dist -maxdepth 1 -type f -name '*.ipa' -print -quit)
+
+          test -n "$APK"
+          test -n "$IPA"
+
+          test -s "$APK"
+          test -s "$IPA"
+
+          echo "Checking IPA archive..."
+
+          unzip -t "$IPA"
+
+          unzip -Z1 "$IPA" > ipa_contents.txt
+
+          grep -q '^Payload/Runner.app/Info.plist$' ipa_contents.txt
+          grep -q '^Payload/Runner.app/Runner$' ipa_contents.txt
+
+          echo "All artifacts passed validation."
 
       - name: Push to releases branch
         env:
