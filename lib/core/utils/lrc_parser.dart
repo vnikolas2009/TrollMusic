@@ -33,12 +33,10 @@ abstract final class LrcParser {
 
       if (line.isEmpty) continue;
 
-      // Пропускаем метаданные: [ar:Artist], [ti:Title] и т. д.
       if (_metaTag.hasMatch(line)) {
         continue;
       }
 
-      // Извлекаем временные метки начала строки.
       final lineTimestamps = <Duration>[];
       var contentStart = 0;
 
@@ -51,7 +49,6 @@ abstract final class LrcParser {
         contentStart = match.end;
       }
 
-      // Если временных меток строки нет, сохраняем обычный текст.
       if (lineTimestamps.isEmpty) {
         final text = _removeWordTags(line);
 
@@ -74,7 +71,6 @@ abstract final class LrcParser {
         lineTimestamps.first,
       );
 
-      // Одна строка LRC может иметь несколько временных меток.
       for (final timestamp in lineTimestamps) {
         lines.add(
           LyricLine(
@@ -86,7 +82,6 @@ abstract final class LrcParser {
       }
     }
 
-    // Сортируем строки по времени воспроизведения.
     lines.sort((a, b) => a.time.compareTo(b.time));
 
     return Lyrics(
@@ -96,22 +91,18 @@ abstract final class LrcParser {
     );
   }
 
-  /// Разбирает временные метки отдельных слов Enhanced LRC.
   static List<LyricWord> _parseWordTimings(
     String content,
     Duration lineTime,
   ) {
     final matches = _wordTimeTag.allMatches(content).toList();
 
-    // Если внутри строки нет временных меток слов,
-    // это обычный LRC.
     if (matches.isEmpty) {
       return const [];
     }
 
     final words = <LyricWord>[];
 
-    // Текст до первой временной метки.
     final prefix = content.substring(0, matches.first.start).trim();
 
     if (prefix.isNotEmpty) {
@@ -125,7 +116,6 @@ abstract final class LrcParser {
       }
     }
 
-    // Обрабатываем текст после каждой временной метки.
     for (var i = 0; i < matches.length; i++) {
       final match = matches[i];
 
@@ -152,11 +142,8 @@ abstract final class LrcParser {
       }
     }
 
-    // Сортируем слова по времени.
     words.sort((a, b) => a.start.compareTo(b.start));
 
-    // Определяем время окончания каждого слова
-    // по началу следующего слова.
     return List.generate(words.length, (index) {
       final word = words[index];
 
@@ -178,7 +165,6 @@ abstract final class LrcParser {
     });
   }
 
-  /// Разделяет текст на слова.
   static List<String> _splitWords(String text) {
     return text
         .trim()
@@ -187,7 +173,6 @@ abstract final class LrcParser {
         .toList();
   }
 
-  /// Удаляет временные метки слов из текста.
   static String _removeWordTags(String text) {
     return text
         .replaceAll(_wordTimeTag, '')
@@ -195,8 +180,8 @@ abstract final class LrcParser {
         .trim();
   }
 
-  /// Разбирает временную метку строки: [00:12.50].
-  static Duration _parseTimestamp(RegExpMatch match) {
+  // Исправлено: Match вместо RegExpMatch.
+  static Duration _parseTimestamp(Match match) {
     final minutes = int.parse(match.group(1)!);
     final seconds = int.parse(match.group(2)!);
     final fraction = _parseFraction(match.group(3));
@@ -208,8 +193,8 @@ abstract final class LrcParser {
     );
   }
 
-  /// Разбирает временную метку слова: <00:12.50>.
-  static Duration _parseWordTimestamp(RegExpMatch match) {
+  // Исправлено: Match вместо RegExpMatch.
+  static Duration _parseWordTimestamp(Match match) {
     final minutes = int.parse(match.group(1)!);
     final seconds = int.parse(match.group(2)!);
     final fraction = _parseFraction(match.group(3));
@@ -221,11 +206,6 @@ abstract final class LrcParser {
     );
   }
 
-  /// Преобразует дробную часть времени в миллисекунды.
-  ///
-  /// .5   = 500 мс
-  /// .50  = 500 мс
-  /// .500 = 500 мс
   static int _parseFraction(String? raw) {
     if (raw == null || raw.isEmpty) return 0;
 
@@ -234,7 +214,6 @@ abstract final class LrcParser {
     );
   }
 
-  /// Преобразует Lyrics обратно в обычный LRC.
   static String toLrc(
     Lyrics lyrics, {
     String? title,
@@ -257,7 +236,6 @@ abstract final class LrcParser {
     return buffer.toString().trimRight();
   }
 
-  /// Форматирует время в [00:12.50].
   static String _stamp(Duration duration) {
     final minutes = duration.inMinutes.toString().padLeft(2, '0');
 
