@@ -22,6 +22,7 @@ jobs:
       name: ${{ steps.v.outputs.name }}
       code: ${{ steps.v.outputs.code }}
       tag: ${{ steps.v.outputs.tag }}
+
     steps:
       - id: v
         run: |
@@ -35,6 +36,7 @@ jobs:
     name: Android APK
     needs: [version]
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -46,10 +48,14 @@ jobs:
       - name: Setup Android SDK
         run: |
           SDKMAN="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
+
           yes | "$SDKMAN" --licenses > /dev/null 2>&1 || true
+
           "$SDKMAN" "platform-tools" "platforms;android-37.0" \
             "build-tools;37.0.0" > /dev/null 2>&1 || true
+
           "$SDKMAN" "ndk;28.2.13676358" > /dev/null 2>&1 || true
+
           "$SDKMAN" --list_installed | head -20
 
       - uses: subosito/flutter-action@v2
@@ -63,7 +69,8 @@ jobs:
           sed -i -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
           grep '^version:' pubspec.yaml
 
-      - run: flutter pub get
+      - name: Get dependencies
+        run: flutter pub get
 
       - name: Build APK
         run: |
@@ -73,7 +80,10 @@ jobs:
 
       - name: Rename artifact
         run: |
+          set -euo pipefail
+
           mkdir -p dist
+
           cp build/app/outputs/flutter-apk/app-release.apk \
             "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-android.apk"
 
@@ -87,6 +97,7 @@ jobs:
     name: iOS IPA (unsigned)
     needs: [version]
     runs-on: macos-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -101,19 +112,64 @@ jobs:
           sed -i '' -E "s/^version: .*/version: ${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}/" pubspec.yaml
           grep '^version:' pubspec.yaml
 
-      - run: flutter pub get
+      - name: Get dependencies
+        run: flutter pub get
 
       - name: Build iOS
         run: |
+          set +e
+
           flutter build ios --release --no-codesign \
             --build-name=${{ needs.version.outputs.name }} \
             --build-number=${{ needs.version.outputs.code }}
 
+          BUILD_STATUS=$?
+
+          set -e
+
+          APP_PATH="build/ios/iphoneos/Runner.app"
+
+          if [ -d "$APP_PATH" ] && [ -f "$APP_PATH/Runner" ]; then
+            echo "Runner.app exists."
+            echo "Checking application executable..."
+
+            file "$APP_PATH/Runner"
+
+            echo "iOS application build output is available."
+          else
+            echo "iOS build failed."
+            echo "Runner.app was not generated."
+            exit "$BUILD_STATUS"
+          fi
+
       - name: Package IPA
         run: |
+          set -euo pipefail
+
+          APP_PATH="build/ios/iphoneos/Runner.app"
+
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Runner.app not found."
+            exit 1
+          fi
+
+          if [ ! -f "$APP_PATH/Runner" ]; then
+            echo "Runner executable not found."
+            exit 1
+          fi
+
           mkdir -p dist Payload
-          cp -R build/ios/iphoneos/Runner.app Payload/
-          zip -qry "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa" Payload
+
+          cp -R "$APP_PATH" Payload/
+
+          cd Payload
+          zip -qry "../dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa" Runner.app
+          cd ..
+
+          test -s "dist/${{ env.APP_NAME }}-v${{ needs.version.outputs.name }}-ios.ipa"
+
+          echo "IPA package created:"
+          ls -lh dist/
 
       - uses: actions/upload-artifact@v4
         with:
@@ -125,34 +181,58 @@ jobs:
     name: Publish
     needs: [version, android, ios]
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
+      - name: Check artifacts
+        run: |
+          set -euo pipefail
+
+          echo "Release files:"
+          ls -lh dist/
+
+          test -n "$(find dist -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$(find dist -maxdepth 1 -type f -name '*.ipa' -print -quit)"
+
       - name: Push to releases branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+
           cd "$RUNNER_TEMP"
+
           rm -rf releases-repo
+
           git init -q releases-repo
+
           cd releases-repo
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+
           if git fetch --depth=1 origin releases; then
             git checkout -q -B releases FETCH_HEAD
+
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           else
             git checkout -q --orphan releases
           fi
+
           cp "$GITHUB_WORKSPACE"/dist/* .
+
           echo "${{ needs.version.outputs.name }}+${{ needs.version.outputs.code }}" > latest-version.txt
+
           git add -A
+
           git commit -q -m "release ${{ needs.version.outputs.tag }}"
+
           git push -q --force origin releases
 
       - name: GitHub Release
