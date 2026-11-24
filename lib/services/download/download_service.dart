@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import '../../core/network/http_client.dart';
 import '../../core/storage/settings.dart';
 import '../../core/utils/lrc_parser.dart';
+import '../../core/utils/path_repair.dart';
 import '../../data/models/track.dart';
 import '../../data/repositories/library_repository.dart';
 import '../audio/audio_resolver_service.dart';
@@ -153,7 +154,7 @@ class DownloadService {
           try {
             final extension = _extensionOf(candidate);
             final file = File(
-              p.join(_storage.audioDir.path, '${track.id}.$extension'),
+              p.join(_storage.audioDir.path, '${safeFileName(track.id)}.$extension'),
             );
 
             await _downloadFile(candidate, file, track.id, token);

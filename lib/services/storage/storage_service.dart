@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/network/lyrics/lyrics_client.dart';
 import '../../core/utils/lrc_parser.dart';
+import '../../core/utils/path_repair.dart';
 import '../../data/models/lyrics.dart';
 import '../../data/models/track.dart';
 import '../../data/repositories/library_repository.dart';
@@ -48,6 +49,22 @@ class StorageService {
   Directory get audioDir => Directory(p.join(_root.path, 'audio'));
   Directory get artworkDir => Directory(p.join(_root.path, 'artwork'));
   Directory get lyricsDir => Directory(p.join(_root.path, 'lyrics'));
+
+  /// Чинит пути скачанных файлов после смены папки приложения (iOS).
+  Future<int> repairPaths() async {
+    var fixed = 0;
+    for (final track in _library.tracks) {
+      final audio = repairedPath(track.localPath, _root.path);
+      final art = repairedPath(track.artworkPath, _root.path);
+      final lyr = repairedPath(track.lyricsPath, _root.path);
+      if (audio == null && art == null && lyr == null) continue;
+      await _library.saveTrack(
+        track.copyWith(localPath: audio, artworkPath: art, lyricsPath: lyr),
+      );
+      fixed++;
+    }
+    return fixed;
+  }
 
   Future<int> usedBytes() async {
     if (!await _root.exists()) return 0;

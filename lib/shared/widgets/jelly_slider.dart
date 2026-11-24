@@ -10,12 +10,17 @@ class JellySlider extends StatefulWidget {
     required this.duration,
     required this.onChanged,
     this.onChangeEnd,
+    this.onPreview,
   });
 
   final Duration position;
   final Duration duration;
   final ValueChanged<Duration> onChanged;
   final ValueChanged<Duration>? onChangeEnd;
+
+  /// Позиция во время перетаскивания (перемотка выполняется только в
+  /// [onChanged] при отпускании).
+  final ValueChanged<Duration>? onPreview;
 
   @override
   State<JellySlider> createState() => _JellySliderState();
@@ -28,12 +33,25 @@ class _JellySliderState extends State<JellySlider>
   double? _dragValue;
   bool _dragging = false;
 
+  /// После отпускания бегунок держится на цели, пока плеер перематывается.
+  double? _hold;
+  DateTime _holdUntil = DateTime.fromMillisecondsSinceEpoch(0);
+
   double get _maxMs =>
       widget.duration.inMilliseconds.clamp(1, 1 << 30).toDouble();
 
-  double get _currentMs =>
-      (_dragValue ?? widget.position.inMilliseconds.toDouble())
-          .clamp(0, _maxMs);
+  double get _currentMs {
+    final hold = _hold;
+    var base = widget.position.inMilliseconds.toDouble();
+    if (hold != null) {
+      if ((base - hold).abs() < 1500 || DateTime.now().isAfter(_holdUntil)) {
+        _hold = null;
+      } else {
+        base = hold;
+      }
+    }
+    return (_dragValue ?? base).clamp(0, _maxMs).toDouble();
+  }
 
   double get _progress => _currentMs / _maxMs;
 
@@ -65,7 +83,7 @@ class _JellySliderState extends State<JellySlider>
     });
 
     _controller.forward();
-    widget.onChanged(_currentDuration);
+    widget.onPreview?.call(_currentDuration);
   }
 
   void _updateDrag(Offset localPosition, double width) {
@@ -75,7 +93,7 @@ class _JellySliderState extends State<JellySlider>
       _dragValue = _valueFromPosition(localPosition.dx, width);
     });
 
-    widget.onChanged(_currentDuration);
+    widget.onPreview?.call(_currentDuration);
   }
 
   void _endDrag() {
@@ -86,10 +104,23 @@ class _JellySliderState extends State<JellySlider>
     setState(() {
       _dragging = false;
       _dragValue = null;
+      _hold = result.inMilliseconds.toDouble();
+      _holdUntil = DateTime.now().add(const Duration(milliseconds: 900));
     });
 
     _controller.reverse();
+    widget.onChanged(result);
     widget.onChangeEnd?.call(result);
+  }
+
+  /// Отмена жеста без перемотки (тап перехвачен перетаскиванием и т.п.).
+  void _abortDrag() {
+    if (!_dragging) return;
+    setState(() {
+      _dragging = false;
+      _dragValue = null;
+    });
+    _controller.reverse();
   }
 
   double _valueFromPosition(double x, double width) {
@@ -125,13 +156,13 @@ class _JellySliderState extends State<JellySlider>
                   onTapDown: (details) =>
                       _startDrag(details.localPosition, width),
                   onTapUp: (_) => _endDrag(),
-                  onTapCancel: _endDrag,
+                  onTapCancel: _abortDrag,
                   onHorizontalDragStart: (details) =>
                       _startDrag(details.localPosition, width),
                   onHorizontalDragUpdate: (details) =>
                       _updateDrag(details.localPosition, width),
                   onHorizontalDragEnd: (_) => _endDrag(),
-                  onHorizontalDragCancel: _endDrag,
+                  onHorizontalDragCancel: _abortDrag,
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
@@ -231,53 +262,6 @@ class _JellySliderState extends State<JellySlider>
                 ),
               ),
 
-              // Scale marks.
-              SizedBox(
-                height: 25,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    for (var i = 0; i <= 20; i++)
-                      Positioned(
-                        left: inset + available * i / 20 - 0.75,
-                        top: 0,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          width: 1.5,
-                          height: i % 5 == 0 ? 9 : 4,
-                          decoration: BoxDecoration(
-                            color: i / 20 <= _progress && _progress > 0
-                                ? AppColors.textPrimary
-                                : AppColors.textSecondary.withValues(
-                                    alpha: 0.35,
-                                  ),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                    for (var i = 0; i <= 4; i++)
-                      Positioned(
-                        left: (inset + available * i / 4 - 10)
-                            .clamp(0.0, width - 20),
-                        top: 12,
-                        width: 20,
-                        child: Text(
-                          '${i * 25}',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: i / 4 <= _progress && _progress > 0
-                                ? AppColors.textSecondary
-                                : AppColors.textSecondary.withValues(
-                                    alpha: 0.55,
-                                  ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
             ],
           );
         },

@@ -53,6 +53,30 @@ HttpClientAdapter buildHttpClientAdapter(
   );
 }
 
+/// Направляет через локальный прокси обхода и сетевые запросы плеера
+/// (`LockCachingAudioSource` создаёт обычный `HttpClient`, мимо Dio).
+/// Клиенты, у которых `findProxy` задан явно (все из `createDio`), не меняются.
+class BypassHttpOverrides extends HttpOverrides {
+  BypassHttpOverrides(this.settings);
+
+  final Settings settings;
+
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client = super.createHttpClient(context);
+    final previous = HttpClient.findProxyFromEnvironment;
+    client.findProxy = (uri) {
+      if (settings.bypassDpi &&
+          uri.scheme == 'https' &&
+          SplitProxy.shared.running) {
+        return 'PROXY 127.0.0.1:${SplitProxy.shared.port}';
+      }
+      return previous(uri);
+    };
+    return client;
+  }
+}
+
 /// Приоритет: ручной HTTP-прокси → системный прокси → прямое соединение.
 void configureProxy(HttpClient client, Settings? settings) {
   final raw = settings?.httpProxy.trim() ?? '';

@@ -46,18 +46,102 @@ int? findSniSplit(Uint8List data) {
   return null;
 }
 
+/// Делит одну TLS-запись ClientHello на две в позиции [at] (абсолютный
+/// индекс внутри [data], не раньше конца заголовка записи).
+///
+/// Это аналог `tlsrec` из zapret: сервер по стандарту собирает
+/// фрагментированные записи обратно, а фильтры, ищущие имя сайта в одной
+/// записи, его не находят. Возвращает `null`, если пакет не подходит.
+Uint8List? fragmentTlsRecord(Uint8List data, int at) {
+  if (data.length < 6 || data[0] != 0x16) return null;
+  final length = (data[3] << 8) | data[4];
+  final end = 5 + length;
+  if (at <= 5 || at >= end || end > data.length) return null;
+
+  final firstLen = at - 5;
+  final secondLen = length - firstLen;
+  final out = BytesBuilder(copy: false)
+    ..add([data[0], data[1], data[2], firstLen >> 8, firstLen & 0xff])
+    ..add(Uint8List.sublistView(data, 5, at))
+    ..add([data[0], data[1], data[2], secondLen >> 8, secondLen & 0xff])
+    ..add(Uint8List.sublistView(data, at));
+  return out.toBytes();
+}
+
+/// Способы отправить первый пакет рукопожатия. Если провайдер режет
+/// соединение при одном способе, пробуется следующий.
+enum BypassStrategy {
+  /// Обычный пакет, разрезанный на два TCP-сегмента внутри имени сервера.
+  tcpSplit,
+
+  /// Две TLS-записи, граница между ними внутри имени, два TCP-сегмента.
+  tlsRecordSplit,
+
+  /// Две TLS-записи в одном TCP-сегменте.
+  tlsRecord,
+
+  /// Первый байт отдельным сегментом, затем две TLS-записи.
+  earlySplit,
+}
+
+/// Части, в которых нужно отправить [hello] выбранным способом. Если
+/// способ не применим к пакету, возвращает его целиком.
+List<Uint8List> planClientHello(Uint8List hello, BypassStrategy strategy) {
+  final at = findSniSplit(hello);
+  if (at == null) return [hello];
+
+  switch (strategy) {
+    case BypassStrategy.tcpSplit:
+      return [
+        Uint8List.sublistView(hello, 0, at),
+        Uint8List.sublistView(hello, at),
+      ];
+    case BypassStrategy.tlsRecordSplit:
+      final f = fragmentTlsRecord(hello, at);
+      if (f == null) return [hello];
+      return [
+        Uint8List.sublistView(f, 0, at),
+        Uint8List.sublistView(f, at),
+      ];
+    case BypassStrategy.tlsRecord:
+      return [fragmentTlsRecord(hello, at) ?? hello];
+    case BypassStrategy.earlySplit:
+      final f = fragmentTlsRecord(hello, at) ?? hello;
+      return [
+        Uint8List.sublistView(f, 0, 1),
+        Uint8List.sublistView(f, 1),
+      ];
+  }
+}
+
+/// Порядок способов, начиная с запомненного для узла.
+List<BypassStrategy> strategyOrder(BypassStrategy? remembered) {
+  const all = BypassStrategy.values;
+  if (remembered == null) return all;
+  return [remembered, ...all.where((s) => s != remembered)];
+}
+
 /// Локальный HTTP-прокси (только `CONNECT`) для обхода блокировок по SNI.
 ///
 /// Приложение ходит через него по HTTPS: прокси подключается к серверу
-/// (адрес берётся через DoH) и первый пакет рукопожатия отправляет двумя
-/// частями. Дальше трафик идёт как есть, шифрование остаётся сквозным:
-/// прокси ничего не расшифровывает.
+/// (адрес берётся через DoH) и первый пакет рукопожатия отправляет
+/// несколькими способами (см. [BypassStrategy]) до первого ответа сервера.
+/// Удачный способ запоминается для узла. Дальше трафик идёт как есть,
+/// шифрование остаётся сквозным: прокси ничего не расшифровывает.
+///
+/// Ограничение: приёмы zapret с поддельными пакетами (fake, TTL, md5sig,
+/// disorder) требуют перехвата пакетов на уровне системы и без root
+/// в мобильном приложении невозможны.
 class SplitProxy {
   SplitProxy._();
 
   static final SplitProxy shared = SplitProxy._();
 
+  /// Сколько ждать ответа сервера после первого пакета.
+  static const _replyTimeout = Duration(seconds: 4);
+
   ServerSocket? _server;
+  final Map<String, BypassStrategy> _remembered = {};
 
   bool get running => _server != null;
   int get port => _server?.port ?? 0;
@@ -83,8 +167,10 @@ class SplitProxy {
     client.setOption(SocketOption.tcpNoDelay, true);
     Socket? upstream;
     final buffer = BytesBuilder();
+    String? host;
+    var port = 443;
     var tunnelled = false;
-    var firstPacketSent = false;
+    var opening = false;
     StreamSubscription<Uint8List>? sub;
 
     void closeAll() {
@@ -97,56 +183,47 @@ class SplitProxy {
       (chunk) async {
         try {
           if (!tunnelled) {
-            buffer.add(chunk);
-            final head = String.fromCharCodes(buffer.toBytes());
-            final end = head.indexOf('\r\n\r\n');
-            if (end < 0) return;
+            if (host == null) {
+              buffer.add(chunk);
+              final head = String.fromCharCodes(buffer.toBytes());
+              if (!head.contains('\r\n\r\n')) return;
 
-            final first = head.split('\r\n').first.split(' ');
-            if (first.length < 2 || first[0].toUpperCase() != 'CONNECT') {
-              client.write('HTTP/1.1 405 Method Not Allowed\r\n\r\n');
-              closeAll();
+              final first = head.split('\r\n').first.split(' ');
+              if (first.length < 2 || first[0].toUpperCase() != 'CONNECT') {
+                client.write('HTTP/1.1 405 Method Not Allowed\r\n\r\n');
+                closeAll();
+                return;
+              }
+              final target = first[1];
+              final colon = target.lastIndexOf(':');
+              host = colon < 0 ? target : target.substring(0, colon);
+              port = colon < 0 ? 443 : int.parse(target.substring(colon + 1));
+
+              // Соединение с сервером откроем после первого пакета клиента:
+              // его нужно будет отправить заново, если способ не сработает.
+              client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+              await client.flush();
               return;
             }
 
+            if (opening) return;
+            opening = true;
             sub!.pause();
-            final target = first[1];
-            final colon = target.lastIndexOf(':');
-            final host = colon < 0 ? target : target.substring(0, colon);
-            final port = colon < 0 ? 443 : int.parse(target.substring(colon + 1));
-
-            final socket = await DohResolver.shared.connectHost(host, port);
-            socket.setOption(SocketOption.tcpNoDelay, true);
-            upstream = socket;
+            final hello = Uint8List.fromList(chunk);
+            final connection = await _open(host!, port, hello);
+            if (connection == null) {
+              closeAll();
+              return;
+            }
+            upstream = connection.socket;
             tunnelled = true;
-
-            socket.listen(
-              client.add,
-              onDone: closeAll,
-              onError: (_) => closeAll(),
-              cancelOnError: true,
-            );
-
-            client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-            await client.flush();
+            if (connection.first.isNotEmpty) client.add(connection.first);
+            unawaited(_pump(connection.iterator, client, closeAll));
             sub!.resume();
             return;
           }
 
-          final out = upstream!;
-          if (!firstPacketSent) {
-            firstPacketSent = true;
-            final bytes = Uint8List.fromList(chunk);
-            final at = findSniSplit(bytes);
-            if (at != null) {
-              out.add(Uint8List.sublistView(bytes, 0, at));
-              await out.flush();
-              await Future<void>.delayed(const Duration(milliseconds: 15));
-              out.add(Uint8List.sublistView(bytes, at));
-              return;
-            }
-          }
-          out.add(chunk);
+          upstream!.add(chunk);
         } catch (_) {
           closeAll();
         }
@@ -156,4 +233,71 @@ class SplitProxy {
       cancelOnError: true,
     );
   }
+
+  Future<void> _pump(
+    StreamIterator<Uint8List> iterator,
+    Socket client,
+    void Function() closeAll,
+  ) async {
+    try {
+      while (await iterator.moveNext()) {
+        client.add(iterator.current);
+      }
+    } catch (_) {}
+    closeAll();
+  }
+
+  /// Открывает соединение и отправляет [hello]. Для TLS перебирает способы
+  /// и возвращает первое соединение, где сервер ответил.
+  Future<_Opened?> _open(String host, int port, Uint8List hello) async {
+    if (findSniSplit(hello) == null) {
+      // Не TLS или без SNI: отправляем как есть.
+      final socket = await _connect(host, port);
+      if (socket == null) return null;
+      final it = StreamIterator<Uint8List>(socket);
+      socket.add(hello);
+      return _Opened(socket, it, Uint8List(0));
+    }
+
+    for (final strategy in strategyOrder(_remembered[host])) {
+      final socket = await _connect(host, port);
+      if (socket == null) return null;
+      final it = StreamIterator<Uint8List>(socket);
+      try {
+        final parts = planClientHello(hello, strategy);
+        for (var i = 0; i < parts.length; i++) {
+          socket.add(parts[i]);
+          if (i < parts.length - 1) {
+            await socket.flush();
+            await Future<void>.delayed(const Duration(milliseconds: 15));
+          }
+        }
+        final got = await it.moveNext().timeout(_replyTimeout);
+        if (got) {
+          _remembered[host] = strategy;
+          return _Opened(socket, it, Uint8List.fromList(it.current));
+        }
+      } catch (_) {}
+      socket.destroy();
+    }
+    return null;
+  }
+
+  Future<Socket?> _connect(String host, int port) async {
+    try {
+      final socket = await DohResolver.shared.connectHost(host, port);
+      socket.setOption(SocketOption.tcpNoDelay, true);
+      return socket;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class _Opened {
+  _Opened(this.socket, this.iterator, this.first);
+
+  final Socket socket;
+  final StreamIterator<Uint8List> iterator;
+  final Uint8List first;
 }

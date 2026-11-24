@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../../core/network/audius/audius_service.dart';
 import '../../core/network/soundcloud/soundcloud_service.dart';
 import '../../core/network/vk/vk_music_service.dart';
@@ -39,7 +41,9 @@ class AudioResolverService {
   Future<List<String>> resolve(Track track) {
     final local = track.localPath;
 
-    if (local != null && local.isNotEmpty) {
+    // Локальный файл нужен только если он реально на месте: после
+    // переустановки iOS путь устаревает, и тогда трек надо искать онлайн.
+    if (local != null && local.isNotEmpty && File(local).existsSync()) {
       return Future.value(const []);
     }
 

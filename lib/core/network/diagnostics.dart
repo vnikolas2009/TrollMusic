@@ -163,7 +163,11 @@ Future<DiagResult> probeAudiusStream(Dio dio) async {
   try {
     final list = await dio.get<dynamic>(
       'https://api.audius.co/v1/tracks/trending',
-      queryParameters: const {'limit': '1', 'app_name': 'TrollMusic'},
+      queryParameters: const {
+        'time': 'week',
+        'limit': '5',
+        'app_name': 'TrollMusic',
+      },
       options: Options(receiveTimeout: const Duration(seconds: 8)),
     );
     final data = list.data;

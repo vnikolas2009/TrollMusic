@@ -38,8 +38,7 @@ VK недоступен, Яндекс отдаёт только метаданн
 
 UI-заметки: AppColors.appBarBackground делает SliverAppBar прозрачным,
 пока контент не под ним (иначе чёрная плашка закрывает градиент).
-Ползунок плеера: shared/widgets/scrubber.dart + core/utils/seek_math.dart;
-позицию слушает только _SeekBar.
+Ползунок плеера: shared/widgets/jelly_slider.dart (без нижней шкалы 0–100; перемотка выполняется один раз при отпускании); core/utils/seek_math.dart — чистая логика. Позицию слушает только _SeekBar.
 
 Анимации на пружинах (DesignBookmark)
 
@@ -409,3 +408,9 @@ Android.
 Диагностика: core/network/diagnostics.dart + features/settings/network_diagnostics_screen.dart. Тексты: core/network/lyrics/external_lyrics.dart (Lyrics.ovh, Genius), выбор источника — ImportService.findLyricsOnline.
 
 Обход блокировок по SNI (опционально, Settings.bypassDpi): core/network/split_proxy.dart — локальный CONNECT-прокси, режет первый TLS-пакет; подключается в configureProxy (http_client.dart). Покрывает только запросы через Dio, не сам плеер.
+
+Обход блокировок (обновлено): split_proxy.dart пробует способы BypassStrategy по очереди (TCP-разрез по SNI, две TLS-записи + разрез, две записи в одном сегменте, ранний разрез) до первого ответа сервера и запоминает рабочий способ для узла. Поддельные пакеты zapret (fake/TTL/md5sig/disorder) без root недоступны. BypassHttpOverrides (http_client.dart, ставится в main) направляет через прокси и HttpClient плеера (LockCachingAudioSource); HLS через нативный плеер не проксируется.
+
+Скачанные треки: StorageService.repairPaths() при старте чинит пути после смены папки приложения iOS (core/utils/path_repair.dart); AudioResolverService.resolve() игнорирует localPath, если файла нет. Имена файлов — safeFileName(track.id).
+
+Вход в VK/Яндекс по логину не реализован: у VK audio.* закрыт для обычных приложений, у Яндекс Музыки нет публичного OAuth для сторонних клиентов; остаётся ввод токена.
