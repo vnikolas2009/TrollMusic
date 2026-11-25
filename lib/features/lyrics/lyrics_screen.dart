@@ -197,6 +197,8 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     const providers = {
       'lrclib': 'LRCLIB',
       'netease': 'NetEase (в том числе пословные)',
+      'kugou': 'Kugou (пословные)',
+      'qq': 'QQ Music',
       'ovh': 'Lyrics.ovh (без таймкодов)',
     };
 
@@ -479,7 +481,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         child: Padding(
           padding: EdgeInsets.all(32),
           child: Text(
-            'Текст не найден.\nОткройте меню ⋮ вверху: поиск в LRCLIB и NetEase, загрузка .lrc или «Свой текст».',
+            'Текст не найден.\nОткройте меню ⋮ вверху: поиск в LRCLIB, NetEase, Kugou, QQ, загрузка .lrc или «Свой текст».',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white70,

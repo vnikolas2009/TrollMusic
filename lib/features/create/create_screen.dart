@@ -194,8 +194,8 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                         ? 'Найдено ${job.found}. Нажмите, чтобы остановить'
                         : missing == 0
                             ? 'У всех треков уже есть текст'
-                            : 'Без текста: $missing — LRCLIB, NetEase, '
-                                'Lyrics.ovh',
+                            : 'Без текста: $missing — 5 источников, '
+                                'enhanced LRC в приоритете',
                     onTap: job.running
                         ? jobCtl.cancel
                         : (missing == 0 ? null : jobCtl.runMissing),

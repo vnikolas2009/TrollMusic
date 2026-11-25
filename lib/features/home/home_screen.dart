@@ -195,7 +195,7 @@ class _LyricsCard extends ConsumerWidget {
                 Text(
                   job.running
                       ? 'Найдено: ${job.found}'
-                      : 'LRCLIB, NetEase и Lyrics.ovh — в том числе enhanced LRC',
+                      : '5 источников, приоритет у enhanced LRC',
                   style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
               ],
