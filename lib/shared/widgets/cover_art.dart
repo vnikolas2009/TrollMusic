@@ -9,7 +9,6 @@ import '../../core/theme/app_motion.dart';
 class CoverArt extends StatelessWidget {
   const CoverArt({
     super.key,
-    this.url,
     this.path,
     this.size = 48,
     this.radius = 4,
@@ -20,7 +19,6 @@ class CoverArt extends StatelessWidget {
     this.animate = true,
   });
 
-  final String? url;
   final String? path;
   final double size;
   final double radius;
@@ -60,18 +58,6 @@ class CoverArt extends StatelessWidget {
         );
       }
     }
-    if (url != null && url!.isNotEmpty) {
-      return _image(
-        Image.network(
-          url!,
-          fit: fit,
-          cacheWidth: cacheWidth,
-          errorBuilder: (_, __, ___) => _placeholder(fallback),
-          loadingBuilder: (context, child, progress) =>
-              progress == null ? child : _placeholder(fallback),
-        ),
-      );
-    }
     return _placeholder(fallback);
   }
 
@@ -97,4 +83,50 @@ class CoverArt extends StatelessWidget {
           size: size * 0.34,
         ),
       );
+}
+
+
+/// Мозаика 2×2 из обложек треков; если обложек меньше четырёх —
+/// одна крупная обложка первого трека.
+class CoverMosaic extends StatelessWidget {
+  const CoverMosaic({
+    super.key,
+    required this.paths,
+    this.size = 56,
+    this.radius = 12,
+    this.icon = Icons.music_note_rounded,
+  });
+
+  final List<String?> paths;
+  final double size;
+  final double radius;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final real = paths.whereType<String>().where((p) => p.isNotEmpty).toList();
+    if (real.length < 4) {
+      return CoverArt(
+        path: real.isEmpty ? null : real.first,
+        size: size,
+        radius: radius,
+        placeholderIcon: icon,
+        animate: false,
+      );
+    }
+    final half = size / 2;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Wrap(
+          children: [
+            for (final path in real.take(4))
+              CoverArt(path: path, size: half, radius: 0, animate: false),
+          ],
+        ),
+      ),
+    );
+  }
 }

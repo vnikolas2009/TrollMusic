@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 import 'package:palette_generator/palette_generator.dart';
 
 import '../../app/providers.dart';
@@ -14,7 +15,7 @@ import '../../data/models/track.dart';
 import '../../services/audio/audio_handler.dart';
 import '../../shared/widgets/jelly_slider.dart';
 import '../../shared/widgets/press_scale.dart';
-import '../artist/artist_screen.dart';
+import '../library/track_list_screen.dart';
 import '../lyrics/lyrics_screen.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
@@ -50,17 +51,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         );
         _apply(palette);
         return;
-      } catch (_) {}
-    }
-
-    final url = track.thumbnailUrl;
-    if (url != null && url.isNotEmpty) {
-      try {
-        final palette = await PaletteGenerator.fromImageProvider(
-          NetworkImage(url),
-          size: const Size(120, 120),
-        );
-        _apply(palette);
       } catch (_) {}
     }
   }
@@ -191,7 +181,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                             onTap: () =>
                                                 Navigator.of(context).push(
                                               MaterialPageRoute(
-                                                builder: (_) => ArtistScreen(
+                                                builder: (_) => TrackListScreen.artist(
                                                   name: track.artist,
                                                 ),
                                               ),
@@ -349,27 +339,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.download_rounded),
-              title: Text(
-                track.localPath != null && track.localPath!.isNotEmpty
-                    ? 'Удалить скачивание'
-                    : 'Скачать трек',
-              ),
-              onTap: () async {
-                Navigator.pop(sheetContext);
-                final downloads = ref.read(downloadProvider);
-                if (track.localPath != null && track.localPath!.isNotEmpty) {
-                  await downloads.deleteDownload(track.id);
-                } else {
-                  await downloads.download(track);
-                }
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Готово')),
-                );
-              },
-            ),
             ListTile(
               leading: const Icon(Icons.timer_outlined),
               title: const Text('Таймер сна'),
@@ -592,16 +561,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               _infoRow('Исполнитель', track.artist),
               if (track.album.isNotEmpty) _infoRow('Альбом', track.album),
               _infoRow('Длительность', duration),
-              _infoRow('Источник', _sourceLabel(track.source)),
               if (track.bitrate != null)
                 _infoRow('Битрейт', '${track.bitrate} kbps'),
               _infoRow(
-                'Офлайн',
-                track.localPath != null && track.localPath!.isNotEmpty
-                    ? 'Да'
-                    : 'Нет',
+                'Текст',
+                ref.read(libraryProvider).hasLyrics(track.id) ? 'Есть' : 'Нет',
               ),
-              _infoRow('ID', track.id),
+              if (track.localPath != null)
+                _infoRow('Файл', p.extension(track.localPath!).replaceFirst('.', '').toUpperCase()),
+              if (track.sourcePath != null) _infoRow('Откуда', track.sourcePath!),
             ],
           ),
         ),
@@ -630,47 +598,46 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     );
   }
 
-  String _sourceLabel(TrackSource source) => switch (source) {
-        TrackSource.youtube => 'YouTube',
-        TrackSource.soundcloud => 'SoundCloud',
-        TrackSource.spotify => 'Spotify',
-        TrackSource.local => 'Локальный файл',
-        TrackSource.downloaded => 'Скачанный',
-        TrackSource.yandex => 'Яндекс Музыка',
-        TrackSource.vk => 'VK Музыка',
-        TrackSource.audius => 'Audius',
-      };
-
   void _showSleepTimer() {
-    const options = <int>[0, 5, 15, 30, 60];
+    const options = <int>[0, 5, 15, 30, 45, 60, 90];
+    final audio = ref.read(audioHandlerProvider);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surfaceAlt,
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Таймер сна',
-                style: TextStyle(fontWeight: FontWeight.w700),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Таймер сна',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
-            ),
-            for (final minutes in options)
               ListTile(
-                title: Text(minutes == 0 ? 'Выключить' : '$minutes мин'),
+                leading: const Icon(Icons.music_note_rounded),
+                title: const Text('До конца трека'),
                 onTap: () {
-                  final audio = ref.read(audioHandlerProvider);
-                  if (minutes == 0) {
-                    audio.cancelSleepTimer();
-                  } else {
-                    audio.startSleepTimer(Duration(minutes: minutes));
-                  }
+                  audio.sleepAfterCurrentTrack();
                   Navigator.pop(sheetContext);
                 },
               ),
-          ],
+              for (final minutes in options)
+                ListTile(
+                  title: Text(minutes == 0 ? 'Выключить' : '$minutes мин'),
+                  onTap: () {
+                    if (minutes == 0) {
+                      audio.cancelSleepTimer();
+                    } else {
+                      audio.startSleepTimer(Duration(minutes: minutes));
+                    }
+                    Navigator.pop(sheetContext);
+                  },
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -806,20 +773,12 @@ class _Artwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final path = track.artworkPath;
-    final url = track.thumbnailUrl;
     Widget child;
     if (path != null && path.isNotEmpty && File(path).existsSync()) {
       child = Image.file(
         File(path),
         fit: BoxFit.cover,
         cacheWidth: AppConfig.coverCacheWidth,
-      );
-    } else if (url != null && url.isNotEmpty) {
-      child = Image.network(
-        url,
-        fit: BoxFit.cover,
-        cacheWidth: AppConfig.coverCacheWidth,
-        errorBuilder: (_, __, ___) => _placeholder(),
       );
     } else {
       child = _placeholder();

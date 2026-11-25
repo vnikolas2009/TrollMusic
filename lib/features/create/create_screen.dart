@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/network_providers.dart';
+import '../../app/lyrics_job.dart';
 import '../../app/providers.dart';
+import '../../app/settings_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/permission_service.dart';
 import '../../data/models/track.dart';
@@ -12,6 +13,7 @@ import '../../shared/widgets/track_tile.dart';
 import 'backup_screen.dart';
 import 'track_edit_sheet.dart';
 
+/// Вкладка импорта: файлы, папки, тексты, резервная копия.
 class CreateScreen extends ConsumerStatefulWidget {
   const CreateScreen({super.key});
 
@@ -22,92 +24,99 @@ class CreateScreen extends ConsumerStatefulWidget {
 class _CreateScreenState extends ConsumerState<CreateScreen> {
   bool _busy = false;
 
-  Future<void> _import() async {
-    await PermissionService.requestAudioFiles();
-
+  void _say(String message, {int seconds = 4}) {
     if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: Duration(seconds: seconds)),
+    );
+  }
 
+  /// Запускает поиск текстов для свежих треков, если это включено в настройках.
+  void _autoLyrics(Iterable<Track> tracks) {
+    if (!ref.read(settingsProvider).autoLyrics) return;
+    final list = tracks.toList();
+    if (list.isEmpty) return;
+    ref.read(lyricsJobProvider.notifier).run(list);
+  }
+
+  Future<void> _run(Future<void> Function() action, String errorPrefix) async {
+    if (_busy) return;
     setState(() => _busy = true);
-
     try {
-      final imported =
-          await ref.read(importProvider).pickAndImportAudio();
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            imported.isEmpty
-                ? 'Файлы не выбраны'
-                : 'Импортировано треков: ${imported.length}',
-          ),
-        ),
-      );
+      await action();
     } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка импорта: $e')),
-      );
+      _say('$errorPrefix: $e');
     } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _scanFolder({
-    required bool fullRescan,
-  }) async {
-    if (_busy) return;
+  Future<void> _import() => _run(() async {
+        await PermissionService.requestAudioFiles();
+        if (!mounted) return;
+        final result = await ref.read(importProvider).pickAndImport();
+        if (result.tracks.isEmpty && result.lyricsAttached == 0) {
+          _say('Файлы не выбраны');
+          return;
+        }
+        _say([
+          'Импортировано треков: ${result.tracks.length}',
+          if (result.lyricsAttached > 0) 'текстов: ${result.lyricsAttached}',
+        ].join(' · '));
+        _autoLyrics(result.tracks);
+      }, 'Ошибка импорта');
 
-    setState(() => _busy = true);
+  Future<void> _importLyrics() => _run(() async {
+        final result = await ref.read(importProvider).pickAndImportLyrics();
+        if (result.lyricsAttached == 0 && result.lyricsSkipped == 0) {
+          _say('Файлы не выбраны');
+          return;
+        }
+        _say([
+          'Привязано текстов: ${result.lyricsAttached}',
+          if (result.lyricsSkipped > 0)
+            'не нашлось трека: ${result.lyricsSkipped}',
+        ].join(' · '), seconds: 6);
+      }, 'Ошибка импорта текстов');
 
-    try {
-      final result = await ref.read(importProvider).scanFolder(
-            fullRescan: fullRescan,
-          );
+  Future<void> _scanFolder({required bool fullRescan}) => _run(() async {
+        final result =
+            await ref.read(importProvider).scanFolder(fullRescan: fullRescan);
+        if (result == null) return;
 
-      if (!mounted) return;
+        _say([
+          'Проверено: ${result.scanned}',
+          'Добавлено: ${result.added}',
+          if (result.updated > 0) 'Обновлено: ${result.updated}',
+          if (result.skipped > 0) 'Пропущено: ${result.skipped}',
+          if (result.lyricsAttached > 0) 'Текстов: ${result.lyricsAttached}',
+          if (result.errors > 0) 'Ошибок: ${result.errors}',
+        ].join(' · '), seconds: 6);
 
-      if (result == null) {
-        return;
-      }
+        final library = ref.read(libraryProvider);
+        _autoLyrics(result.newTrackIds
+            .map(library.trackById)
+            .whereType<Track>());
+      }, 'Ошибка сканирования');
 
-      final message = [
-        'Проверено: ${result.scanned}',
-        'Добавлено: ${result.added}',
-        'Обновлено: ${result.updated}',
-        'Пропущено: ${result.skipped}',
-        if (result.errors > 0) 'Ошибок: ${result.errors}',
-      ].join(' · ');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 6),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ошибка сканирования: $e'),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
-    }
+  void _openBackup() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const BackupScreen()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final local =
-        ref.watch(localTracksProvider).value ?? const <Track>[];
+    final tracks = ref.watch(tracksProvider).value ?? const <Track>[];
+    final library = ref.watch(libraryProvider);
+    final job = ref.watch(lyricsJobProvider);
+    final jobCtl = ref.read(lyricsJobProvider.notifier);
+
+    final missing = tracks.where((t) => !library.hasLyrics(t.id)).length;
+
+    final recent = [...tracks]
+      ..sort((a, b) => (b.addedAtMs ?? 0).compareTo(a.addedAtMs ?? 0));
+    final shown = recent.take(30).toList();
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
@@ -119,7 +128,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
           backgroundColor: AppColors.appBarBackground,
           surfaceTintColor: Colors.transparent,
           scrolledUnderElevation: 0,
-          title: const Text('Создать'),
+          title: const Text('Импорт'),
         ),
         SliverToBoxAdapter(
           child: Padding(
@@ -131,9 +140,9 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                   index: 0,
                   child: _ActionCard(
                     icon: Icons.upload_file_rounded,
-                    title: 'Импортировать аудио',
-                    subtitle:
-                        'MP3, M4A, FLAC, WAV и другие форматы',
+                    title: 'Файлы: аудио и тексты',
+                    subtitle: 'Отметьте треки и .lrc вместе — тексты '
+                        'привяжутся по названию файла',
                     onTap: _busy ? null : _import,
                     busy: _busy,
                   ),
@@ -143,12 +152,10 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                   index: 1,
                   child: _ActionCard(
                     icon: Icons.folder_open_rounded,
-                    title: 'Быстрое сканирование',
-                    subtitle:
-                        'Найти новые и изменённые треки в папке',
-                    onTap: _busy
-                        ? null
-                        : () => _scanFolder(fullRescan: false),
+                    title: 'Сканировать папку',
+                    subtitle: 'Новые и изменённые треки, .lrc рядом с аудио '
+                        'подключаются сами',
+                    onTap: _busy ? null : () => _scanFolder(fullRescan: false),
                     busy: _busy,
                   ),
                 ),
@@ -158,11 +165,8 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                   child: _ActionCard(
                     icon: Icons.refresh_rounded,
                     title: 'Полное сканирование',
-                    subtitle:
-                        'Повторно прочитать все аудиофайлы в папке',
-                    onTap: _busy
-                        ? null
-                        : () => _scanFolder(fullRescan: true),
+                    subtitle: 'Заново прочитать теги всех файлов в папке',
+                    onTap: _busy ? null : () => _scanFolder(fullRescan: true),
                     busy: _busy,
                   ),
                 ),
@@ -170,11 +174,11 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                 Entrance(
                   index: 3,
                   child: _ActionCard(
-                    icon: Icons.cloud_download_outlined,
-                    title: 'Импорт плейлиста Spotify',
-                    subtitle:
-                        'Вставьте ссылку — треки появятся в медиатеке',
-                    onTap: _busy ? null : () => _importSpotify(context),
+                    icon: Icons.lyrics_outlined,
+                    title: 'Импорт текстов (.lrc, .txt)',
+                    subtitle: 'Несколько файлов сразу, в том числе enhanced '
+                        'LRC с пословными метками',
+                    onTap: _busy ? null : _importLyrics,
                     busy: _busy,
                   ),
                 ),
@@ -182,12 +186,30 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                 Entrance(
                   index: 4,
                   child: _ActionCard(
+                    icon: Icons.manage_search_rounded,
+                    title: job.running
+                        ? 'Ищу тексты: ${job.done} из ${job.total}'
+                        : 'Найти тексты онлайн',
+                    subtitle: job.running
+                        ? 'Найдено ${job.found}. Нажмите, чтобы остановить'
+                        : missing == 0
+                            ? 'У всех треков уже есть текст'
+                            : 'Без текста: $missing — LRCLIB, NetEase, '
+                                'Lyrics.ovh',
+                    onTap: job.running
+                        ? jobCtl.cancel
+                        : (missing == 0 ? null : jobCtl.runMissing),
+                    busy: job.running,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Entrance(
+                  index: 5,
+                  child: _ActionCard(
                     icon: Icons.swap_vert_rounded,
-                    title: 'Экспорт / импорт медиатеки',
-                    subtitle:
-                        'JSON-резервная копия всей библиотеки',
-                    onTap: _busy ? null : () => _openBackup(context),
-                    busy: _busy,
+                    title: 'Резервная копия',
+                    subtitle: 'JSON с треками, плейлистами и текстами',
+                    onTap: _busy ? null : _openBackup,
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -195,7 +217,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                   children: [
                     const Expanded(
                       child: Text(
-                        'Локальные треки',
+                        'Недавно добавленные',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
@@ -213,7 +235,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        '${local.length}',
+                        '${tracks.length}',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -229,119 +251,27 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
           ),
         ),
         SliverList.builder(
-          itemCount: local.length,
+          itemCount: shown.length,
           itemBuilder: (context, i) {
-            final track = local[i];
-
+            final track = shown[i];
             return TrackTile(
               title: track.title,
               artist: track.artist,
-              coverUrl: track.thumbnailUrl,
               coverPath: track.artworkPath,
-              downloaded: track.localPath != null &&
-                  track.localPath!.isNotEmpty,
               index: i,
               onTap: () => ref
                   .read(audioHandlerProvider)
-                  .playTrack(track, contextQueue: local),
+                  .playTrack(track, contextQueue: shown),
               onMenu: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => TrackEditSheet(
-                    trackId: track.id,
-                  ),
+                  builder: (_) => TrackEditSheet(trackId: track.id),
                 ),
               ),
             );
           },
         ),
-        const SliverToBoxAdapter(
-          child: SizedBox(height: 44),
-        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 44)),
       ],
-    );
-  }
-
-  Future<void> _importSpotify(BuildContext context) async {
-    final controller = TextEditingController();
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surfaceAlt,
-        title: const Text('Ссылка Spotify'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText:
-                'https://open.spotify.com/playlist/...',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final url = controller.text;
-              Navigator.pop(dialogContext);
-              await _performSpotifyImport(url);
-            },
-            child: const Text('Импорт'),
-          ),
-        ],
-      ),
-    );
-
-    controller.dispose();
-  }
-
-  Future<void> _performSpotifyImport(String url) async {
-    if (_busy) return;
-
-    setState(() => _busy = true);
-
-    try {
-      final repo = ref.read(musicRepositoryProvider);
-      final playlist = await repo.spotifyPlaylist(url);
-
-      if (playlist == null) {
-        throw StateError('Неверная ссылка');
-      }
-
-      await ref.read(libraryProvider).savePlaylist(playlist);
-      await ref.read(libraryProvider).saveTracks(playlist.tracks);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Импортировано: ${playlist.tracks.length} треков',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Не удалось импортировать: $e'),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
-    }
-  }
-
-  void _openBackup(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const BackupScreen(),
-      ),
     );
   }
 }

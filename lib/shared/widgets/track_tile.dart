@@ -14,11 +14,10 @@ class TrackTile extends StatefulWidget {
     super.key,
     required this.title,
     required this.artist,
-    this.coverUrl,
     this.coverPath,
     this.explicit = false,
-    this.downloaded = false,
-    this.downloadProgress,
+    this.subtitleExtra,
+    this.hasLyrics = false,
     this.onTap,
     this.onMenu,
     this.trailing,
@@ -30,11 +29,13 @@ class TrackTile extends StatefulWidget {
 
   final String title;
   final String artist;
-  final String? coverUrl;
   final String? coverPath;
   final bool explicit;
-  final bool downloaded;
-  final double? downloadProgress;
+  /// Короткая подпись справа от исполнителя (например, длительность).
+  final String? subtitleExtra;
+
+  /// У трека есть текст песни.
+  final bool hasLyrics;
   final VoidCallback? onTap;
   final VoidCallback? onMenu;
   final Widget? trailing;
@@ -78,7 +79,7 @@ class _TrackTileState extends State<TrackTile> {
           if (widget.leading != null)
             widget.leading!
           else if (widget.showCover) ...[
-            _Cover(url: widget.coverUrl, path: widget.coverPath),
+            _Cover(path: widget.coverPath),
             const SizedBox(width: 12),
           ],
           Expanded(
@@ -122,22 +123,21 @@ class _TrackTileState extends State<TrackTile> {
               ],
             ),
           ),
-          if (widget.downloadProgress != null)
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                value: widget.downloadProgress,
-                strokeWidth: 2,
-              ),
-            )
-          else if (widget.downloaded)
+          if (widget.subtitleExtra != null)
             Padding(
-              padding: EdgeInsets.only(right: 4),
+              padding: const EdgeInsets.only(right: 4),
+              child: Text(
+                widget.subtitleExtra!,
+                style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+              ),
+            ),
+          if (widget.hasLyrics)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
               child: Icon(
-                Icons.download_done_rounded,
-                size: 16,
-                color: AppColors.accent,
+                Icons.lyrics_outlined,
+                size: 15,
+                color: AppColors.textTertiary,
               ),
             ),
           if (widget.trailing != null)
@@ -226,9 +226,8 @@ class _TileEntranceState extends State<_TileEntrance>
 }
 
 class _Cover extends StatelessWidget {
-  const _Cover({this.url, this.path});
+  const _Cover({this.path});
 
-  final String? url;
   final String? path;
 
   @override
@@ -238,16 +237,15 @@ class _Cover extends StatelessWidget {
       child: SizedBox(
         width: 48,
         height: 48,
-        child: CoverImage(url: url, path: path),
+        child: CoverImage(path: path),
       ),
     );
   }
 }
 
 class CoverImage extends StatelessWidget {
-  const CoverImage({super.key, this.url, this.path, this.radius = 4});
+  const CoverImage({super.key, this.path, this.radius = 4});
 
-  final String? url;
   final String? path;
   final double radius;
 
@@ -262,14 +260,7 @@ class CoverImage extends StatelessWidget {
               cacheWidth: AppConfig.thumbCacheWidth,
               errorBuilder: (_, __, ___) => _fallback(),
             )
-          : (url != null && url!.isNotEmpty
-              ? Image.network(
-                  url!,
-                  fit: BoxFit.cover,
-                  cacheWidth: AppConfig.thumbCacheWidth,
-                  errorBuilder: (_, __, ___) => _fallback(),
-                )
-              : _fallback()),
+          : _fallback(),
     );
   }
 

@@ -1,20 +1,16 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/network_providers.dart';
-import '../../app/source_provider.dart';
 import '../../app/providers.dart';
+import '../../app/settings_provider.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_motion.dart';
-import '../../data/models/playlist.dart';
+import '../../core/utils/track_search.dart';
 import '../../data/models/track.dart';
-import '../../shared/widgets/entrance.dart';
-import '../../shared/widgets/source_switcher.dart';
+import '../../shared/widgets/track_actions.dart';
 import '../../shared/widgets/track_tile.dart';
-import '../playlist/playlist_screen.dart';
+import '../library/track_list_screen.dart';
 
+/// Поиск по медиатеке: названия, исполнители, альбомы и тексты песен.
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -22,8 +18,158 @@ class SearchScreen extends ConsumerStatefulWidget {
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _RecentQueries extends StatelessWidget {
-  const _RecentQueries({
+class _SearchScreenState extends ConsumerState<SearchScreen> {
+  final _controller = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _set(String value) {
+    _controller.text = value;
+    _controller.selection = TextSelection.collapsed(offset: value.length);
+    setState(() => _query = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final all = ref.watch(tracksProvider).value ?? const <Track>[];
+    final library = ref.watch(libraryProvider);
+    final settings = ref.read(settingsProvider);
+    final audio = ref.read(audioHandlerProvider);
+    final current = ref.watch(currentTrackProvider).value;
+
+    final result = searchLibrary(all, _query, library.lyricsFor);
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: AppColors.appBarBackground,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        title: const Text('Поиск'),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: TextField(
+              controller: _controller,
+              onChanged: (v) => setState(() => _query = v),
+              onSubmitted: (v) => settings.rememberQuery(v.trim()),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Трек, исполнитель, альбом или строчка из песни',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => _set(''),
+                      ),
+                filled: true,
+                fillColor: AppColors.surfaceAlt,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: _query.trim().isEmpty
+                ? _Recent(
+                    queries: settings.searchQueries,
+                    onPick: _set,
+                    onClear: () => setState(settings.clearSearchQueries),
+                  )
+                : result.isEmpty
+                    ? Center(
+                        child: Text(
+                          'Ничего не найдено',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      )
+                    : ListView(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        children: [
+                          if (result.artists.isNotEmpty) ...[
+                            const _Header('Исполнители'),
+                            for (final name in result.artists.take(5))
+                              ListTile(
+                                leading: const Icon(Icons.person_rounded),
+                                title: Text(name),
+                                onTap: () {
+                                  settings.rememberQuery(_query.trim());
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => TrackListScreen.artist(name: name),
+                                  ));
+                                },
+                              ),
+                          ],
+                          if (result.tracks.isNotEmpty) ...[
+                            const _Header('Треки'),
+                            for (final track in result.tracks.take(50))
+                              TrackTile(
+                                title: track.title,
+                                artist: track.artist,
+                                coverPath: track.artworkPath,
+                                active: current?.id == track.id,
+                                hasLyrics: library.hasLyrics(track.id),
+                                onTap: () {
+                                  settings.rememberQuery(_query.trim());
+                                  audio.playTrack(track, contextQueue: result.tracks);
+                                },
+                                onMenu: () => showTrackActions(context, ref, track),
+                              ),
+                          ],
+                          if (result.lyricMatches.isNotEmpty) ...[
+                            const _Header('В текстах песен'),
+                            for (final entry in result.lyricMatches.entries.take(30))
+                              ListTile(
+                                leading: const Icon(Icons.lyrics_outlined),
+                                title: Text(entry.key.title,
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                                subtitle: Text(
+                                  '${entry.key.artist} · ${entry.value}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onTap: () => audio.playTrack(entry.key),
+                              ),
+                          ],
+                          const SizedBox(height: 96),
+                        ],
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+        child: Text(
+          text,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        ),
+      );
+}
+
+class _Recent extends StatelessWidget {
+  const _Recent({
     required this.queries,
     required this.onPick,
     required this.onClear,
@@ -36,405 +182,38 @@ class _RecentQueries extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (queries.isEmpty) {
-      return SliverFillRemaining(
-        hasScrollBody: false,
+      return Center(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(32, 40, 32, 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.graphic_eq_rounded,
-                size: 36,
-                color: AppColors.textTertiary,
-              ),
-              SizedBox(height: 14),
-              Text(
-                'Начните вводить название трека или имя артиста',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                  height: 1.5,
-                ),
-              ),
-            ],
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            'Ищите по названию, исполнителю, альбому\nили по строчке из текста песни',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary, height: 1.5),
           ),
         ),
       );
     }
-
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Недавние запросы',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                TextButton(
-                  onPressed: onClear,
-                  child: const Text('Очистить'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (var i = 0; i < queries.length; i++)
-                  Entrance(
-                    index: i,
-                    offsetY: 0.06,
-                    child: ActionChip(
-                      avatar: Icon(
-                        Icons.north_west_rounded,
-                        size: 14,
-                        color: AppColors.textTertiary,
-                      ),
-                      label: Text(
-                        queries[i],
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      backgroundColor: AppColors.surfaceAlt,
-                      side: BorderSide.none,
-                      onPressed: () => onPick(queries[i]),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchScreenState extends ConsumerState<SearchScreen> {
-  final _controller = TextEditingController();
-  final _focus = FocusNode();
-  Timer? _debounce;
-  List<Track> _results = const [];
-  bool _loading = false;
-  String? _error;
-  bool _focused = false;
-
-  List<Track> get _filtered => _results;
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(_onFocus);
-  }
-
-  void _onFocus() {
-    if (_focused == _focus.hasFocus) return;
-    setState(() => _focused = _focus.hasFocus);
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _focus.removeListener(_onFocus);
-    _focus.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onChanged(String value) {
-    _debounce?.cancel();
-    // Кнопка очистки появляется сразу, запрос — после паузы.
-    setState(() {});
-    _debounce = Timer(const Duration(milliseconds: 420), () => _search(value));
-  }
-
-  Future<void> _search(String query) async {
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) {
-      setState(() {
-        _results = const [];
-        _error = null;
-        _loading = false;
-      });
-      return;
-    }
-    ref.read(settingsProvider).rememberQuery(trimmed);
-    if (mounted) setState(() {});
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final repo = ref.read(musicRepositoryProvider);
-      final source = ref.read(musicSourceProvider);
-
-      // VK без токена не запрашивается вовсе: объясняем, что нужно сделать.
-      if (source == MusicSource.vk && !ref.read(serviceTokensProvider).hasVk) {
-        if (!mounted) return;
-        setState(() {
-          _results = const [];
-          _error = 'VK Музыка требует личный токен. '
-              'Добавьте его в Настройки → VK Музыка.';
-          _loading = false;
-        });
-        return;
-      }
-
-      var results = switch (source) {
-        MusicSource.spotify => await repo.searchSpotify(trimmed),
-        MusicSource.youtube => await repo.searchYouTube(trimmed),
-        MusicSource.yandex => await repo.searchYandex(trimmed),
-        MusicSource.vk => await repo.searchVk(trimmed),
-        MusicSource.audius => await repo.searchAudius(trimmed),
-      };
-      // Выбранный источник ничего не вернул (часто — заблокирован у
-      // провайдера): ищем в Audius, он доступен и без VPN.
-      if (results.isEmpty && source != MusicSource.audius) {
-        results = await repo.searchAudius(trimmed);
-      }
-      if (!mounted) return;
-      setState(() {
-        _results = results;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = 'Не удалось выполнить поиск. Проверьте подключение к интернету.';
-        _loading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final source = ref.watch(musicSourceProvider);
-
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
-      slivers: [
-        SliverAppBar(
-          pinned: true,
-          backgroundColor: AppColors.appBarBackground,
-          surfaceTintColor: Colors.transparent,
-          scrolledUnderElevation: 0,
-          title: const Text('Поиск'),
-        ),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: SourceSwitcher(
-              selected: source,
-              onChanged: (value) {
-                ref.read(musicSourceProvider.notifier).select(value);
-                final q = _controller.text.trim();
-                if (q.isNotEmpty) _search(q);
-              },
-            ),
+    return ListView(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text('Недавние запросы',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              ),
+              TextButton(onPressed: onClear, child: const Text('Очистить')),
+            ],
           ),
         ),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-            child: AnimatedContainer(
-              duration: AppMotion.base,
-              curve: AppMotion.emphasized,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _focused
-                      ? AppColors.textPrimary.withValues(alpha: 0.22)
-                      : Colors.transparent,
-                ),
-                boxShadow: _focused
-                    ? [
-                        BoxShadow(
-                          color: AppColors.accentTint,
-                          blurRadius: 22,
-                          offset: Offset(0, 4),
-                        ),
-                      ]
-                    : const [],
-              ),
-              child: TextField(
-                controller: _controller,
-                focusNode: _focus,
-                onChanged: _onChanged,
-                onSubmitted: _search,
-                textInputAction: TextInputAction.search,
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 14,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Треки, артисты, подкасты',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  suffixIcon: _controller.text.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          onPressed: () {
-                            _controller.clear();
-                            _debounce?.cancel();
-                            setState(() {
-                              _results = const [];
-                              _error = null;
-                              _loading = false;
-                            });
-                            _focus.requestFocus();
-                          },
-                        ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-            ),
+        for (final q in queries)
+          ListTile(
+            leading: const Icon(Icons.history_rounded),
+            title: Text(q),
+            onTap: () => onPick(q),
           ),
-        ),
-        if (_loading)
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(36),
-              child: Center(
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            ),
-          )
-        else if (_error != null)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-            ),
-          )
-        else if (_results.isEmpty)
-          _RecentQueries(
-            queries: ref.watch(settingsProvider).searchQueries,
-            onPick: (query) {
-              _controller.text = query;
-              _search(query);
-            },
-            onClear: () {
-              ref.read(settingsProvider).clearSearchQueries();
-              setState(() {});
-            },
-          )
-        else ...[
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 2, 8, 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Найдено: ${_results.length}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textTertiary,
-                      ),
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: _filtered.isEmpty
-                        ? null
-                        : () => ref
-                            .read(audioHandlerProvider)
-                            .playTrack(_filtered.first, contextQueue: _filtered),
-                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                    label: const Text('Слушать все'),
-                  ),
-                  IconButton(
-                    tooltip: 'Сохранить в медиатеку',
-                    onPressed: _saveResults,
-                    icon: const Icon(Icons.playlist_add_rounded, size: 20),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          SliverList.builder(
-            itemCount: _filtered.length,
-            itemBuilder: (context, i) {
-              final track = _filtered[i];
-              return TrackTile(
-                title: track.title,
-                artist: track.artist,
-                coverUrl: track.thumbnailUrl,
-                explicit: track.explicit,
-                index: i,
-                onTap: () => ref
-                    .read(audioHandlerProvider)
-                    .playTrack(track, contextQueue: _filtered),
-                onMenu: () => _open(track),
-              );
-            },
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 28)),
-        ],
       ],
-    );
-  }
-
-  void _saveResults() async {
-    final tracks = _filtered;
-    if (tracks.isEmpty) return;
-    final library = ref.read(libraryProvider);
-    final query = _controller.text.trim();
-    final title = query.isEmpty ? 'Поиск' : query;
-    final now = DateTime.now();
-    await library.savePlaylist(
-      Playlist(
-        id: 'search:${now.millisecondsSinceEpoch}',
-        title: title,
-        description: 'Результаты поиска',
-        imageUrl: tracks.first.thumbnailUrl,
-        tracks: tracks,
-      ),
-    );
-    await library.saveTracks(tracks);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Сохранено: ${tracks.length} треков')),
-    );
-  }
-
-  void _open(Track track) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PlaylistScreen(
-          id: 'search:${track.id}',
-          title: track.title,
-          subtitle: track.artist,
-          tracks: [track],
-        ),
-      ),
     );
   }
 }

@@ -4,9 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palette_generator/palette_generator.dart';
 
-import '../../app/network_providers.dart';
+import '../../app/settings_provider.dart';
 import '../../app/providers.dart';
-import '../../core/network/lyrics/external_lyrics.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../core/utils/read_along.dart';
@@ -57,9 +56,6 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
 
     if (local != null && local.isNotEmpty && File(local).existsSync()) {
       image = FileImage(File(local));
-    } else if (track.thumbnailUrl != null &&
-        track.thumbnailUrl!.isNotEmpty) {
-      image = NetworkImage(track.thumbnailUrl!);
     }
 
     if (image == null) return;
@@ -194,11 +190,17 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     Track? track,
     String? raw,
   ) {
-    const custom = -1;
-    const auto = -2;
-    const url = -3;
+    const custom = 'custom';
+    const auto = 'auto';
+    const file = 'file';
+    const remove = 'remove';
+    const providers = {
+      'lrclib': 'LRCLIB',
+      'netease': 'NetEase (в том числе пословные)',
+      'ovh': 'Lyrics.ovh (без таймкодов)',
+    };
 
-    return PopupMenuButton<int>(
+    return PopupMenuButton<String>(
       color: AppColors.surfaceAlt,
       icon: const Icon(Icons.more_vert_rounded),
       tooltip: 'Текст песни',
@@ -210,26 +212,42 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           return;
         }
 
-        if (value == url) {
-          await _importUrl(context);
+        if (value == file) {
+          final updated =
+              await ref.read(importProvider).importLyricsFromFile(track.id);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(updated == null ? 'Файл не выбран' : 'Текст загружен'),
+            ),
+          );
+          setState(() {});
           return;
         }
 
-        final source = value == auto
-            ? null
-            : LyricsSource.values[value];
+        if (value == remove) {
+          await ref.read(libraryProvider).clearLyrics(track.id);
+          if (mounted) setState(() {});
+          return;
+        }
 
-        final result = await ref
-            .read(importProvider)
-            .findLyricsOnline(track, source: source);
+        final result = await ref.read(importProvider).findLyricsOnline(
+              track,
+              provider: value == auto ? null : value,
+            );
 
         if (!context.mounted) return;
 
+        final kind = result.wordSynced
+            ? 'по словам'
+            : result.synced
+                ? 'с таймкодами'
+                : 'без таймкодов';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               result.found
-                  ? 'Текст найден${result.source == null ? '' : ' · ${result.source!.label}'}'
+                  ? 'Текст найден ($kind) · ${providers[result.source] ?? result.source}'
                   : 'Текст не найден',
             ),
           ),
@@ -245,28 +263,28 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.search_rounded),
             title: Text('Найти автоматически'),
+            subtitle: Text('Перебор всех источников'),
           ),
         ),
-        for (final source in LyricsSource.values)
+        for (final entry in providers.entries)
           PopupMenuItem(
-            value: source.index,
+            value: entry.key,
             child: ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.library_books_outlined),
-              title: Text(source.label),
-              subtitle: Text(source.hint),
+              title: Text(entry.value),
             ),
           ),
         const PopupMenuDivider(),
         const PopupMenuItem(
-          value: url,
+          value: file,
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.link_rounded),
-            title: Text('Импорт по ссылке'),
-            subtitle: Text('Страница песни на Lyricsify'),
+            leading: Icon(Icons.upload_file_rounded),
+            title: Text('Загрузить из файла'),
+            subtitle: Text('.lrc, enhanced .lrc или .txt'),
           ),
         ),
         const PopupMenuItem(
@@ -279,62 +297,18 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
             subtitle: Text('Вставьте текст или LRC с таймкодами'),
           ),
         ),
+        if (raw != null)
+          const PopupMenuItem(
+            value: remove,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.delete_outline_rounded),
+              title: Text('Удалить текст'),
+            ),
+          ),
       ],
     );
-  }
-
-  /// Импорт по ссылке на страницу песни Lyricsify.
-  Future<void> _importUrl(BuildContext context) async {
-    final controller = TextEditingController();
-
-    final link = await showDialog<String>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        backgroundColor: AppColors.surfaceAlt,
-        title: const Text('Импорт из Lyricsify'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
-            hintText: 'https://www.lyricsify.com/lyrics/…',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialog),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialog, controller.text),
-            child: const Text('Импортировать'),
-          ),
-        ],
-      ),
-    );
-
-    controller.dispose();
-
-    if (link == null || link.trim().isEmpty) return;
-
-    final ok = await ref
-        .read(importProvider)
-        .importLyricsifyUrl(widget.trackId, link);
-
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ok
-              ? 'Текст импортирован'
-              : 'Не удалось взять текст со страницы. Если сайт не открывается '
-                  'или закрыт защитой, вставьте текст через «Свой текст».',
-        ),
-      ),
-    );
-
-    if (ok) setState(() {});
   }
 
   /// Ввод своего текста, обычного LRC или Enhanced LRC.
@@ -505,7 +479,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         child: Padding(
           padding: EdgeInsets.all(32),
           child: Text(
-            'Текст не найден.\nОткройте меню ⋮ вверху: поиск в LRCLIB, Lyrics.ovh, Genius или «Свой текст».',
+            'Текст не найден.\nОткройте меню ⋮ вверху: поиск в LRCLIB и NetEase, загрузка .lrc или «Свой текст».',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white70,

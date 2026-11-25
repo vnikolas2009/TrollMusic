@@ -119,13 +119,17 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(result.found
-                          ? (result.synced ? 'Найден LRC с таймкодами' : 'Найден текст без таймкодов')
-                          : 'Текст не найден в LRCLIB'),
+                          ? (result.wordSynced
+                              ? 'Найден enhanced LRC (по словам)'
+                              : result.synced
+                                  ? 'Найден LRC с таймкодами'
+                                  : 'Найден текст без таймкодов')
+                          : 'Текст не найден'),
                     ),
                   );
                 },
                 icon: const Icon(Icons.search),
-                label: const Text('Найти в LRCLIB'),
+                label: const Text('Найти онлайн'),
               ),
               OutlinedButton.icon(
                 onPressed: () async {
@@ -290,7 +294,6 @@ class _ArtworkPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final path = track?.artworkPath;
-    final url = track?.thumbnailUrl;
 
     final child = path != null && path.isNotEmpty
         ? Image.file(
@@ -299,14 +302,7 @@ class _ArtworkPreview extends StatelessWidget {
             cacheWidth: AppConfig.thumbCacheWidth,
             errorBuilder: (_, __, ___) => _placeholder(),
           )
-        : url != null && url.isNotEmpty
-            ? Image.network(
-                url,
-                fit: BoxFit.cover,
-                cacheWidth: AppConfig.thumbCacheWidth,
-                errorBuilder: (_, __, ___) => _placeholder(),
-              )
-            : _placeholder();
+        : _placeholder();
 
     return Row(
       key: ValueKey(revision),

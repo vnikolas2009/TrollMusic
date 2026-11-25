@@ -4,28 +4,22 @@ import 'package:trollmusic/core/config/app_config.dart';
 
 void main() {
   group('AppConfig', () {
-    test('bitrates are sorted ascending', () {
-      final bitrates = AppConfig.audioBitrates;
-      for (var i = 1; i < bitrates.length; i++) {
-        expect(bitrates[i], greaterThan(bitrates[i - 1]));
+    test('audio extensions are lowercase without dots', () {
+      expect(AppConfig.audioExtensions, isNotEmpty);
+      for (final ext in AppConfig.audioExtensions) {
+        expect(ext, ext.toLowerCase());
+        expect(ext.startsWith('.'), isFalse);
       }
-      expect(bitrates, contains(AppConfig.defaultBitrate));
+      expect(AppConfig.audioExtensions, containsAll(['mp3', 'flac', 'm4a']));
     });
 
-    test('DoH endpoints are https', () {
-      expect(AppConfig.dohEndpoints, isNotEmpty);
-      for (final endpoint in AppConfig.dohEndpoints) {
-        expect(endpoint.startsWith('https://'), isTrue, reason: endpoint);
-      }
+    test('lyrics extensions include lrc and enhanced lrc', () {
+      expect(AppConfig.lyricsExtensions, containsAll(['lrc', 'elrc', 'txt']));
     });
 
-    test('default API base is https without trailing slash', () {
-      expect(AppConfig.defaultApiBase.startsWith('https://'), isTrue);
-      expect(AppConfig.defaultApiBase.endsWith('/'), isFalse);
-    });
-
-    test('prefetch window is positive', () {
-      expect(AppConfig.prefetchBefore, greaterThan(Duration.zero));
+    test('timeouts are positive', () {
+      expect(AppConfig.connectTimeout, greaterThan(Duration.zero));
+      expect(AppConfig.requestTimeout, greaterThan(Duration.zero));
     });
   });
 }

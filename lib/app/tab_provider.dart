@@ -11,7 +11,7 @@ abstract final class AppTab {
 }
 
 /// Текущая вкладка. Через провайдер любой экран может переключить вкладку
-/// (например, карточка «Подключите VK» открывает настройки).
+/// (например, пустая главная открывает импорт).
 class SelectedTabController extends Notifier<int> {
   @override
   int build() => AppTab.home;

@@ -12,27 +12,41 @@ void main() {
         artist: 'Artist',
         album: 'Album',
         duration: Duration(seconds: 187),
-        thumbnailUrl: 'https://example.com/cover.jpg',
+        localPath: '/music/a.mp3',
         explicit: true,
-        source: TrackSource.local,
         bitrate: 256,
+        addedAtMs: 10,
       );
 
       final restored = Track.fromJson(track.toJson());
       expect(restored.id, 'abc');
       expect(restored.title, 'Title');
       expect(restored.duration, const Duration(seconds: 187));
+      expect(restored.localPath, '/music/a.mp3');
       expect(restored.explicit, isTrue);
-      expect(restored.source, TrackSource.local);
       expect(restored.bitrate, 256);
+      expect(restored.addedAtMs, 10);
+    });
+
+    test('reads records saved by older streaming versions', () {
+      final restored = Track.fromJson({
+        'id': 'yt:1',
+        'title': 'Old',
+        'artist': 'Someone',
+        'thumbnailUrl': 'https://example.com/c.jpg',
+        'streamUrl': 'https://cdn/a.m4a',
+        'source': 'youtube',
+        'localPath': '/music/old.mp3',
+      });
+      expect(restored.title, 'Old');
+      expect(restored.localPath, '/music/old.mp3');
     });
 
     test('copyWith keeps unrelated fields', () {
       const track = Track(id: 'a', title: 'T', artist: 'A');
-      final updated = track.copyWith(streamUrl: 'https://cdn/audio.m4a');
-      expect(updated.streamUrl, 'https://cdn/audio.m4a');
+      final updated = track.copyWith(lyricsPath: '/l/a.lrc');
+      expect(updated.lyricsPath, '/l/a.lrc');
       expect(updated.title, 'T');
-      expect(updated.source, TrackSource.youtube);
     });
 
     test('equality is id based', () {

@@ -35,7 +35,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     RubberDockTab(icon: Icons.home_rounded, label: 'Главная'),
     RubberDockTab(icon: Icons.search_rounded, label: 'Поиск'),
     RubberDockTab(icon: Icons.library_music_rounded, label: 'Медиатека'),
-    RubberDockTab(icon: Icons.add_rounded, label: 'Создать'),
+    RubberDockTab(icon: Icons.download_rounded, label: 'Импорт'),
     RubberDockTab(icon: Icons.settings_rounded, label: 'Настройки'),
   ];
 

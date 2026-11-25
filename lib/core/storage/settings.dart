@@ -1,8 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
-import '../config/app_config.dart';
-import '../utils/audio_pick.dart';
-
 class Settings {
   Settings(this._box);
 
@@ -15,125 +12,19 @@ class Settings {
     return Settings(box);
   }
 
-  /// Базовый URL Vercel-бэкенда с метаданными Spotify.
-  String get apiBaseUrl {
-    final raw = (_box.get('apiBaseUrl') as String? ?? '').trim();
-    final value = raw.isEmpty ? AppConfig.defaultApiBase : raw;
-    return value.endsWith('/') ? value.substring(0, value.length - 1) : value;
-  }
+  // ---------------------------------------------------------------- тексты
 
-  set apiBaseUrl(String value) => _box.put('apiBaseUrl', value.trim());
+  /// Сам искать тексты для новых треков после импорта.
+  bool get autoLyrics => _box.get('autoLyrics', defaultValue: true) as bool;
 
-  /// HTTP-прокси для всех соединений приложения (пусто — напрямую).
-  String get httpProxy => (_box.get('httpProxy') as String? ?? '').trim();
+  set autoLyrics(bool value) => _box.put('autoLyrics', value);
 
-  set httpProxy(String value) => _box.put('httpProxy', value.trim());
+  /// Порядок сортировки медиатеки (индекс `TrackSort`).
+  int get sortIndex => (_box.get('sortIndex') as num?)?.toInt() ?? 0;
 
-  /// Использовать системные настройки прокси (переменные окружения / ОС).
-  bool get useSystemProxy =>
-      _box.get('useSystemProxy', defaultValue: true) as bool;
-
-  set useSystemProxy(bool value) => _box.put('useSystemProxy', value);
-
-  /// Дополнительные заголовки, по одному на строку: `Name: value`.
-  String get customHeaders => _box.get('customHeaders') as String? ?? '';
-
-  set customHeaders(String value) => _box.put('customHeaders', value);
-
-  Map<String, String> get requestHeaders {
-    final headers = <String, String>{};
-    for (final line in customHeaders.split('\n')) {
-      final idx = line.indexOf(':');
-      if (idx <= 0) continue;
-      final name = line.substring(0, idx).trim();
-      final value = line.substring(idx + 1).trim();
-      if (name.isNotEmpty && value.isNotEmpty) headers[name] = value;
-    }
-    return headers;
-  }
-
-  /// Гостевой режим Spotify: анонимный веб-токен + публичные метаданные.
-  bool get spotifyGuestMode =>
-      _box.get('spotifyGuestMode', defaultValue: true) as bool;
-
-  set spotifyGuestMode(bool value) => _box.put('spotifyGuestMode', value);
-
-  /// Пользовательский Bearer-токен Spotify (необязательно).
-  String get spotifyAccessToken =>
-      _box.get('spotifyAccessToken') as String? ?? '';
-
-  set spotifyAccessToken(String value) =>
-      _box.put('spotifyAccessToken', value.trim());
-
-  String get spotifyClientId => _box.get('spotifyClientId') as String? ?? '';
-
-  set spotifyClientId(String value) => _box.put('spotifyClientId', value.trim());
-
-  String get spotifyClientSecret =>
-      _box.get('spotifyClientSecret') as String? ?? '';
-
-  set spotifyClientSecret(String value) =>
-      _box.put('spotifyClientSecret', value.trim());
-
-  /// OAuth-токен Яндекс Музыки пользователя (необязателен: без него поиск
-  /// и чарты работают, а звук подбирается на других источниках).
-  String get yandexToken => (_box.get('yandexToken') as String? ?? '').trim();
-
-  set yandexToken(String value) => _box.put('yandexToken', value.trim());
-
-  /// Токен пользователя для VK API (`audio.*`). Без него VK Музыка недоступна.
-  /// Клиентский токен Genius (genius.com/api-clients) для поиска текстов.
-  String get geniusToken => (_box.get('geniusToken') as String? ?? '').trim();
-
-  set geniusToken(String value) => _box.put('geniusToken', value.trim());
-
-  String get vkToken => (_box.get('vkToken') as String? ?? '').trim();
-
-  set vkToken(String value) => _box.put('vkToken', value.trim());
-
-  // ---------------------------------------------------------------- звук
-
-  /// Качество звука: Низкое / Среднее / Высокое / Авто (по умолчанию Авто).
-  AudioQuality get audioQuality {
-    final index = (_box.get('audioQuality') as num?)?.toInt() ?? AudioQuality.auto.index;
-    return AudioQuality.values[index.clamp(0, AudioQuality.values.length - 1)];
-  }
-
-  set audioQuality(AudioQuality value) => _box.put('audioQuality', value.index);
-
-  /// Целевой битрейт потока (производная от качества).
-  int get bitrate {
-    switch (audioQuality) {
-      case AudioQuality.low:
-        return 64;
-      case AudioQuality.medium:
-        return 128;
-      case AudioQuality.high:
-      case AudioQuality.auto:
-        return 256;
-    }
-  }
-
-  /// Opus не поддерживается AVPlayer, поэтому предпочитаем AAC.
-  bool get preferOpus => false;
-
-  /// Подготавливать следующий трек заранее, чтобы переход был без пауз.
-  bool get gaplessEnabled => _box.get('gapless', defaultValue: true) as bool;
-
-  set gaplessEnabled(bool value) => _box.put('gapless', value);
-
-  /// Выравнивать громкость треков по данным YouTube (`loudnessDb`).
-  bool get normalizeVolume => _box.get('normalizeVolume', defaultValue: true) as bool;
-
-  set normalizeVolume(bool value) => _box.put('normalizeVolume', value);
+  set sortIndex(int value) => _box.put('sortIndex', value);
 
   // ----------------------------------------------------------------- тема
-
-  /// 0 — системная, 1 — светлая, 2 — тёмная (порядок `ThemeMode`).
-  /// Выбранный источник каталога: 0 — Spotify, 1 — YouTube Music (по умолчанию: работает без бэкенда).
-  int get musicSourceIndex => (_box.get('musicSource', defaultValue: 1) as num).toInt();
-
-  set musicSourceIndex(int value) => _box.put('musicSource', value);
 
   int get themeModeIndex =>
       ((_box.get('themeMode') as num?)?.toInt() ?? 2).clamp(0, 2);
@@ -154,20 +45,6 @@ class Settings {
       _box.get('gradientBackground', defaultValue: true) as bool;
 
   set gradientBackground(bool value) => _box.put('gradientBackground', value);
-
-  // ------------------------------------------------------------- матчи
-
-  /// Соответствие Spotify-трека видео на YouTube (сохраняется между запусками).
-  String? matchedVideo(String spotifyTrackId) =>
-      _box.get('spMatch:$spotifyTrackId') as String?;
-
-  void rememberMatch(String spotifyTrackId, String videoId) =>
-      _box.put('spMatch:$spotifyTrackId', videoId);
-
-  /// Обход блокировок по SNI (локальный прокси, режущий TLS ClientHello).
-  bool get bypassDpi => _box.get('bypassDpi', defaultValue: false) as bool;
-
-  set bypassDpi(bool value) => _box.put('bypassDpi', value);
 
   /// Пропуск тишины в треках (Android).
   bool get skipSilence => _box.get('skipSilence', defaultValue: false) as bool;

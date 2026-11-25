@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/network_providers.dart';
+import '../../app/lyrics_job.dart';
 import '../../app/providers.dart';
-import '../../app/source_provider.dart';
+import '../../app/settings_provider.dart';
 import '../../app/theme_controller.dart';
+import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
-import '../../shared/widgets/spring_switch_tile.dart';
-import 'storage_meter.dart';
-import '../../core/utils/audio_pick.dart';
 import '../../core/utils/formatters.dart';
 import '../../shared/widgets/spring_switch.dart';
-import '../../core/network/split_proxy.dart';
-import 'network_diagnostics_screen.dart';
+import '../../shared/widgets/spring_switch_tile.dart';
+import 'storage_meter.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -33,97 +31,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _loadCache() async {
     try {
-      final data = await StorageMeterData.load(
-        ref.read(storageProvider),
-      );
-
+      final data = await StorageMeterData.load(ref.read(storageProvider));
       if (!mounted) return;
-
       setState(() {
         _storageData = data;
         _loadingCache = false;
       });
     } catch (_) {
       if (!mounted) return;
-
-      setState(() {
-        _loadingCache = false;
-      });
+      setState(() => _loadingCache = false);
     }
-  }
-
-  Future<void> _confirmClearCache() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Очистить кэш?'),
-        content: const Text(
-          'Будут удалены скачанные аудиофайлы, обложки и тексты. '
-          'Импортированные локальные файлы останутся.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Очистить'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    final downloads = ref.read(downloadProvider);
-
-    if (downloads.activeCount > 0) {
-      downloads.cancelAll();
-    }
-
-    try {
-      await ref.read(storageProvider).clearCache();
-      await _loadCache();
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Кэш очищен')),
-      );
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Не удалось очистить кэш: $error'),
-        ),
-      );
-    }
-  }
-
-  static const _qualityLabels = {
-    AudioQuality.low: 'Низкое',
-    AudioQuality.medium: 'Среднее',
-    AudioQuality.high: 'Высокое',
-    AudioQuality.auto: 'Авто',
-  };
-
-  static const _qualityHints = {
-    AudioQuality.low: '≈ 64 кбит/с — минимум трафика',
-    AudioQuality.medium: '≈ 128 кбит/с — баланс',
-    AudioQuality.high: 'Максимум, что отдаёт источник',
-    AudioQuality.auto: 'Высокое по Wi-Fi, среднее по мобильной сети',
-  };
-
-  Future<void> _setBypass(bool value) async {
-    ref.read(settingsProvider).bypassDpi = value;
-    if (value) {
-      await SplitProxy.shared.start();
-    } else {
-      await SplitProxy.shared.stop();
-    }
-    if (mounted) setState(() {});
   }
 
   @override
@@ -132,6 +49,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final theme = ref.watch(themeControllerProvider);
     final themeCtl = ref.read(themeControllerProvider.notifier);
     final audio = ref.read(audioHandlerProvider);
+    final library = ref.watch(libraryProvider);
+    final tracks = ref.watch(tracksProvider).value ?? const [];
+    final job = ref.watch(lyricsJobProvider);
+
+    final withLyrics = tracks.where((t) => library.hasLyrics(t.id)).length;
+    final totalDuration = tracks.fold<Duration>(
+      Duration.zero,
+      (sum, t) => sum + t.duration,
+    );
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -145,42 +71,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
-          const _Section('Качество звука'),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 4,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final q in AudioQuality.values)
-                      ChoiceChip(
-                        label: Text(_qualityLabels[q]!),
-                        selected: settings.audioQuality == q,
-                        onSelected: (_) {
-                          setState(() => settings.audioQuality = q);
-                        },
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _qualityHints[settings.audioQuality]!,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
           const _Section('Тема'),
 
           Padding(
@@ -313,43 +203,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const _Section('Воспроизведение'),
 
-          SpringSwitchTile(
-            title: 'Без пауз (gapless)',
-            subtitle: 'Следующий трек подготавливается заранее',
-            value: settings.gaplessEnabled,
-            onChanged: (v) {
-              setState(() => settings.gaplessEnabled = v);
-            },
-          ),
-
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 8,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Кроссфейд',
-                  style: TextStyle(fontSize: 14),
-                ),
+                const Text('Кроссфейд', style: TextStyle(fontSize: 14)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   children: [
                     for (final seconds in const [0, 3, 6, 10, 12])
                       ChoiceChip(
-                        label: Text(
-                          seconds == 0 ? 'Выкл' : '$seconds с',
-                        ),
-                        selected:
-                            settings.crossfadeSeconds == seconds,
+                        label: Text(seconds == 0 ? 'Выкл' : '$seconds с'),
+                        selected: settings.crossfadeSeconds == seconds,
                         onSelected: (_) {
-                          settings.crossfadeSeconds = seconds;
-                          audio.setCrossfade(
-                            Duration(seconds: seconds),
-                          );
+                          audio.setCrossfade(Duration(seconds: seconds));
                           setState(() {});
                         },
                       ),
@@ -374,94 +243,73 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               setState(() {});
             },
           ),
+
           const _Section('Тексты песен'),
-          _TokenField(
-            label: 'Genius · клиентский токен',
-            help: 'Необязательно. Тексты ищутся в LRCLIB (с таймкодами) и '
-                'Lyrics.ovh без ключа; с токеном Genius добавляется третьим '
-                'источником. Токен хранится только на этом устройстве.',
-            initial: ref.read(settingsProvider).geniusToken,
-            onSave: (v) => ref.read(settingsProvider).geniusToken = v,
-          ),
-          const _Section('Сеть'),
-          ListTile(
-            leading: const Icon(Icons.shield_outlined),
-            title: const Text('Обход блокировок (экспериментально)'),
-            subtitle: const Text(
-              'Режет TLS-пакет, чтобы фильтр по имени сайта его не увидел. '
-              'Работает не у всех провайдеров; после включения перезапустите '
-              'приложение и проверьте диагностику.',
-            ),
-            trailing: SpringSwitch(
-              value: settings.bypassDpi,
-              semanticLabel: 'Обход блокировок',
-              onChanged: _setBypass,
-            ),
-            onTap: () => _setBypass(!settings.bypassDpi),
+
+          SpringSwitchTile(
+            title: 'Искать тексты автоматически',
+            subtitle: 'После импорта подбирать тексты для новых треков '
+                '(LRCLIB, NetEase, Lyrics.ovh)',
+            value: settings.autoLyrics,
+            onChanged: (v) => setState(() => settings.autoLyrics = v),
           ),
           ListTile(
-            leading: const Icon(Icons.network_check_rounded),
-            title: const Text('Диагностика сети'),
-            subtitle: const Text('Какие серверы доступны с вашего интернета'),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const NetworkDiagnosticsScreen(),
-              ),
-            ),
-          ),
-          const _Section('Источники музыки'),
-          _TokenField(
-            label: 'Яндекс Музыка · OAuth-токен',
-            help: 'Необязательно. Поиск и чарты работают без токена; с токеном '
-                'треки играют напрямую из Яндекс Музыки (нужна ваша подписка). '
-                'Токен хранится только на этом устройстве и отправляется '
-                'только в Яндекс.',
-            initial: ref.read(serviceTokensProvider).yandex,
-            onSave: ref.read(serviceTokensProvider.notifier).setYandex,
-          ),
-          _TokenField(
-            label: 'VK Музыка · токен',
-            help: 'Нужен для VK Музыки. VK разрешает методы музыки не всем '
-                'токенам, поэтому доступ не гарантирован. Токен хранится '
-                'только на этом устройстве и отправляется только в VK.',
-            initial: ref.read(serviceTokensProvider).vk,
-            onSave: ref.read(serviceTokensProvider.notifier).setVk,
-          ),
-          ListTile(
-            leading: const Icon(Icons.public_rounded),
-            title: const Text('Audius'),
-            subtitle: Text(
-              'Открытый каталог независимых артистов — токен не нужен',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-              ),
-            ),
+            leading: const Icon(Icons.lyrics_outlined),
+            title: Text('Тексты: $withLyrics из ${tracks.length} треков'),
+            subtitle: job.running
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        LinearProgressIndicator(value: job.progress),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Ищу: ${job.done} из ${job.total} · найдено ${job.found}',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Text(
+                    tracks.length == withLyrics
+                        ? 'У всех треков есть текст'
+                        : 'Можно найти тексты для остальных',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  ),
+            trailing: job.running
+                ? TextButton(
+                    onPressed: ref.read(lyricsJobProvider.notifier).cancel,
+                    child: const Text('Стоп'),
+                  )
+                : TextButton(
+                    onPressed: tracks.length == withLyrics
+                        ? null
+                        : ref.read(lyricsJobProvider.notifier).runMissing,
+                    child: const Text('Найти'),
+                  ),
           ),
 
-          const _Section('Кэш и хранилище'),
+          const _Section('Медиатека и хранилище'),
+
+          ListTile(
+            leading: const Icon(Icons.library_music_outlined),
+            title: Text('${tracks.length} треков'),
+            subtitle: Text(
+              totalDuration == Duration.zero
+                  ? 'Импортируйте музыку на вкладке «Импорт»'
+                  : 'Общая длительность: ${formatLongDuration(totalDuration)}',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ),
 
           StorageMeter(
             data: _storageData,
             loading: _loadingCache,
             onRefresh: _loadCache,
-          ),
-
-          ListTile(
-            leading: const Icon(Icons.delete_outline_rounded),
-            title: const Text('Очистить кэш'),
-            subtitle: Text(
-              'Удалить скачанные файлы, обложки и тексты',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-              ),
-            ),
-            trailing: TextButton(
-              onPressed: _confirmClearCache,
-              child: const Text('Очистить'),
-            ),
           ),
 
           const _Section('История прослушивания'),
@@ -470,117 +318,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: const Text('История прослушивания'),
             subtitle: Text(
               '${settings.recentIds.length} треков',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
             trailing: TextButton(
               onPressed: () {
                 settings.clearHistory();
                 setState(() {});
-
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('История очищена'),
-                  ),
+                  const SnackBar(content: Text('История очищена')),
                 );
               },
               child: const Text('Очистить'),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
 
-/// Поле личного токена: скрыто по умолчанию, сохраняется кнопкой или Enter.
-class _TokenField extends StatefulWidget {
-  const _TokenField({
-    required this.label,
-    required this.help,
-    required this.initial,
-    required this.onSave,
-  });
+          const _Section('О приложении'),
 
-  final String label;
-  final String help;
-  final String initial;
-  final ValueChanged<String> onSave;
-
-  @override
-  State<_TokenField> createState() => _TokenFieldState();
-}
-
-class _TokenFieldState extends State<_TokenField> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initial);
-
-  bool _obscure = true;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _save([String? _]) {
-    final value = _controller.text.trim();
-    widget.onSave(value);
-    FocusScope.of(context).unfocus();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(value.isEmpty ? 'Токен удалён' : 'Токен сохранён')),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _controller,
-            obscureText: _obscure,
-            autocorrect: false,
-            enableSuggestions: false,
-            textInputAction: TextInputAction.done,
-            onSubmitted: _save,
-            style: const TextStyle(fontSize: 14),
-            decoration: InputDecoration(
-              labelText: widget.label,
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      _obscure
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      size: 20,
-                    ),
-                    onPressed: () => setState(() => _obscure = !_obscure),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.check_rounded, size: 22),
-                    onPressed: _save,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              widget.help,
-              style: TextStyle(
-                fontSize: 11.5,
-                height: 1.4,
-                color: AppColors.textTertiary,
-              ),
+          ListTile(
+            leading: const Icon(Icons.info_outline_rounded),
+            title: const Text(AppConfig.appName),
+            subtitle: Text(
+              'Версия ${AppConfig.appVersion} · локальный плеер без стриминга',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
           ),
         ],

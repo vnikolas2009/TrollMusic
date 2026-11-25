@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/storage/settings.dart';
-import 'network_providers.dart';
+import 'settings_provider.dart';
 
 /// Готовые акцентные цвета для настройки темы.
 const kAccentChoices = <Color>[

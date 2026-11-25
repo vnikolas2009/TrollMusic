@@ -1,16 +1,10 @@
-/// Источник трека. В JSON хранится по имени, поэтому новые значения
-/// добавляются в конец и не ломают старые записи.
-enum TrackSource {
-  youtube,
-  spotify,
-  soundcloud,
-  local,
-  downloaded,
-  yandex,
-  vk,
-  audius,
-}
+/// Подставляется, когда в тегах нет исполнителя.
+const unknownArtist = 'Неизвестный исполнитель';
 
+/// Локальный трек. Все треки лежат в хранилище приложения на устройстве.
+///
+/// Старые записи (когда в приложении были стриминговые источники) читаются
+/// без ошибок: лишние ключи JSON просто игнорируются.
 class Track {
   const Track({
     required this.id,
@@ -18,15 +12,12 @@ class Track {
     required this.artist,
     this.album = '',
     this.duration = Duration.zero,
-    this.thumbnailUrl,
-    this.streamUrl,
     this.localPath,
     this.lyricsPath,
     this.artworkPath,
     this.explicit = false,
-    this.source = TrackSource.youtube,
     this.bitrate,
-    this.albumId,
+    this.addedAtMs,
     this.sourcePath,
     this.sourceSize,
     this.sourceModifiedAtMs,
@@ -37,15 +28,14 @@ class Track {
   final String artist;
   final String album;
   final Duration duration;
-  final String? thumbnailUrl;
-  final String? streamUrl;
   final String? localPath;
   final String? lyricsPath;
   final String? artworkPath;
   final bool explicit;
-  final TrackSource source;
   final int? bitrate;
-  final String? albumId;
+
+  /// Когда трек добавлен в медиатеку (мс с эпохи). У старых записей `null`.
+  final int? addedAtMs;
 
   /// Исходный путь файла, из которого импортирован трек.
   final String? sourcePath;
@@ -56,48 +46,38 @@ class Track {
   /// Время последнего изменения исходного файла.
   final int? sourceModifiedAtMs;
 
-  bool get isOffline => localPath != null;
-
   String get displaySubtitle => explicit ? 'E · $artist' : artist;
 
   Track copyWith({
-    String? id,
     String? title,
     String? artist,
     String? album,
     Duration? duration,
-    String? thumbnailUrl,
-    String? streamUrl,
     String? localPath,
     String? lyricsPath,
     String? artworkPath,
     bool? explicit,
-    TrackSource? source,
     int? bitrate,
-    String? albumId,
+    int? addedAtMs,
     String? sourcePath,
     int? sourceSize,
     int? sourceModifiedAtMs,
   }) {
     return Track(
-      id: id ?? this.id,
+      id: id,
       title: title ?? this.title,
       artist: artist ?? this.artist,
       album: album ?? this.album,
       duration: duration ?? this.duration,
-      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
-      streamUrl: streamUrl ?? this.streamUrl,
       localPath: localPath ?? this.localPath,
       lyricsPath: lyricsPath ?? this.lyricsPath,
       artworkPath: artworkPath ?? this.artworkPath,
       explicit: explicit ?? this.explicit,
-      source: source ?? this.source,
       bitrate: bitrate ?? this.bitrate,
-      albumId: albumId ?? this.albumId,
+      addedAtMs: addedAtMs ?? this.addedAtMs,
       sourcePath: sourcePath ?? this.sourcePath,
       sourceSize: sourceSize ?? this.sourceSize,
-      sourceModifiedAtMs:
-          sourceModifiedAtMs ?? this.sourceModifiedAtMs,
+      sourceModifiedAtMs: sourceModifiedAtMs ?? this.sourceModifiedAtMs,
     );
   }
 
@@ -107,15 +87,12 @@ class Track {
         'artist': artist,
         'album': album,
         'durationMs': duration.inMilliseconds,
-        'thumbnailUrl': thumbnailUrl,
-        'streamUrl': streamUrl,
         'localPath': localPath,
         'lyricsPath': lyricsPath,
         'artworkPath': artworkPath,
         'explicit': explicit,
-        'source': source.name,
         'bitrate': bitrate,
-        'albumId': albumId,
+        'addedAtMs': addedAtMs,
         'sourcePath': sourcePath,
         'sourceSize': sourceSize,
         'sourceModifiedAtMs': sourceModifiedAtMs,
@@ -129,22 +106,15 @@ class Track {
         duration: Duration(
           milliseconds: (json['durationMs'] as num?)?.toInt() ?? 0,
         ),
-        thumbnailUrl: json['thumbnailUrl'] as String?,
-        streamUrl: json['streamUrl'] as String?,
         localPath: json['localPath'] as String?,
         lyricsPath: json['lyricsPath'] as String?,
         artworkPath: json['artworkPath'] as String?,
         explicit: json['explicit'] as bool? ?? false,
-        source: TrackSource.values.firstWhere(
-          (s) => s.name == json['source'],
-          orElse: () => TrackSource.youtube,
-        ),
         bitrate: (json['bitrate'] as num?)?.toInt(),
-        albumId: json['albumId'] as String?,
+        addedAtMs: (json['addedAtMs'] as num?)?.toInt(),
         sourcePath: json['sourcePath'] as String?,
         sourceSize: (json['sourceSize'] as num?)?.toInt(),
-        sourceModifiedAtMs:
-            (json['sourceModifiedAtMs'] as num?)?.toInt(),
+        sourceModifiedAtMs: (json['sourceModifiedAtMs'] as num?)?.toInt(),
       );
 
   @override

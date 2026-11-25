@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
 
@@ -8,45 +7,20 @@ class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,
     required this.title,
-    this.avatarUrl,
     this.action,
     this.subtitle,
   });
 
   final String title;
-  final String? avatarUrl;
   final Widget? action;
   final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
-    final avatar = avatarUrl;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 12, 12),
       child: Row(
         children: [
-          if (avatar != null && avatar.isNotEmpty) ...[
-            ClipOval(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: Image.network(
-                  avatar,
-                  fit: BoxFit.cover,
-                  cacheWidth: AppConfig.thumbCacheWidth,
-                  errorBuilder: (_, __, ___) => DecoratedBox(
-                    decoration: BoxDecoration(color: AppColors.surfaceHigh),
-                    child: Icon(
-                      Icons.person_rounded,
-                      size: 16,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

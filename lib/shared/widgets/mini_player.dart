@@ -180,20 +180,12 @@ class _Cover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final path = track.artworkPath;
-    final url = track.thumbnailUrl;
     Widget child;
     if (path != null && path.isNotEmpty && File(path).existsSync()) {
       child = Image.file(
         File(path),
         fit: BoxFit.cover,
         cacheWidth: AppConfig.thumbCacheWidth,
-      );
-    } else if (url != null && url.isNotEmpty) {
-      child = Image.network(
-        url,
-        fit: BoxFit.cover,
-        cacheWidth: AppConfig.thumbCacheWidth,
-        errorBuilder: (_, __, ___) => _fallback(),
       );
     } else {
       child = _fallback();

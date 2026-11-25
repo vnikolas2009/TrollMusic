@@ -34,14 +34,26 @@ class LibraryRepository {
   }
 
   List<Track> get tracks => _decodeTracks();
-  List<Track> get downloaded => tracks
-      .where((t) =>
-          t.source != TrackSource.local &&
-          t.localPath != null &&
-          t.localPath!.isNotEmpty &&
-          File(t.localPath!).existsSync())
-      .toList();
-  List<Track> get local => tracks.where((t) => t.source == TrackSource.local).toList();
+
+  /// Лежит ли файл трека на устройстве.
+  bool isAvailable(Track track) {
+    final path = track.localPath;
+    return path != null && path.isNotEmpty && File(path).existsSync();
+  }
+
+  /// Удаляет записи без файла (остатки стриминговых источников прошлых версий).
+  Future<int> pruneUnplayable() async {
+    var removed = 0;
+    for (final track in tracks) {
+      final path = track.localPath;
+      if (path != null && path.isNotEmpty) continue;
+      await _tracks.delete(track.id);
+      await _lyrics.delete(track.id);
+      removed++;
+    }
+    if (removed > 0) _trackUpdates.add(null);
+    return removed;
+  }
 
   Track? trackById(String id) {
     final raw = _tracks.get(id);
