@@ -7,6 +7,7 @@ import '../../core/utils/formatters.dart';
 import '../../data/models/playlist.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/cover_art.dart';
+import '../../shared/widgets/mini_player_bar.dart';
 import '../../shared/widgets/track_actions.dart';
 import '../../shared/widgets/track_tile.dart';
 
@@ -170,6 +171,7 @@ class _PlaylistScreenState extends ConsumerState<PlaylistScreen> {
     final total = tracks.fold<Duration>(Duration.zero, (s, t) => s + t.duration);
 
     return Scaffold(
+      bottomNavigationBar: const MiniPlayerBar(),
       appBar: AppBar(
         backgroundColor: AppColors.appBarBackground,
         surfaceTintColor: Colors.transparent,
