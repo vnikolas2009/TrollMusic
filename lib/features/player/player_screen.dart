@@ -17,6 +17,7 @@ import '../../shared/widgets/jelly_slider.dart';
 import '../../shared/widgets/press_scale.dart';
 import '../library/track_list_screen.dart';
 import '../lyrics/lyrics_screen.dart';
+import 'lyric_preview.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key, this.initialTrack});
@@ -175,6 +176,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                               children: [
                                 const SizedBox(height: 12),
                                 _Artwork(track: track),
+                                LyricPreview(trackId: track.id),
                                 const SizedBox(height: 26),
                                 Row(
                                   children: [
@@ -327,12 +329,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                 _LyricsCard(
                                   trackId: track.id,
                                   hasLyrics: hasLyrics,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          LyricsScreen(trackId: track.id),
-                                    ),
-                                  ),
+                                  onTap: () =>
+                                      openLyricsScreen(context, track.id),
                                 ),
                                 const SizedBox(height: 24),
                               ],

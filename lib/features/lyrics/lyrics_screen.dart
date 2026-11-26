@@ -7,6 +7,7 @@ import 'package:palette_generator/palette_generator.dart';
 import '../../app/settings_provider.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../core/utils/read_along.dart';
 import '../../data/models/lyrics.dart';
@@ -15,6 +16,36 @@ import '../../shared/widgets/read_along_text.dart';
 import 'aurora_background.dart';
 
 const _defaultAurora = Color(0xFF3A4570);
+
+/// Открывает полноэкранный режим текстов: экран плавно выезжает снизу
+/// и проявляется; закрывается стрелкой вниз, кнопкой «назад» или жестом
+/// системы и возвращает в плеер.
+void openLyricsScreen(BuildContext context, String trackId) {
+  Navigator.of(context).push(
+    PageRouteBuilder<void>(
+      transitionDuration: AppMotion.slower,
+      reverseTransitionDuration: AppMotion.base,
+      pageBuilder: (_, __, ___) => LyricsScreen(trackId: trackId),
+      transitionsBuilder: (_, animation, __, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: AppMotion.emphasized,
+          reverseCurve: AppMotion.exit,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.12),
+              end: Offset.zero,
+            ).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    ),
+  );
+}
 
 class LyricsScreen extends ConsumerStatefulWidget {
   const LyricsScreen({super.key, required this.trackId});
@@ -91,6 +122,11 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Назад к плееру',
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 30),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
