@@ -12,8 +12,9 @@ import '../../shared/widgets/press_scale.dart';
 import '../lyrics/lyrics_screen.dart';
 
 /// Текущая строка текста под обложкой. Нажатие открывает полноэкранный
-/// режим текстов. Показывается только для текстов с таймкодами; для
-/// остальных занимает нулевую высоту (вход в текст остаётся в карточке ниже).
+/// режим текстов. Строка показывается только для текстов с таймкодами; для
+/// остальных (и при выключенной строке) вместо неё компактная кнопка
+/// «Текст песни», чтобы вход в текст не пропадал.
 ///
 /// Единственное, что слушает позицию воспроизведения: через `select`
 /// виджет перестраивается только при смене строки, а не на каждый тик.
@@ -42,18 +43,27 @@ class _LyricPreviewState extends ConsumerState<LyricPreview> {
     return _lyrics;
   }
 
+  void _open() {
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box != null && box.hasSize
+        ? box.localToGlobal(box.size.center(Offset.zero))
+        : null;
+    openLyricsScreen(context, widget.trackId, origin: origin);
+  }
+
   @override
   Widget build(BuildContext context) {
     final enabled = ref.watch(
       appearanceProvider.select((a) => a.showLyricPreview),
     );
-    if (!enabled) return const SizedBox(width: double.infinity);
-
     final raw = ref.watch(libraryProvider).lyricsFor(widget.trackId);
     final lyrics = _parsed(raw);
 
-    if (!lyrics.synced || lyrics.lines.isEmpty) {
-      return const SizedBox(width: double.infinity);
+    if (!enabled || !lyrics.synced || lyrics.lines.isEmpty) {
+      return _OpenPill(
+        found: raw != null && raw.trim().isNotEmpty,
+        onOpen: _open,
+      );
     }
 
     if (_offsetFor != widget.trackId) {
@@ -74,7 +84,7 @@ class _LyricPreviewState extends ConsumerState<LyricPreview> {
 
     return PressScale(
       scale: 0.985,
-      onTap: () => openLyricsScreen(context, widget.trackId),
+      onTap: _open,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(4, 18, 4, 0),
         child: ConstrainedBox(
@@ -109,6 +119,47 @@ class _LyricPreviewState extends ConsumerState<LyricPreview> {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Компактная кнопка входа в текст, когда строки под обложкой нет.
+class _OpenPill extends StatelessWidget {
+  const _OpenPill({required this.found, required this.onOpen});
+
+  final bool found;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 18),
+      child: PressScale(
+        scale: 0.96,
+        onTap: onOpen,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.outline),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lyrics_outlined, size: 18, color: AppColors.accent),
+              const SizedBox(width: 8),
+              Text(
+                found ? 'Текст песни' : 'Текст не найден',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
         ),
       ),

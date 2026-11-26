@@ -20,37 +20,83 @@ import '../../data/models/lyrics.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/read_along_text.dart';
 import 'aurora_background.dart';
+import 'lyrics_settings_sheet.dart';
 
 const _defaultAurora = Color(0xFF3A4570);
 
-/// Открывает полноэкранный режим текстов: экран плавно выезжает снизу
-/// и проявляется; закрывается стрелкой вниз, кнопкой «назад» или жестом
-/// системы и возвращает в плеер.
-void openLyricsScreen(BuildContext context, String trackId) {
+/// Открывает полноэкранный режим текстов: экран раскрывается кругом из
+/// точки [origin] (центр нажатой кнопки), содержимое при этом чуть
+/// увеличивается и проявляется. Закрывается стрелкой вниз, кнопкой «назад»
+/// или жестом системы — круг схлопывается обратно.
+void openLyricsScreen(
+  BuildContext context,
+  String trackId, {
+  Offset? origin,
+}) {
+  final size = MediaQuery.sizeOf(context);
+  final center = origin ?? Offset(size.width / 2, size.height * 0.6);
+
   Navigator.of(context).push(
     PageRouteBuilder<void>(
       transitionDuration: AppMotion.slower,
       reverseTransitionDuration: AppMotion.base,
       pageBuilder: (_, __, ___) => LyricsScreen(trackId: trackId),
       transitionsBuilder: (_, animation, __, child) {
-        final curved = CurvedAnimation(
+        final reveal = CurvedAnimation(
           parent: animation,
           curve: AppMotion.emphasized,
           reverseCurve: AppMotion.exit,
         );
-        return FadeTransition(
-          opacity: curved,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.12),
-              end: Offset.zero,
-            ).animate(curved),
-            child: child,
+        final content = CurvedAnimation(
+          parent: animation,
+          curve: const Interval(0.25, 1, curve: Curves.easeOutCubic),
+          reverseCurve: const Interval(0, 0.6, curve: Curves.easeIn),
+        );
+        return AnimatedBuilder(
+          animation: reveal,
+          builder: (_, __) => ClipPath(
+            clipper: CircleRevealClipper(
+              center: center,
+              fraction: reveal.value.clamp(0.0, 1.0),
+            ),
+            child: FadeTransition(
+              opacity: content,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 1.06, end: 1).animate(content),
+                child: child,
+              ),
+            ),
           ),
         );
       },
     ),
   );
+}
+
+/// Круглое окно с центром в [center]; при [fraction] = 1 перекрывает весь
+/// экран.
+class CircleRevealClipper extends CustomClipper<Path> {
+  const CircleRevealClipper({required this.center, required this.fraction});
+
+  final Offset center;
+  final double fraction;
+
+  @override
+  Path getClip(Size size) {
+    final farthest = [
+      Offset.zero,
+      Offset(size.width, 0),
+      Offset(0, size.height),
+      Offset(size.width, size.height),
+    ].map((corner) => (corner - center).distance).reduce((a, b) => a > b ? a : b);
+
+    return Path()
+      ..addOval(Rect.fromCircle(center: center, radius: farthest * fraction));
+  }
+
+  @override
+  bool shouldReclip(CircleRevealClipper old) =>
+      old.fraction != fraction || old.center != center;
 }
 
 class LyricsScreen extends ConsumerStatefulWidget {
@@ -172,6 +218,11 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         ),
         actions: [
           if (lyrics.synced) _offsetMenu(),
+          IconButton(
+            tooltip: 'Настройки текста',
+            icon: const Icon(Icons.text_fields_rounded, size: 22),
+            onPressed: () => showLyricsSettings(context),
+          ),
           _lyricsMenu(context, track, raw),
         ],
       ),

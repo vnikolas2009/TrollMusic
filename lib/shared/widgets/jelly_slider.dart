@@ -11,6 +11,7 @@ class JellySlider extends StatefulWidget {
     required this.onChanged,
     this.onChangeEnd,
     this.onPreview,
+    this.labelBuilder,
   });
 
   final Duration position;
@@ -21,6 +22,9 @@ class JellySlider extends StatefulWidget {
   /// Позиция во время перетаскивания (перемотка выполняется только в
   /// [onChanged] при отпускании).
   final ValueChanged<Duration>? onPreview;
+
+  /// Подпись на бегунке при перетаскивании; по умолчанию — таймкод.
+  final String Function(Duration value)? labelBuilder;
 
   @override
   State<JellySlider> createState() => _JellySliderState();
@@ -231,7 +235,9 @@ class _JellySliderState extends State<JellySlider>
                                 child: FittedBox(
                                   fit: BoxFit.scaleDown,
                                   child: Text(
-                                    formatDuration(_currentDuration),
+                                    (widget.labelBuilder ?? formatDuration)(
+                                      _currentDuration,
+                                    ),
                                     maxLines: 1,
                                     style: TextStyle(
                                       color: AppColors.background,
@@ -257,6 +263,52 @@ class _JellySliderState extends State<JellySlider>
           );
         },
       ),
+    );
+  }
+}
+
+/// Тот же бегунок, что и в плеере, для числового значения из диапазона
+/// [min]..[max] с шагом [step] (масштаб текста и т.п.). Значение
+/// применяется при отпускании, а подпись на бегунке показывает уже
+/// округлённое до шага число.
+class JellyValueSlider extends StatelessWidget {
+  const JellyValueSlider({
+    super.key,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.step,
+    required this.onChanged,
+    required this.labelBuilder,
+  });
+
+  final double value;
+  final double min;
+  final double max;
+  final double step;
+  final ValueChanged<double> onChanged;
+  final String Function(double value) labelBuilder;
+
+  /// Разрешение внутренней шкалы: 10 000 делений на весь диапазон.
+  static const _scale = 10000;
+
+  /// Значение из позиции на шкале, округлённое до шага.
+  double _valueAt(Duration position) {
+    final fraction = (position.inMilliseconds / _scale).clamp(0.0, 1.0);
+    final raw = min + fraction * (max - min);
+    final snapped = min + ((raw - min) / step).round() * step;
+    return (snapped.clamp(min, max) * 100).round() / 100;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction = ((value - min) / (max - min)).clamp(0.0, 1.0);
+
+    return JellySlider(
+      position: Duration(milliseconds: (fraction * _scale).round()),
+      duration: const Duration(milliseconds: _scale),
+      labelBuilder: (position) => labelBuilder(_valueAt(position)),
+      onChanged: (position) => onChanged(_valueAt(position)),
     );
   }
 }

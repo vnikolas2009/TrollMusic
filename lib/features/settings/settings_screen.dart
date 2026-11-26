@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/lyrics_job.dart';
 import '../../app/appearance_controller.dart';
 import '../../app/font_controller.dart';
-import '../../app/lyrics_style_provider.dart';
 import '../../app/providers.dart';
 import '../../app/settings_provider.dart';
 import '../../app/theme_controller.dart';
@@ -13,8 +12,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
 import '../../core/theme/appearance.dart';
 import '../../core/utils/formatters.dart';
-import '../../core/utils/lyric_style.dart';
 import '../../shared/widgets/spring_switch.dart';
+import '../../shared/widgets/scale_slider_tile.dart';
 import '../../shared/widgets/spring_switch_tile.dart';
 import 'font_screen.dart';
 import '../../shared/widgets/tab_header.dart';
@@ -223,11 +222,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
             onChanged: lookCtl.setWeightLevel,
           ),
-          _SliderTile(
+          ScaleSliderTile(
             title: 'Размер текста',
             value: look.textScale,
             min: TextScaleRange.interfaceMin,
             max: TextScaleRange.interfaceMax,
+            step: TextScaleRange.step,
             onChanged: lookCtl.setTextScale,
           ),
           _ChoiceTile<AnimationMode>(
@@ -249,19 +249,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             value: look.coverShape,
             options: [for (final c in CoverShape.values) (c, c.title)],
             onChanged: lookCtl.setCoverShape,
-          ),
-          _SliderTile(
-            title: 'Размер текста песен',
-            value: look.lyricsScale,
-            min: TextScaleRange.lyricsMin,
-            max: TextScaleRange.lyricsMax,
-            onChanged: lookCtl.setLyricsScale,
-          ),
-          SpringSwitchTile(
-            title: 'Строка текста под обложкой',
-            subtitle: 'Текущая строка в плеере; нажатие открывает весь текст',
-            value: look.showLyricPreview,
-            onChanged: lookCtl.setShowLyricPreview,
           ),
 
           const _Section('Воспроизведение'),
@@ -308,27 +295,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
 
           const _Section('Тексты песен'),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: SegmentedButton<LyricsStyle>(
-              showSelectedIcon: false,
-              segments: [
-                for (final style in LyricsStyle.values)
-                  ButtonSegment(value: style, label: Text(style.title)),
-              ],
-              selected: {ref.watch(lyricsStyleProvider)},
-              onSelectionChanged: (v) =>
-                  ref.read(lyricsStyleProvider.notifier).set(v.first),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Text(
-              ref.watch(lyricsStyleProvider).description,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-            ),
-          ),
 
           SpringSwitchTile(
             title: 'Искать тексты автоматически',
@@ -601,55 +567,6 @@ class _ChoiceTile<T> extends StatelessWidget {
               style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Ползунок масштаба с подписью в процентах; шаг [TextScaleRange.step].
-class _SliderTile extends StatelessWidget {
-  const _SliderTile({
-    required this.title,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-  });
-
-  final String title;
-  final double value;
-  final double min;
-  final double max;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final steps = ((max - min) / TextScaleRange.step).round();
-    final percent = '${(value * 100).round()}%';
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 12, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text(title)),
-              Text(percent, style: TextStyle(color: AppColors.textSecondary)),
-            ],
-          ),
-          Slider(
-            value: value.clamp(min, max).toDouble(),
-            min: min,
-            max: max,
-            divisions: steps,
-            label: percent,
-            onChanged: (v) {
-              final snapped = (v * 100).round() / 100;
-              if (snapped != value) onChanged(snapped);
-            },
-          ),
         ],
       ),
     );

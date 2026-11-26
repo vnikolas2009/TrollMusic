@@ -19,7 +19,6 @@ import '../../core/utils/formatters.dart';
 import '../../data/models/track.dart';
 import '../../services/audio/audio_handler.dart';
 import '../../shared/widgets/jelly_slider.dart';
-import '../../shared/widgets/press_scale.dart';
 import '../library/track_list_screen.dart';
 import '../lyrics/lyrics_screen.dart';
 import 'lyric_preview.dart';
@@ -83,7 +82,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
     _resolveDominant(track);
     final playing = state?.playing ?? false;
-    final hasLyrics = ref.watch(libraryProvider).hasLyrics(track.id);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -351,12 +349,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                       onRetry: () => audio.playTrack(track),
                                     ),
                                   ),
-                                _LyricsCard(
-                                  trackId: track.id,
-                                  hasLyrics: hasLyrics,
-                                  onTap: () =>
-                                      openLyricsScreen(context, track.id),
-                                ),
                                 const SizedBox(height: 24),
                               ],
                             ),
@@ -929,78 +921,6 @@ class _PlayButtonState extends State<_PlayButton> {
               color: Colors.black,
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LyricsCard extends StatelessWidget {
-  const _LyricsCard({
-    required this.trackId,
-    required this.hasLyrics,
-    required this.onTap,
-  });
-
-  final String trackId;
-  final bool hasLyrics;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressScale(
-      onTap: onTap,
-      scale: 0.985,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt.withValues(alpha: 0.72),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.outline),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: Icon(
-                Icons.lyrics_outlined,
-                size: 19,
-                color: AppColors.accent,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Текст песни',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    hasLyrics
-                        ? 'Синхронизированный · нажмите'
-                        : 'Текст не найден · нажмите',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: AppColors.textTertiary,
-            ),
-          ],
         ),
       ),
     );
