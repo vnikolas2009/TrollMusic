@@ -100,48 +100,66 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           child: SafeArea(
             child: Column(
               children: [
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 28,
-                      ),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                    Expanded(
-                      child: ValueListenableBuilder<Duration?>(
-                        valueListenable:
-                            ref.read(audioHandlerProvider).sleepRemaining,
-                        builder: (context, remaining, _) => Text(
-                          remaining == null
-                              ? 'СЕЙЧАС ИГРАЕТ'
-                              : 'ТАЙМЕР СНА · ${_countdown(remaining)}',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.4,
-                            color: remaining == null
-                                ? AppColors.textSecondary
-                                : AppColors.accent,
+                // Заголовок центрируется по экрану независимо от числа кнопок
+                // по краям: кнопки лежат поверх, а у текста по бокам запас
+                // под две кнопки (2 × 48).
+                SizedBox(
+                  height: 48,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 96),
+                        child: ValueListenableBuilder<Duration?>(
+                          valueListenable:
+                              ref.read(audioHandlerProvider).sleepRemaining,
+                          builder: (context, remaining, _) => FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              remaining == null
+                                  ? 'СЕЙЧАС ИГРАЕТ'
+                                  : 'ТАЙМЕР СНА · ${_countdown(remaining)}',
+                              maxLines: 1,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.4,
+                                color: remaining == null
+                                    ? AppColors.textSecondary
+                                    : AppColors.accent,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        _showQueue
-                            ? Icons.play_circle_outline
-                            : Icons.queue_music_rounded,
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              size: 28,
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: Icon(
+                              _showQueue
+                                  ? Icons.play_circle_outline
+                                  : Icons.queue_music_rounded,
+                            ),
+                            onPressed: () =>
+                                setState(() => _showQueue = !_showQueue),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.more_vert),
+                            onPressed: () => _showOptions(track),
+                          ),
+                        ],
                       ),
-                      onPressed: () => setState(() => _showQueue = !_showQueue),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.more_vert),
-                      onPressed: () => _showOptions(track),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 Expanded(
                   child: AnimatedSwitcher(
