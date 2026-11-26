@@ -12,8 +12,22 @@ class BuiltInFont {
   final String name;
   final String description;
 
-  /// Семейство из `pubspec.yaml`.
+  /// Базовое семейство из `pubspec.yaml` (обычная толщина).
   final String family;
+
+  /// Названия уровней толщины: сдвиг начертаний на 0–3 шага вверх или вниз.
+  static const weightLevels = ['Тонкий', 'Обычный', 'Плотный', 'Жирный'];
+
+  /// Уровень по умолчанию — [weightLevels] `[1]`, «Обычный».
+  static const defaultWeightLevel = 1;
+
+  /// Семейство для уровня толщины. Все уровни собраны в `pubspec.yaml` из
+  /// одних и тех же файлов, у каждого вес 400–800 сдвинут на шаг: у «Жирного»
+  /// обычный текст рисуется начертанием 600, а заголовки — 800.
+  String familyFor(int level) {
+    final l = level.clamp(0, weightLevels.length - 1);
+    return l == defaultWeightLevel ? family : '$family-w$l';
+  }
 
   static const idPrefix = 'builtin:';
 

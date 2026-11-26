@@ -29,8 +29,17 @@ class FontState {
   String get selectedName =>
       selectedBuiltIn?.name ?? selected?.name ?? 'Стандартный';
 
-  /// Семейство для темы; `null` — стандартный шрифт.
+  /// Базовое семейство; `null` — стандартный шрифт.
   String? get family => selectedBuiltIn?.family ?? selected?.family;
+
+  /// Семейство для темы с учётом толщины. Толщина меняется только у
+  /// встроенных шрифтов: у стандартного и импортированных набор начертаний
+  /// не наш.
+  String? familyWith(int weightLevel) =>
+      selectedBuiltIn?.familyFor(weightLevel) ?? selected?.family;
+
+  /// Меняется ли у выбранного шрифта толщина.
+  bool get supportsWeight => selectedBuiltIn != null;
 }
 
 /// Выбор шрифта: стандартный или импортированный. Сохраняется в

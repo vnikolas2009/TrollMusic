@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/lyrics_job.dart';
+import '../../app/appearance_controller.dart';
 import '../../app/font_controller.dart';
 import '../../app/lyrics_style_provider.dart';
 import '../../app/providers.dart';
@@ -9,6 +10,8 @@ import '../../app/settings_provider.dart';
 import '../../app/theme_controller.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_fonts.dart';
+import '../../core/theme/appearance.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/lyric_style.dart';
 import '../../shared/widgets/spring_switch.dart';
@@ -53,6 +56,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settings = ref.watch(settingsProvider);
     final theme = ref.watch(themeControllerProvider);
     final themeCtl = ref.read(themeControllerProvider.notifier);
+    final look = ref.watch(appearanceProvider);
+    final lookCtl = ref.read(appearanceProvider.notifier);
+    final fonts = ref.watch(fontControllerProvider);
     final audio = ref.read(audioHandlerProvider);
     final library = ref.watch(libraryProvider);
     final tracks = ref.watch(tracksProvider).value ?? const [];
@@ -201,6 +207,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const FontScreen()),
             ),
+          ),
+
+          const _Section('Оформление'),
+          _ChoiceTile<int>(
+            title: 'Толщина шрифта',
+            hint: fonts.supportsWeight
+                ? null
+                : 'Меняется у встроенных шрифтов Manrope и Inter',
+            enabled: fonts.supportsWeight,
+            value: look.weightLevel,
+            options: [
+              for (var i = 0; i < BuiltInFont.weightLevels.length; i++)
+                (i, BuiltInFont.weightLevels[i]),
+            ],
+            onChanged: lookCtl.setWeightLevel,
+          ),
+          _SliderTile(
+            title: 'Размер текста',
+            value: look.textScale,
+            min: TextScaleRange.interfaceMin,
+            max: TextScaleRange.interfaceMax,
+            onChanged: lookCtl.setTextScale,
+          ),
+          _ChoiceTile<AnimationMode>(
+            title: 'Анимации',
+            hint: look.animation.description,
+            value: look.animation,
+            options: [for (final m in AnimationMode.values) (m, m.title)],
+            onChanged: lookCtl.setAnimation,
+          ),
+          _ChoiceTile<EffectsLevel>(
+            title: 'Визуальные эффекты',
+            hint: 'Тени, цвет обложки на фоне плеера и экрана текстов',
+            value: look.effects,
+            options: [for (final e in EffectsLevel.values) (e, e.title)],
+            onChanged: lookCtl.setEffects,
+          ),
+          _ChoiceTile<CoverShape>(
+            title: 'Форма обложек',
+            value: look.coverShape,
+            options: [for (final c in CoverShape.values) (c, c.title)],
+            onChanged: lookCtl.setCoverShape,
+          ),
+          _SliderTile(
+            title: 'Размер текста песен',
+            value: look.lyricsScale,
+            min: TextScaleRange.lyricsMin,
+            max: TextScaleRange.lyricsMax,
+            onChanged: lookCtl.setLyricsScale,
+          ),
+          SpringSwitchTile(
+            title: 'Строка текста под обложкой',
+            subtitle: 'Текущая строка в плеере; нажатие открывает весь текст',
+            value: look.showLyricPreview,
+            onChanged: lookCtl.setShowLyricPreview,
           ),
 
           const _Section('Воспроизведение'),
@@ -490,6 +551,107 @@ class _ColorDialogState extends State<_ColorDialog> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Строка выбора из нескольких вариантов (чипы) с подписью.
+class _ChoiceTile<T> extends StatelessWidget {
+  const _ChoiceTile({
+    required this.title,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+    this.hint,
+    this.enabled = true,
+  });
+
+  final String title;
+  final String? hint;
+  final bool enabled;
+  final T value;
+  final List<(T, String)> options;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final (option, label) in options)
+                ChoiceChip(
+                  label: Text(label),
+                  selected: option == value,
+                  onSelected: enabled ? (_) => onChanged(option) : null,
+                ),
+            ],
+          ),
+          if (hint != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              hint!,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Ползунок масштаба с подписью в процентах; шаг [TextScaleRange.step].
+class _SliderTile extends StatelessWidget {
+  const _SliderTile({
+    required this.title,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final String title;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = ((max - min) / TextScaleRange.step).round();
+    final percent = '${(value * 100).round()}%';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 12, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(title)),
+              Text(percent, style: TextStyle(color: AppColors.textSecondary)),
+            ],
+          ),
+          Slider(
+            value: value.clamp(min, max).toDouble(),
+            min: min,
+            max: max,
+            divisions: steps,
+            label: percent,
+            onChanged: (v) {
+              final snapped = (v * 100).round() / 100;
+              if (snapped != value) onChanged(snapped);
+            },
+          ),
+        ],
+      ),
     );
   }
 }

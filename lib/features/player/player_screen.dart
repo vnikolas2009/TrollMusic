@@ -9,6 +9,7 @@ import 'package:palette_generator/palette_generator.dart';
 import '../../app/providers.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/appearance.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/track.dart';
@@ -94,7 +95,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           decoration: BoxDecoration(
             // Однотонная подложка: тон обложки поверх фона темы.
             color: Color.alphaBlend(
-              AppColors.tinted(_dominant).withValues(alpha: 0.3),
+              AppColors.tinted(_dominant).withValues(
+                alpha: (0.3 * AppAppearance.fx).clamp(0.0, 0.5).toDouble(),
+              ),
               AppColors.background,
             ),
           ),
@@ -802,17 +805,14 @@ class _Artwork extends StatelessWidget {
       aspectRatio: 1,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.shadow,
-              blurRadius: 36,
-              offset: Offset(0, 18),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(AppAppearance.coverRadius(22)),
+          boxShadow: AppAppearance.shadows(
+            blur: 36,
+            offset: const Offset(0, 18),
+          ),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(AppAppearance.coverRadius(22)),
           child: AnimatedSwitcher(
             duration: AppMotion.slow,
             switchInCurve: AppMotion.enter,
@@ -866,13 +866,10 @@ class _PlayButtonState extends State<_PlayButton> {
           decoration: BoxDecoration(
             color: AppColors.textPrimary,
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadow,
-                blurRadius: 24,
-                offset: Offset(0, 10),
-              ),
-            ],
+            boxShadow: AppAppearance.shadows(
+              blur: 24,
+              offset: const Offset(0, 10),
+            ),
           ),
           child: AnimatedSwitcher(
             duration: AppMotion.instant,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/appearance_controller.dart';
 import '../../app/providers.dart';
 import '../../app/settings_provider.dart';
 import '../../core/theme/app_colors.dart';
@@ -43,6 +44,11 @@ class _LyricPreviewState extends ConsumerState<LyricPreview> {
 
   @override
   Widget build(BuildContext context) {
+    final enabled = ref.watch(
+      appearanceProvider.select((a) => a.showLyricPreview),
+    );
+    if (!enabled) return const SizedBox(width: double.infinity);
+
     final raw = ref.watch(libraryProvider).lyricsFor(widget.trackId);
     final lyrics = _parsed(raw);
 

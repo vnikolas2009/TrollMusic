@@ -14,6 +14,7 @@ lib/
     lyrics_job.dart              пакетный поиск текстов (3 параллельных запроса, отмена)
     tab_provider.dart, theme_controller.dart
     lyrics_style_provider.dart   стиль текстов песен (spotify / minimal / classic), хранится в настройках
+    appearance_controller.dart   косметика: толщина и размер шрифта, анимации, эффекты, форма обложек, размер текста песен
     font_controller.dart         выбранный шрифт (стандартный / импортированный), применяется в теме
   core/
     config/app_config.dart       расширения файлов, таймауты, user-agent
@@ -21,6 +22,7 @@ lib/
     network/lyrics/lyrics_providers.dart   LRCLIB, Lyrics.ovh (Kugou и QQ — в asia_providers.dart)
     storage/settings.dart        настройки и история прослушивания (Hive)
     utils/lrc_parser.dart        разбор/запись LRC и enhanced LRC, plainLines для текста без таймкодов
+    theme/appearance.dart        AnimationMode, EffectsLevel, CoverShape и AppAppearance (читается виджетами статически)
     theme/app_fonts.dart         встроенные шрифты Inter и Manrope (assets/fonts, лицензия OFL)
     utils/font_check.dart        проверка TTF/OTF (заголовок, таблицы, имя семейства) до загрузки
     utils/lyric_style.dart       LyricsStyle: вид строк и яркость по расстоянию до текущей

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palette_generator/palette_generator.dart';
 
+import '../../app/appearance_controller.dart';
 import '../../app/lyrics_style_provider.dart';
 import '../../app/settings_provider.dart';
 import '../../app/providers.dart';
@@ -555,6 +556,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
 
     final screenHeight = MediaQuery.sizeOf(context).height;
     final style = ref.watch(lyricsStyleProvider);
+    final fontScale = ref.watch(appearanceProvider).lyricsScale;
 
     return StreamBuilder<int>(
       stream: indexes,
@@ -584,7 +586,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (var i = 0; i < lyrics.lines.length; i++)
-                  _buildLine(lyrics, i, index, positions, shifted, style),
+                  _buildLine(lyrics, i, index, positions, shifted, style, fontScale),
               ],
             ),
           ),
@@ -600,6 +602,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     Stream<Duration> positions,
     Duration Function(Duration) shifted,
     LyricsStyle style,
+    double fontScale,
   ) {
     final line = lyrics.lines[i];
     final distance = index < 0 ? 99 : i - index;
@@ -624,7 +627,11 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
             progress: line.hasWordTiming
                 ? _wordProgress(line, safe, lineEnd)
                 : _lineProgress(line, safe, lineEnd),
-            style: look.textStyle(active: true, accent: AppColors.accent),
+            style: look.textStyle(
+              active: true,
+              accent: AppColors.accent,
+              scale: fontScale,
+            ),
           );
         },
       );
@@ -643,6 +650,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           text: line.text,
           distance: distance,
           lyricsStyle: style,
+          fontScale: fontScale,
           active: active,
         ),
       ),
@@ -653,6 +661,15 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
   /// отступами.
   Widget _plainBody(String raw) {
     final rows = LrcParser.plainLines(raw);
+    // Провайдеры читаем здесь, а не в itemBuilder: ref.watch допустим в build.
+    final rowStyle = ref
+        .watch(lyricsStyleProvider)
+        .look
+        .textStyle(active: false, accent: AppColors.accent)
+        .copyWith(
+          fontSize: 22 * ref.watch(appearanceProvider).lyricsScale,
+          color: Colors.white.withValues(alpha: 0.92),
+        );
 
     return ListView.builder(
       physics: const BouncingScrollPhysics(
@@ -667,17 +684,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 5),
-          child: Text(
-            row,
-            style: ref
-                .watch(lyricsStyleProvider)
-                .look
-                .textStyle(active: false, accent: AppColors.accent)
-                .copyWith(
-                  fontSize: 22,
-                  color: Colors.white.withValues(alpha: 0.92),
-                ),
-          ),
+          child: Text(row, style: rowStyle),
         );
       },
     );
@@ -742,6 +749,7 @@ class _LyricLine extends StatelessWidget {
     required this.text,
     required this.distance,
     required this.lyricsStyle,
+    required this.fontScale,
     this.active,
   });
 
@@ -752,6 +760,9 @@ class _LyricLine extends StatelessWidget {
 
   final LyricsStyle lyricsStyle;
 
+  /// Масштаб текста песен из настроек.
+  final double fontScale;
+
   /// Виджет активной строки (с подсветкой по словам); у остальных `null`.
   final Widget? active;
 
@@ -760,7 +771,11 @@ class _LyricLine extends StatelessWidget {
     final look = lyricsStyle.look;
     final label = text.trim().isEmpty ? '♪' : text;
     final isActive = distance == 0;
-    final style = look.textStyle(active: isActive, accent: AppColors.accent);
+    final style = look.textStyle(
+      active: isActive,
+      accent: AppColors.accent,
+      scale: fontScale,
+    );
 
     return Padding(
       padding: EdgeInsets.symmetric(vertical: look.verticalPadding),

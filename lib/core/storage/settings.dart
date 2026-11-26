@@ -64,6 +64,52 @@ class Settings {
   set fontId(String? value) =>
       value == null ? _box.delete('fontId') : _box.put('fontId', value);
 
+  // ----------------------------------------------------------- оформление
+
+  /// Уровень толщины шрифта (0 — тонкий … 3 — жирный; 1 — обычный).
+  int get weightLevel =>
+      ((_box.get('weightLevel') as num?)?.toInt() ?? 1).clamp(0, 3);
+
+  set weightLevel(int value) => _box.put('weightLevel', value);
+
+  /// Масштаб текста интерфейса.
+  double get textScale =>
+      ((_box.get('textScale') as num?)?.toDouble() ?? 1.0)
+          .clamp(0.85, 1.2)
+          .toDouble();
+
+  set textScale(double value) => _box.put('textScale', value);
+
+  /// Масштаб текста песен.
+  double get lyricsScale =>
+      ((_box.get('lyricsScale') as num?)?.toDouble() ?? 1.0)
+          .clamp(0.85, 1.4)
+          .toDouble();
+
+  set lyricsScale(double value) => _box.put('lyricsScale', value);
+
+  /// Индекс `AnimationMode`.
+  int get animationModeIndex =>
+      (_box.get('animationMode') as num?)?.toInt() ?? 0;
+
+  set animationModeIndex(int value) => _box.put('animationMode', value);
+
+  /// Индекс `EffectsLevel` (по умолчанию «Обычные»).
+  int get effectsIndex => (_box.get('effectsLevel') as num?)?.toInt() ?? 2;
+
+  set effectsIndex(int value) => _box.put('effectsLevel', value);
+
+  /// Индекс `CoverShape` (по умолчанию «Скруглённые»).
+  int get coverShapeIndex => (_box.get('coverShape') as num?)?.toInt() ?? 1;
+
+  set coverShapeIndex(int value) => _box.put('coverShape', value);
+
+  /// Показывать текущую строку текста под обложкой в плеере.
+  bool get showLyricPreview =>
+      _box.get('showLyricPreview', defaultValue: true) as bool;
+
+  set showLyricPreview(bool value) => _box.put('showLyricPreview', value);
+
   /// Пропуск тишины в треках (Android).
   bool get skipSilence => _box.get('skipSilence', defaultValue: false) as bool;
 

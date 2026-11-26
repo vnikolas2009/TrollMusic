@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/appearance.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/track.dart';
@@ -54,13 +55,10 @@ class MiniPlayer extends ConsumerWidget {
             color: AppColors.surfaceMini,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: AppColors.outline),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadow,
-                blurRadius: 22,
-                offset: Offset(0, 6),
-              ),
-            ],
+            boxShadow: AppAppearance.shadows(
+              blur: 22,
+              offset: const Offset(0, 6),
+            ),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(

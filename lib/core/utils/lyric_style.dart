@@ -99,9 +99,13 @@ class LyricLook {
   /// Красить ли текущую строку акцентным цветом.
   final bool accentActive;
 
-  TextStyle textStyle({required bool active, required Color accent}) =>
+  TextStyle textStyle({
+    required bool active,
+    required Color accent,
+    double scale = 1.0,
+  }) =>
       TextStyle(
-        fontSize: fontSize,
+        fontSize: fontSize * scale,
         height: 1.25,
         fontWeight: active ? activeWeight : weight,
         color: active && accentActive ? accent : const Color(0xFFFFFFFF),

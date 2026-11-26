@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../shared/widgets/splash_gate.dart';
+import 'appearance_controller.dart';
 import 'font_controller.dart';
 import 'providers.dart';
 import 'theme_controller.dart';
@@ -88,9 +89,21 @@ class _TrollMusicAppState extends ConsumerState<TrollMusicApp>
       }
     }
 
+    final appearance = ref.watch(appearanceProvider);
+
+    // Косметика читается статически (AppAppearance), поэтому после смены
+    // настроек пересобираем всё дерево — так же, как при смене палитры.
+    ref.listen(appearanceProvider, (previous, next) {
+      if (previous == null) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _rebuildAll();
+      });
+    });
+
     final theme = AppTheme.build(
       palette,
-      fontFamily: ref.watch(fontControllerProvider).family,
+      fontFamily:
+          ref.watch(fontControllerProvider).familyWith(appearance.weightLevel),
     );
 
     return MaterialApp(
@@ -100,7 +113,18 @@ class _TrollMusicAppState extends ConsumerState<TrollMusicApp>
       darkTheme: theme,
       themeMode: palette.isDark ? ThemeMode.dark : ThemeMode.light,
       builder: (context, child) {
-        return child ?? const SizedBox.shrink();
+        final media = MediaQuery.of(context);
+        // Пользовательский масштаб умножается на системный.
+        final system = media.textScaler.scale(14) / 14;
+
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: TextScaler.linear(system * appearance.textScale),
+            disableAnimations:
+                media.disableAnimations || appearance.animation.reduceMotion,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
       },
       home: const SplashGate(),
     );

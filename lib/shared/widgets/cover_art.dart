@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/appearance.dart';
 import '../../core/theme/app_motion.dart';
 
 /// Обложка с мягким появлением и плейсхолдером, который не «прыгает».
@@ -31,7 +32,9 @@ class CoverArt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radiusValue =
-        circle ? BorderRadius.circular(size / 2) : BorderRadius.circular(radius);
+        circle
+            ? BorderRadius.circular(size / 2)
+            : BorderRadius.circular(AppAppearance.coverRadius(radius));
     final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     final cacheWidth = (size * devicePixelRatio).round().clamp(32, 1200);
     return ClipRRect(
@@ -116,7 +119,7 @@ class CoverMosaic extends StatelessWidget {
     }
     final half = size / 2;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
+      borderRadius: BorderRadius.circular(AppAppearance.coverRadius(radius)),
       child: SizedBox(
         width: size,
         height: size,
