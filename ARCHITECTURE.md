@@ -24,6 +24,7 @@ lib/
     utils/lrc_parser.dart        разбор/запись LRC и enhanced LRC, plainLines для текста без таймкодов
     theme/appearance.dart        AnimationMode, EffectsLevel, CoverShape и AppAppearance (читается виджетами статически)
     theme/app_fonts.dart         встроенные шрифты Inter и Manrope (assets/fonts, лицензия OFL)
+    utils/loop_range.dart        LoopRange и loopRangeForLine: повтор строки текста (долгое нажатие на строку)
     utils/font_check.dart        проверка TTF/OTF (заголовок, таблицы, имя семейства) до загрузки
     utils/lyric_style.dart       LyricsStyle: вид строк и яркость по расстоянию до текущей
     utils/lyrics_match.dart      чистка названий, варианты запросов, выбор кандидата, сопоставление .lrc с треком

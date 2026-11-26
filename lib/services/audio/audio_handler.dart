@@ -8,6 +8,7 @@ import 'package:just_audio/just_audio.dart';
 
 import '../../core/storage/settings.dart';
 import '../../core/utils/lrc_parser.dart';
+import '../../core/utils/loop_range.dart';
 import '../../data/models/lyrics.dart';
 import '../../data/models/track.dart';
 import '../../data/repositories/library_repository.dart';
@@ -33,6 +34,7 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   final _repeat = ValueNotifier<TrollRepeat>(TrollRepeat.off);
   final _sleepRemaining = ValueNotifier<Duration?>(null);
   final _sleepAtTrackEnd = ValueNotifier<bool>(false);
+  final _loop = ValueNotifier<LoopRange?>(null);
   final _errors = StreamController<String>.broadcast();
 
   List<Track> _playable = const [];
@@ -50,6 +52,9 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   ValueNotifier<bool> get shuffleEnabled => _shuffleEnabled;
   ValueNotifier<TrollRepeat> get repeat => _repeat;
   ValueNotifier<Duration?> get sleepRemaining => _sleepRemaining;
+
+  /// Повторяемый отрезок трека; `null` — повтора нет.
+  ValueNotifier<LoopRange?> get loop => _loop;
 
   /// Таймер сна «до конца текущего трека».
   ValueNotifier<bool> get sleepAtTrackEnd => _sleepAtTrackEnd;
@@ -72,11 +77,13 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
       if (state == ProcessingState.completed) _onCompleted();
     });
     _player.currentIndexStream.listen((_) {
+      _loop.value = null;
       _syncQueueIndex();
       _persistCurrentTrack();
       if (!_restoring) _fadeIn();
     });
     _player.positionStream.listen((position) {
+      _maybeLoop(position);
       _maybeFadeOut(position);
       _maybeSleepAtTrackEnd(position);
       _persistPosition(position);
@@ -308,13 +315,35 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
 
   @override
   Future<void> stop() async {
+    _loop.value = null;
     await _player.stop();
     _persistPosition(_player.position, force: true);
     await super.stop();
   }
 
   @override
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) {
+    // Перемотка пользователем за пределы отрезка отменяет повтор.
+    final range = _loop.value;
+    if (range != null && !range.contains(position)) _loop.value = null;
+    return _player.seek(position);
+  }
+
+  /// Зацикливает отрезок [range] и сразу запускает его с начала.
+  Future<void> setLoop(LoopRange range) async {
+    _loop.value = range;
+    await _player.seek(range.start);
+    await play();
+  }
+
+  void clearLoop() => _loop.value = null;
+
+  void _maybeLoop(Duration position) {
+    final range = _loop.value;
+    if (range != null && range.reached(position)) {
+      _player.seek(range.start);
+    }
+  }
 
   @override
   Future<void> skipToNext() async {

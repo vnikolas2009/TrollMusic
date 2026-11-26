@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palette_generator/palette_generator.dart';
 
@@ -11,6 +12,7 @@ import '../../app/settings_provider.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
+import '../../core/utils/loop_range.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../core/utils/lyric_style.dart';
 import '../../core/utils/read_along.dart';
@@ -180,6 +182,24 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           ),
           Positioned.fill(
             child: _body(lyrics, raw),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: MediaQuery.paddingOf(context).bottom + 20,
+            child: Center(
+              child: ValueListenableBuilder<LoopRange?>(
+                valueListenable: ref.read(audioHandlerProvider).loop,
+                builder: (context, range, _) => AnimatedSwitcher(
+                  duration: AppMotion.base,
+                  child: range == null
+                      ? const SizedBox.shrink()
+                      : _LoopChip(
+                          onClear: ref.read(audioHandlerProvider).clearLoop,
+                        ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -643,8 +663,9 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
       onTap: () {
         _resumeTimer?.cancel();
         _userScrolling = false;
-        ref.read(audioHandlerProvider).seek(line.time);
+        ref.read(audioHandlerProvider).seek(_audioTime(line.time));
       },
+      onLongPress: () => _loopLine(lyrics, i),
       child: RepaintBoundary(
         child: _LyricLine(
           text: line.text,
@@ -655,6 +676,31 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         ),
       ),
     );
+  }
+
+  /// Время строки в аудио: время текста минус сдвиг (подсветка считается как
+  /// позиция + сдвиг).
+  Duration _audioTime(Duration lyricTime) {
+    final value = lyricTime - Duration(milliseconds: _offsetMs);
+    return value < Duration.zero ? Duration.zero : value;
+  }
+
+  /// Долгое нажатие: повторять эту строку, пока повтор не отменят.
+  void _loopLine(Lyrics lyrics, int i) {
+    final handler = ref.read(audioHandlerProvider);
+    final range = loopRangeForLine(
+      lineTime: lyrics.lines[i].time,
+      nextLineTime:
+          i + 1 < lyrics.lines.length ? lyrics.lines[i + 1].time : null,
+      offsetMs: _offsetMs,
+      trackDuration: handler.player.duration,
+    );
+    if (range == null) return;
+
+    HapticFeedback.mediumImpact();
+    _resumeTimer?.cancel();
+    _userScrolling = false;
+    handler.setLoop(range);
   }
 
   /// Текст без таймкодов: обычное чтение с прокруткой, куплеты разделены
@@ -797,6 +843,45 @@ class _LyricLine extends StatelessWidget {
                     style: style,
                     child: Text(label),
                   ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Плашка «Повтор строки» с отменой по нажатию.
+class _LoopChip extends StatelessWidget {
+  const _LoopChip({required this.onClear});
+
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.16),
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onClear,
+        child: const Padding(
+          padding: EdgeInsets.fromLTRB(14, 10, 12, 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.repeat_one_rounded, size: 18, color: Colors.white),
+              SizedBox(width: 8),
+              Text(
+                'Повтор строки',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+              SizedBox(width: 8),
+              Icon(Icons.close_rounded, size: 18, color: Colors.white70),
+            ],
           ),
         ),
       ),
