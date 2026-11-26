@@ -10,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../shared/widgets/spring_switch.dart';
 import '../../shared/widgets/spring_switch_tile.dart';
+import '../../shared/widgets/tab_header.dart';
 import 'storage_meter.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -61,16 +62,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: AppColors.appBarBackground,
-        surfaceTintColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        title: const Text('Настройки'),
-      ),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
+          const TabHeader(title: 'Настройки'),
           const _Section('Тема'),
 
           Padding(

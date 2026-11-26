@@ -12,6 +12,7 @@ import '../../data/models/playlist.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/cover_art.dart';
 import '../../shared/widgets/press_scale.dart';
+import '../../shared/widgets/tab_header.dart';
 import '../../shared/widgets/track_actions.dart';
 import '../../shared/widgets/track_tile.dart';
 import '../playlist/playlist_screen.dart';
@@ -61,27 +62,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 10, 8, 10),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Медиатека',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.9,
-                    height: 1.1,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Новый плейлист',
-                onPressed: _newPlaylist,
-                icon: const Icon(Icons.playlist_add_rounded),
-              ),
-            ],
+        TabHeader(
+          title: 'Медиатека',
+          trailing: IconButton(
+            tooltip: 'Новый плейлист',
+            onPressed: _newPlaylist,
+            icon: const Icon(Icons.playlist_add_rounded),
           ),
         ),
         TabBar(

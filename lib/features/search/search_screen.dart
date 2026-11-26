@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/track_search.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/track_actions.dart';
+import '../../shared/widgets/tab_header.dart';
 import '../../shared/widgets/track_tile.dart';
 import '../library/track_list_screen.dart';
 
@@ -46,15 +47,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: AppColors.appBarBackground,
-        surfaceTintColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        title: const Text('Поиск'),
-      ),
       body: Column(
         children: [
+          const TabHeader(title: 'Поиск'),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: TextField(

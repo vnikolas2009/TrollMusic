@@ -15,6 +15,7 @@ import '../../shared/widgets/entrance.dart';
 import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/track_actions.dart';
+import '../../shared/widgets/tab_header.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -48,17 +49,16 @@ class HomeScreen extends ConsumerWidget {
         parent: AlwaysScrollableScrollPhysics(),
       ),
       slivers: [
-        SliverAppBar(
-          pinned: true,
-          backgroundColor: AppColors.appBarBackground,
-          surfaceTintColor: Colors.transparent,
-          scrolledUnderElevation: 0,
-          title: const Row(
-            children: [
-              _BrandMark(),
-              SizedBox(width: 10),
-              BrandWordmark(fontSize: 21),
-            ],
+        const SliverToBoxAdapter(
+          child: TabHeader(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _BrandMark(),
+                SizedBox(width: 10),
+                BrandWordmark(fontSize: 26),
+              ],
+            ),
           ),
         ),
         SliverToBoxAdapter(

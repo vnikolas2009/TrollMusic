@@ -9,6 +9,7 @@ import '../../core/utils/permission_service.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/entrance.dart';
 import '../../shared/widgets/press_scale.dart';
+import '../../shared/widgets/tab_header.dart';
 import '../../shared/widgets/track_tile.dart';
 import 'backup_screen.dart';
 import 'track_edit_sheet.dart';
@@ -123,13 +124,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
         parent: AlwaysScrollableScrollPhysics(),
       ),
       slivers: [
-        SliverAppBar(
-          pinned: true,
-          backgroundColor: AppColors.appBarBackground,
-          surfaceTintColor: Colors.transparent,
-          scrolledUnderElevation: 0,
-          title: const Text('Импорт'),
-        ),
+        const SliverToBoxAdapter(child: TabHeader(title: 'Импорт')),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
