@@ -139,12 +139,11 @@ class _JellySliderState extends State<JellySlider>
           final width = constraints.maxWidth;
           const inset = 12.0;
           const thumbSize = 24.0;
-          const bubbleSize = 42.0;
+          const draggedSize = 46.0;
+          const thumbBox = draggedSize;
 
           final available = (width - inset * 2).clamp(1.0, width);
           final thumbCenter = inset + available * _progress;
-          final bubbleLeft = (thumbCenter - bubbleSize / 2)
-              .clamp(0.0, (width - bubbleSize).clamp(0.0, width));
 
           return Column(
             mainAxisSize: MainAxisSize.min,
@@ -198,52 +197,20 @@ class _JellySliderState extends State<JellySlider>
                         ),
                       ),
 
-                      // Bubble.
+                      // Единственный бегунок: при перетаскивании растёт
+                      // и показывает таймкод внутри себя.
                       Positioned(
-                        left: bubbleLeft,
-                        top: 0,
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 140),
-                          opacity: _dragging ? 1 : 0,
-                          child: AnimatedScale(
-                            duration: const Duration(milliseconds: 220),
+                        left: thumbCenter - thumbBox / 2,
+                        top: 32 - thumbBox / 2,
+                        width: thumbBox,
+                        height: thumbBox,
+                        child: Center(
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
                             curve: Curves.easeOutBack,
-                            scale: _dragging ? 1 : 0.65,
-                            child: Container(
-                              width: bubbleSize,
-                              height: bubbleSize,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: AppColors.textPrimary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                formatDuration(_currentDuration),
-                                style: TextStyle(
-                                  color: AppColors.background,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Thumb.
-                      Positioned(
-                        left: thumbCenter - thumbSize / 2,
-                        top: 20,
-                        child: AnimatedScale(
-                          duration: const Duration(milliseconds: 180),
-                          curve: Curves.easeOutBack,
-                          scale: _dragging ? 1.16 : 1,
-                          child: Container(
-                            width: thumbSize,
-                            height: thumbSize,
+                            width: _dragging ? draggedSize : thumbSize,
+                            height: _dragging ? draggedSize : thumbSize,
+                            alignment: Alignment.center,
                             decoration: BoxDecoration(
                               color: AppColors.textPrimary,
                               shape: BoxShape.circle,
@@ -252,6 +219,30 @@ class _JellySliderState extends State<JellySlider>
                                   alpha: 0.12,
                                 ),
                                 width: 2,
+                              ),
+                            ),
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 140),
+                              opacity: _dragging ? 1 : 0,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 3,
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    formatDuration(_currentDuration),
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      color: AppColors.background,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
