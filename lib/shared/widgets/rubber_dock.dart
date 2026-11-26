@@ -285,10 +285,16 @@ class _RubberDockState extends State<RubberDock>
           l = r;
           r = swap;
         }
-        final pillWidth = math.max(r - l, 24.0);
-        // площадь пилюли сохраняется: растянулась — стала ниже
+        // Пилюля всегда остаётся внутри «внутренней рамки» дока: между ней
+        // и краем серого овала сохраняется отступ [_inset]. При перелёте
+        // пружин или резиновом оттягивании она упирается в рамку, не меняя
+        // ширину, поэтому края остаются скруглёнными и не обрезаются.
+        final pillWidth = math.min(math.max(r - l, 24.0), _tabsWidth);
+        l = l.clamp(0.0, _tabsWidth - pillWidth).toDouble();
+        // площадь пилюли сохраняется: растянулась — стала ниже, но не выше
+        // высоты вкладки
         final pillHeight =
-            _tab * (1 / math.sqrt(pillWidth / _tab)).clamp(0.66, 1.1);
+            _tab * (1 / math.sqrt(pillWidth / _tab)).clamp(0.66, 1.0);
         final pillTop = (_tab - pillHeight) / 2;
         final pillRect = Rect.fromLTWH(l, pillTop, pillWidth, pillHeight);
 
