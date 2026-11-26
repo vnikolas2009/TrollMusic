@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palette_generator/palette_generator.dart';
 
+import '../../app/lyrics_style_provider.dart';
 import '../../app/settings_provider.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/utils/lrc_parser.dart';
+import '../../core/utils/lyric_style.dart';
 import '../../core/utils/read_along.dart';
 import '../../data/models/lyrics.dart';
 import '../../data/models/track.dart';
@@ -553,6 +555,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         .distinct();
 
     final screenHeight = MediaQuery.sizeOf(context).height;
+    final style = ref.watch(lyricsStyleProvider);
 
     return StreamBuilder<int>(
       stream: indexes,
@@ -582,7 +585,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (var i = 0; i < lyrics.lines.length; i++)
-                  _buildLine(lyrics, i, index, positions, shifted),
+                  _buildLine(lyrics, i, index, positions, shifted, style),
               ],
             ),
           ),
@@ -597,13 +600,17 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     int index,
     Stream<Duration> positions,
     Duration Function(Duration) shifted,
+    LyricsStyle style,
   ) {
     final line = lyrics.lines[i];
     final distance = index < 0 ? 99 : i - index;
+    final look = style.look;
 
     Widget? active;
 
-    if (i == index) {
+    // Подсветка по словам нужна только стилю с wordHighlight; у остальных
+    // текущая строка — обычный текст, и позицию слушать не надо.
+    if (i == index && look.wordHighlight) {
       final lineEnd = i + 1 < lyrics.lines.length
           ? lyrics.lines[i + 1].time
           : line.time + const Duration(seconds: 5);
@@ -618,7 +625,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
             progress: line.hasWordTiming
                 ? _wordProgress(line, safe, lineEnd)
                 : _lineProgress(line, safe, lineEnd),
-            style: _LyricLine.style,
+            style: look.textStyle(active: true, accent: AppColors.accent),
           );
         },
       );
@@ -636,6 +643,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         child: _LyricLine(
           text: line.text,
           distance: distance,
+          lyricsStyle: style,
           active: active,
         ),
       ),
@@ -662,10 +670,14 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           padding: const EdgeInsets.symmetric(vertical: 5),
           child: Text(
             row,
-            style: _LyricLine.style.copyWith(
-              fontSize: 22,
-              color: Colors.white.withValues(alpha: 0.92),
-            ),
+            style: ref
+                .watch(lyricsStyleProvider)
+                .look
+                .textStyle(active: false, accent: AppColors.accent)
+                .copyWith(
+                  fontSize: 22,
+                  color: Colors.white.withValues(alpha: 0.92),
+                ),
           ),
         );
       },
@@ -722,13 +734,15 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
   }
 }
 
-/// Строка текста. Активная подсвечивается слева направо, пройденные
-/// приглушены слабее, будущие сильнее. Смена состояния плавная: меняются
-/// прозрачность и масштаб, а не сама строка.
+/// Строка текста. Вид зависит от выбранного [LyricsStyle]: в Spotify-like
+/// активная строка подсвечивается слева направо, пройденные приглушены
+/// слабее будущих. Смена состояния плавная: меняются прозрачность, масштаб
+/// и начертание, а не сама строка.
 class _LyricLine extends StatelessWidget {
   const _LyricLine({
     required this.text,
     required this.distance,
+    required this.lyricsStyle,
     this.active,
   });
 
@@ -737,49 +751,41 @@ class _LyricLine extends StatelessWidget {
   /// Расстояние до текущей строки: 0 — текущая, меньше нуля — пройденные.
   final int distance;
 
+  final LyricsStyle lyricsStyle;
+
   /// Виджет активной строки (с подсветкой по словам); у остальных `null`.
   final Widget? active;
 
-  static const style = TextStyle(
-    fontSize: 28,
-    height: 1.25,
-    fontWeight: FontWeight.w800,
-    color: Colors.white,
-  );
-
   @override
   Widget build(BuildContext context) {
+    final look = lyricsStyle.look;
     final label = text.trim().isEmpty ? '♪' : text;
     final isActive = distance == 0;
+    final style = look.textStyle(active: isActive, accent: AppColors.accent);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: EdgeInsets.symmetric(vertical: look.verticalPadding),
       child: AnimatedOpacity(
         duration: AppMotion.slow,
         curve: AppMotion.enter,
-        opacity: lyricLineOpacity(distance),
+        opacity: lyricsStyle.opacity(distance),
         child: AnimatedScale(
           duration: AppMotion.slow,
           curve: AppMotion.emphasized,
           alignment: Alignment.centerLeft,
-          scale: isActive ? 1.0 : 0.94,
+          scale: isActive ? 1.0 : look.inactiveScale,
           child: Align(
             alignment: Alignment.centerLeft,
-            child: isActive && text.trim().isNotEmpty
-                ? active ?? Text(label, style: style)
-                : Text(label, style: style),
+            child: isActive && active != null && text.trim().isNotEmpty
+                ? active
+                : AnimatedDefaultTextStyle(
+                    duration: AppMotion.base,
+                    style: style,
+                    child: Text(label),
+                  ),
           ),
         ),
       ),
     );
   }
-}
-
-/// Яркость строки по расстоянию до текущей: текущая — полная, пройденные
-/// ярче будущих, дальние постепенно тускнеют до нижней границы.
-double lyricLineOpacity(int distance) {
-  if (distance == 0) return 1.0;
-  final far = distance.abs() - 1;
-  if (distance < 0) return (0.55 - far * 0.04).clamp(0.3, 0.55).toDouble();
-  return (0.38 - far * 0.02).clamp(0.24, 0.38).toDouble();
 }

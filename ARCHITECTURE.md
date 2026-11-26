@@ -13,12 +13,14 @@ lib/
     settings_provider.dart       settingsProvider, lyricsServiceProvider
     lyrics_job.dart              пакетный поиск текстов (3 параллельных запроса, отмена)
     tab_provider.dart, theme_controller.dart
+    lyrics_style_provider.dart   стиль текстов песен (spotify / minimal / classic), хранится в настройках
   core/
     config/app_config.dart       расширения файлов, таймауты, user-agent
     network/http_client.dart     createDio() для запросов текстов
     network/lyrics/lyrics_providers.dart   LRCLIB, NetEase (+ yrc → enhanced LRC), Lyrics.ovh
     storage/settings.dart        настройки и история прослушивания (Hive)
-    utils/lrc_parser.dart        разбор/запись LRC и enhanced LRC
+    utils/lrc_parser.dart        разбор/запись LRC и enhanced LRC, plainLines для текста без таймкодов
+    utils/lyric_style.dart       LyricsStyle: вид строк и яркость по расстоянию до текущей
     utils/lyrics_match.dart      чистка названий, варианты запросов, выбор кандидата, сопоставление .lrc с треком
     utils/track_sort.dart        сортировка, группировка по альбомам
     utils/track_search.dart      поиск по медиатеке и по текстам
@@ -34,7 +36,10 @@ lib/
     lyrics/lyrics_service.dart   перебор источников, выбор лучшего текста
   features/                      home, library (+track_list_screen), playlist, search, player,
                                  lyrics, create (импорт, теги, резервная копия), settings
-  shared/widgets/                track_tile, track_actions (общее меню трека), cover_art, mini_player, ...
+  shared/widgets/                track_tile, track_actions (общее меню трека), cover_art, mini_player,
+                                 mini_player_bar (мини-плеер для экранов поверх оболочки), tab_header
+                                 (единый заголовок вкладок), rubber_dock, jelly_slider, ...
+  features/player/lyric_preview  текущая строка под обложкой; нажатие → openLyricsScreen
 test/                            чистая логика: LRC, сопоставление, сортировка, поиск, модели
 ```
 

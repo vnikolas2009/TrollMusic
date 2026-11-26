@@ -46,6 +46,12 @@ class Settings {
 
   set gradientBackground(bool value) => _box.put('gradientBackground', value);
 
+  /// Стиль показа текстов песен (`spotify`, `minimal`, `classic`).
+  String get lyricsStyle =>
+      _box.get('lyricsStyle', defaultValue: 'spotify') as String;
+
+  set lyricsStyle(String value) => _box.put('lyricsStyle', value);
+
   /// Пропуск тишины в треках (Android).
   bool get skipSilence => _box.get('skipSilence', defaultValue: false) as bool;
 

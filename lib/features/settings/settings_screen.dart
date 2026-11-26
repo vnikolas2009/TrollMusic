@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/lyrics_job.dart';
+import '../../app/lyrics_style_provider.dart';
 import '../../app/providers.dart';
 import '../../app/settings_provider.dart';
 import '../../app/theme_controller.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/utils/lyric_style.dart';
 import '../../shared/widgets/spring_switch.dart';
 import '../../shared/widgets/spring_switch_tile.dart';
 import '../../shared/widgets/tab_header.dart';
@@ -233,6 +235,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
 
           const _Section('Тексты песен'),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: SegmentedButton<LyricsStyle>(
+              showSelectedIcon: false,
+              segments: [
+                for (final style in LyricsStyle.values)
+                  ButtonSegment(value: style, label: Text(style.title)),
+              ],
+              selected: {ref.watch(lyricsStyleProvider)},
+              onSelectionChanged: (v) =>
+                  ref.read(lyricsStyleProvider.notifier).set(v.first),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text(
+              ref.watch(lyricsStyleProvider).description,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ),
 
           SpringSwitchTile(
             title: 'Искать тексты автоматически',
