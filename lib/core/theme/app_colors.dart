@@ -172,34 +172,12 @@ abstract final class AppColors {
   static const stationLilac = Color(0xFFB9A7F5);
   static const stationPeach = Color(0xFFF2A97E);
 
-  /// Затемняющий градиент поверх обложек.
-  static const coverScrim = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0x00000000), Color(0xB3000000)],
-  );
-
-  /// Фон экранов: сплошной цвет или едва заметный градиент от акцента.
-  static BoxDecoration get backdrop {
-    if (!_p.gradient) return BoxDecoration(color: _p.background);
-    return BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          _p.accent.withAlpha(_p.isDark ? 0x26 : 0x22),
-          _p.background,
-        ],
-        stops: const [0, 0.5],
-      ),
-    );
-  }
+  /// Фон экранов: сплошной цвет темы.
+  static BoxDecoration get backdrop => BoxDecoration(color: _p.background);
 
   /// Фон закреплённого `SliverAppBar`.
   ///
-  /// Пока контент не прокручен под панель, она полностью прозрачна и виден
-  /// градиент [backdrop]. Раньше здесь был почти непрозрачный `background`,
-  /// из-за чего верх экрана выглядел чёрной плашкой поверх градиента.
+  /// Пока контент не прокручен под панель, она полностью прозрачна.
   /// Когда контент заезжает под панель (`scrolledUnder`), панель получает
   /// фон, чтобы заголовок оставался читаемым.
   static WidgetStateColor get appBarBackground => WidgetStateColor.resolveWith(

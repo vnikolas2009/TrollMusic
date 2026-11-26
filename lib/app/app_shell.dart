@@ -8,7 +8,6 @@ import '../features/home/home_screen.dart';
 import '../features/library/library_screen.dart';
 import '../features/search/search_screen.dart';
 import '../features/settings/settings_screen.dart';
-import '../shared/widgets/aurora_background.dart';
 import '../shared/widgets/mini_player.dart';
 import '../shared/widgets/mini_player_bar.dart';
 import '../shared/widgets/rubber_dock.dart';
@@ -56,8 +55,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       backgroundColor: AppColors.background,
       body: DecoratedBox(
         decoration: AppColors.backdrop,
-        child: AuroraBackground(
-          child: SafeArea(
+        child: SafeArea(
           bottom: false,
           child: Column(
             children: [
@@ -80,7 +78,6 @@ class _AppShellState extends ConsumerState<AppShell> {
               ),
             ],
           ),
-        ),
         ),
       ),
     );

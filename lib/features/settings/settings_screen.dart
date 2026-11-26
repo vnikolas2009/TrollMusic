@@ -183,13 +183,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
 
           SpringSwitchTile(
-            title: 'Градиентный фон',
-            subtitle: 'Едва заметный градиент от акцентного цвета',
-            value: theme.gradient,
-            onChanged: themeCtl.setGradient,
-          ),
-
-          SpringSwitchTile(
             title: 'Чёрный AMOLED',
             subtitle: 'Чисто чёрный фон в тёмной теме',
             value: theme.amoled,

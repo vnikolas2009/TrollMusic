@@ -91,11 +91,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           duration: AppMotion.slower,
           curve: AppMotion.emphasized,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [AppColors.tinted(_dominant), AppColors.background],
-              stops: const [0, 0.82],
+            // Однотонная подложка: тон обложки поверх фона темы.
+            color: Color.alphaBlend(
+              AppColors.tinted(_dominant).withValues(alpha: 0.3),
+              AppColors.background,
             ),
           ),
           child: SafeArea(
