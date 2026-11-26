@@ -260,7 +260,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           SpringSwitchTile(
             title: 'Искать тексты автоматически',
             subtitle: 'После импорта подбирать тексты для новых треков '
-                '(LRCLIB, NetEase, Kugou, QQ Music, Lyrics.ovh)',
+                '(LRCLIB, Kugou, QQ Music, Lyrics.ovh)',
             value: settings.autoLyrics,
             onChanged: (v) => setState(() => settings.autoLyrics = v),
           ),

@@ -289,7 +289,7 @@ class ImportService {
   }
 
   /// Ищет текст в сети и сохраняет. [provider] — идентификатор источника
-  /// (`lrclib`, `netease`, `ovh`); без него перебираются все.
+  /// (`lrclib`, `kugou`, `qq`, `ovh`); без него перебираются все.
   Future<LyricsUpdate> findLyricsOnline(Track track, {String? provider}) async {
     final found = await _lyrics.find(
       title: track.title,

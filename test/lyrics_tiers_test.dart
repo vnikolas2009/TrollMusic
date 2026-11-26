@@ -48,4 +48,47 @@ void main() {
   test('KRC без пословных меток даёт null', () {
     expect(krcTextToEnhancedLrc('[1000,2000]plain'), isNull);
   });
+
+  group('замазанные слова и неточные таймкоды', () {
+    test('looksCensored находит звёздочки в словах, но не сноски', () {
+      expect(looksCensored('What the f*** is this'), isTrue);
+      expect(looksCensored('Ты **** и с***а'), isTrue);
+      expect(looksCensored('f*ck'), isTrue);
+      expect(looksCensored('Обычный текст*'), isFalse);
+      expect(looksCensored('Обычный текст без замен'), isFalse);
+    });
+
+    test('полный LRC выигрывает у enhanced с замазанными словами', () {
+      final best = pickByTier(query, [
+        cand('masked', synced: '[00:01.00]<00:01.00>what the <00:01.50>f***'),
+        cand('clean', synced: '[00:01.00]what the fuck'),
+      ]);
+      expect(best!.candidate.source, 'clean');
+    });
+
+    test('замазанный синхронизированный текст лучше чистого без таймкодов', () {
+      final best = pickByTier(query, [
+        cand('masked', synced: '[00:01.00]what the f***'),
+        cand('plain', plain: 'what the fuck'),
+      ]);
+      expect(best!.candidate.source, 'masked');
+    });
+
+    test('таймкоды другой версии трека не принимаются как точные', () {
+      final best = pickByTier(query, [
+        cand('shifted', synced: '[00:01.00]hello', dur: 193),
+      ]);
+      expect(best!.degraded, isTrue);
+      expect(best.rank, 1);
+    });
+
+    test('точные таймкоды лучше таймкодов с расхождением', () {
+      final best = pickByTier(query, [
+        cand('shifted', synced: '[00:01.00]<00:01.00>hello', dur: 193),
+        cand('exact', synced: '[00:01.00]hello', dur: 201),
+      ]);
+      expect(best!.candidate.source, 'exact');
+      expect(best.degraded, isFalse);
+    });
+  });
 }

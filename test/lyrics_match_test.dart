@@ -122,17 +122,4 @@ void main() {
         lyricsFileName: 'Something', title: 'Bohemian Rhapsody', artist: 'Queen'), isFalse);
     });
   });
-
-  group('NetEase yrc conversion', () {
-    test('converts word-timed lines to enhanced LRC', () {
-      const yrc = '[10000,2000](10000,500,0)Hello (10500,700,0)dark (11200,800,0)world\n'
-          '[json]ignored';
-      final lrc = neteaseYrcToEnhancedLrc(yrc);
-      expect(lrc, '[00:10.00]<00:10.00>Hello <00:10.50>dark <00:11.20>world');
-    });
-
-    test('returns null when there are no word tags', () {
-      expect(neteaseYrcToEnhancedLrc('[00:01.00]plain'), isNull);
-    });
-  });
 }

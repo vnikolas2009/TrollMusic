@@ -1,6 +1,6 @@
 # Архитектура TrollMusic
 
-Flutter-приложение: только локальные файлы. Сеть используется для одного: поиск текстов песен (LRCLIB, NetEase, Kugou, QQ Music, Lyrics.ovh). Бэкенда нет.
+Flutter-приложение: только локальные файлы. Сеть используется для одного: поиск текстов песен (LRCLIB, Kugou, QQ Music, Lyrics.ovh). Бэкенда нет.
 
 ## Карта файлов
 
@@ -17,7 +17,7 @@ lib/
   core/
     config/app_config.dart       расширения файлов, таймауты, user-agent
     network/http_client.dart     createDio() для запросов текстов
-    network/lyrics/lyrics_providers.dart   LRCLIB, NetEase (+ yrc → enhanced LRC), Lyrics.ovh
+    network/lyrics/lyrics_providers.dart   LRCLIB, Lyrics.ovh (Kugou и QQ — в asia_providers.dart)
     storage/settings.dart        настройки и история прослушивания (Hive)
     utils/lrc_parser.dart        разбор/запись LRC и enhanced LRC, plainLines для текста без таймкодов
     utils/lyric_style.dart       LyricsStyle: вид строк и яркость по расстоянию до текущей
@@ -67,6 +67,6 @@ test/                            чистая логика: LRC, сопоста�
 
 ## Ограничения
 
-- Онлайн-источники текстов неофициальные (NetEase) и могут измениться или быть недоступны в вашей сети; остальное работает офлайн.
+- Онлайн-источники текстов (Kugou, QQ Music) неофициальные и могут измениться или быть недоступны в вашей сети; остальное работает офлайн.
 - Пропуск тишины работает только на Android.
 - Перед коммитом: `flutter pub get`, `flutter analyze`, `flutter test`.

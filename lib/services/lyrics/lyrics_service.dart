@@ -32,20 +32,57 @@ int lyricsTier(LyricsCandidate c) {
   return c.hasPlain ? 1 : 0;
 }
 
-/// Лучший кандидат: сначала по ярусу, затем по оценке совпадения.
-({LyricsCandidate candidate, int tier, double score})? pickByTier(
+/// Оценка кандидата для выбора, больше — лучше.
+///
+/// Основа — ярус [lyricsTier]. Поправки:
+/// - таймкоды не подходят по длительности ([timingMismatch]): текст всё ещё
+///   полезен, но показывается без таймкодов, поэтому ярус 1;
+/// - часть слов замазана ([looksCensored]): не выше яруса 2 и минус 0,5,
+///   чтобы полный текст из другого источника выигрывал при равных таймкодах.
+double lyricsRank(LyricsQuery query, LyricsCandidate c) {
+  var rank = lyricsTier(c).toDouble();
+  if (rank >= 2 && timingMismatch(query, c)) rank = 1;
+  if (looksCensored(c.synced ?? c.plain ?? '')) {
+    rank = (rank > 2 ? 2 : rank) - 0.5;
+  }
+  return rank;
+}
+
+/// Лучший кандидат: сначала по [lyricsRank], затем по оценке совпадения.
+/// `tier` — исходный ярус текста, `rank` — с учётом поправок,
+/// `degraded` — таймкоды неточны, текст нужно отдать без них.
+({
+  LyricsCandidate candidate,
+  int tier,
+  double rank,
+  bool degraded,
+  double score,
+})? pickByTier(
   LyricsQuery query,
   Iterable<LyricsCandidate> candidates,
 ) {
-  ({LyricsCandidate candidate, int tier, double score})? best;
+  ({
+    LyricsCandidate candidate,
+    int tier,
+    double rank,
+    bool degraded,
+    double score,
+  })? best;
   for (final c in candidates) {
     final score = scoreCandidate(query, c);
     if (score == null) continue;
     final tier = lyricsTier(c);
+    final rank = lyricsRank(query, c);
     if (best == null ||
-        tier > best.tier ||
-        (tier == best.tier && score > best.score)) {
-      best = (candidate: c, tier: tier, score: score);
+        rank > best.rank ||
+        (rank == best.rank && score > best.score)) {
+      best = (
+        candidate: c,
+        tier: tier,
+        rank: rank,
+        degraded: tier >= 2 && timingMismatch(query, c),
+        score: score,
+      );
     }
   }
   return best;
@@ -59,7 +96,6 @@ class LyricsService {
       : providers = providers ??
             <LyricsProvider>[
               LrclibProvider(),
-              NeteaseProvider(),
               KugouProvider(),
               QqMusicProvider(),
               LyricsOvhProvider(),
@@ -98,9 +134,10 @@ class LyricsService {
       final best = pickByTier(query, pool);
       if (best == null) continue;
 
-      final found = _toFound(best.candidate);
-      // Построчный или пословный текст — это уже хороший результат.
-      if (best.tier >= 2) return found;
+      final found = _toFound(best.candidate, degraded: best.degraded);
+      // Построчный или пословный текст с точными таймкодами и без замазанных
+      // слов — это уже хороший результат.
+      if (best.rank >= 2) return found;
       fallback ??= found;
     }
     return fallback;
@@ -117,8 +154,8 @@ class LyricsService {
     }
   }
 
-  LyricsFound _toFound(LyricsCandidate c) {
-    if (c.hasSynced) {
+  LyricsFound _toFound(LyricsCandidate c, {bool degraded = false}) {
+    if (c.hasSynced && !degraded) {
       return LyricsFound(
         text: c.synced!.trim(),
         synced: true,
@@ -126,8 +163,12 @@ class LyricsService {
         source: c.source,
       );
     }
+    // Неточные таймкоды хуже их отсутствия: отдаём только текст.
+    final plain = c.hasPlain
+        ? c.plain!.trim()
+        : LrcParser.plainLines(c.synced!).join('\n');
     return LyricsFound(
-      text: c.plain!.trim(),
+      text: plain,
       synced: false,
       wordSynced: false,
       source: c.source,

@@ -215,6 +215,28 @@ double? scoreCandidate(LyricsQuery query, LyricsCandidate c) {
   return score;
 }
 
+/// Похож ли текст на «зацензуренный» источником: часть слов замазана
+/// звёздочками (`f***`, `с****а`). Одиночная звёздочка у слова (сноска) не
+/// считается.
+bool looksCensored(String text) => _censored.hasMatch(text);
+
+final RegExp _censored = RegExp(
+  r'\p{L}\*{2,}|\*{2,}\p{L}|\p{L}\*\p{L}',
+  unicode: true,
+);
+
+/// Максимальная разница длительности трека и версии текста, при которой
+/// таймкоды ещё считаются точными. Другая версия (радио-правка, длинное
+/// вступление) сдвигает все строки.
+const int maxSyncedDurationDiffSec = 5;
+
+/// Таймкоды кандидата не подходят к треку: длительности известны и
+/// отличаются больше [maxSyncedDurationDiffSec].
+bool timingMismatch(LyricsQuery query, LyricsCandidate c) =>
+    query.durationSec > 0 &&
+    c.durationSec > 0 &&
+    (query.durationSec - c.durationSec).abs() > maxSyncedDurationDiffSec;
+
 /// Лучший подходящий кандидат или `null`.
 LyricsCandidate? pickBest(LyricsQuery query, Iterable<LyricsCandidate> candidates) {
   LyricsCandidate? best;
