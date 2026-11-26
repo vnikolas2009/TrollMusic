@@ -39,3 +39,10 @@ String formatCount(int? value) {
   if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)} тыс.';
   return '$value';
 }
+
+/// Оставшееся время трека со знаком минус: `-2:31`. Не уходит в плюс,
+/// если позиция вышла за длительность.
+String formatRemaining(Duration position, Duration duration) {
+  final left = duration - position;
+  return '-${formatDuration(left.isNegative ? Duration.zero : left)}';
+}

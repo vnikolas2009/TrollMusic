@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show FontFeature;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:palette_generator/palette_generator.dart';
 
 import '../../app/providers.dart';
+import '../../app/settings_provider.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/appearance.dart';
@@ -755,15 +757,35 @@ class _StreamErrorBanner extends StatelessWidget {
 /// Ползунок и таймеры: единственная часть экрана, которая слушает
 /// positionProvider/durationProvider, поэтому остальной экран не
 /// перестраивается на каждый тик позиции.
-class _SeekBar extends ConsumerWidget {
+class _SeekBar extends ConsumerStatefulWidget {
   const _SeekBar({required this.fallbackDuration});
 
   final Duration fallbackDuration;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_SeekBar> createState() => _SeekBarState();
+}
+
+class _SeekBarState extends ConsumerState<_SeekBar> {
+  /// Справа показывается оставшееся время; переключается нажатием на него и
+  /// запоминается.
+  late bool _remaining = ref.read(settingsProvider).showRemainingTime;
+
+  void _toggleRemaining() {
+    setState(() => _remaining = !_remaining);
+    ref.read(settingsProvider).showRemainingTime = _remaining;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final position = ref.watch(positionProvider).value ?? Duration.zero;
-    final duration = ref.watch(durationProvider).value ?? fallbackDuration;
+    final duration =
+        ref.watch(durationProvider).value ?? widget.fallbackDuration;
+    final labelStyle = TextStyle(
+      fontSize: 11,
+      color: AppColors.textSecondary,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
 
     return RepaintBoundary(
       child: Column(
@@ -780,18 +802,21 @@ class _SeekBar extends ConsumerWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  formatDuration(position),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                Text(
-                  formatDuration(duration),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
+                Text(formatDuration(position), style: labelStyle),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _toggleRemaining,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      _remaining
+                          ? formatRemaining(position, duration)
+                          : formatDuration(duration),
+                      style: labelStyle,
+                    ),
                   ),
                 ),
               ],

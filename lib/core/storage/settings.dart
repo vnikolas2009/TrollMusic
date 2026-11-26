@@ -64,6 +64,13 @@ class Settings {
   set fontId(String? value) =>
       value == null ? _box.delete('fontId') : _box.put('fontId', value);
 
+  /// В плеере справа от ползунка показывается оставшееся время (`-2:31`),
+  /// а не общая длительность.
+  bool get showRemainingTime =>
+      _box.get('showRemainingTime', defaultValue: false) as bool;
+
+  set showRemainingTime(bool value) => _box.put('showRemainingTime', value);
+
   // ----------------------------------------------------------- оформление
 
   /// Уровень толщины шрифта (0 — тонкий … 3 — жирный; 1 — обычный).
