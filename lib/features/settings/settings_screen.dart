@@ -196,8 +196,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const _Section('Шрифт'),
           ListTile(
             title: const Text('Шрифт интерфейса'),
-            subtitle: Text(ref.watch(fontControllerProvider).selected?.name ??
-                'Стандартный'),
+            subtitle: Text(ref.watch(fontControllerProvider).selectedName),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const FontScreen()),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/font_controller.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_fonts.dart';
 import '../../services/fonts/font_service.dart';
 
 /// Пример для предпросмотра: кириллица, латиница, цифры.
@@ -115,6 +116,14 @@ class FontScreen extends ConsumerWidget {
             selected: state.selectedId == null,
             onTap: controller.reset,
           ),
+          for (final font in BuiltInFont.all)
+            _FontTile(
+              title: font.name,
+              description: font.description,
+              family: font.family,
+              selected: state.selectedId == font.id,
+              onTap: () => controller.select(font.id),
+            ),
           for (final font in state.fonts)
             _FontTile(
               title: font.name,
@@ -151,10 +160,14 @@ class _FontTile extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.family,
+    this.description,
     this.onDelete,
   });
 
   final String title;
+
+  /// Короткое описание характера шрифта.
+  final String? description;
 
   /// Семейство для предпросмотра; `null` — стандартный шрифт.
   final String? family;
@@ -167,7 +180,7 @@ class _FontTile extends StatelessWidget {
     return ListTile(
       onTap: onTap,
       contentPadding: const EdgeInsets.fromLTRB(20, 6, 8, 6),
-      title: Text(title),
+      title: Text(description == null ? title : '$title · $description'),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 4),
         child: Text(

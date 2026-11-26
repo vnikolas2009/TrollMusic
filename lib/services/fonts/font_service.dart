@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/storage/settings.dart';
+import '../../core/theme/app_fonts.dart';
 import '../../core/utils/font_check.dart';
 
 /// Импортированный пользователем шрифт. Файл лежит в папке приложения
@@ -111,7 +112,9 @@ class FontService {
     }
     if (kept.length != fonts.length) _save(kept);
     final selected = settings.fontId;
-    if (selected != null && !kept.any((f) => f.id == selected)) {
+    if (selected != null &&
+        BuiltInFont.byId(selected) == null &&
+        !kept.any((f) => f.id == selected)) {
       settings.fontId = null;
     }
   }

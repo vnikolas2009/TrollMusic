@@ -21,6 +21,7 @@ lib/
     network/lyrics/lyrics_providers.dart   LRCLIB, Lyrics.ovh (Kugou и QQ — в asia_providers.dart)
     storage/settings.dart        настройки и история прослушивания (Hive)
     utils/lrc_parser.dart        разбор/запись LRC и enhanced LRC, plainLines для текста без таймкодов
+    theme/app_fonts.dart         встроенные шрифты Inter и Manrope (assets/fonts, лицензия OFL)
     utils/font_check.dart        проверка TTF/OTF (заголовок, таблицы, имя семейства) до загрузки
     utils/lyric_style.dart       LyricsStyle: вид строк и яркость по расстоянию до текущей
     utils/lyrics_match.dart      чистка названий, варианты запросов, выбор кандидата, сопоставление .lrc с треком

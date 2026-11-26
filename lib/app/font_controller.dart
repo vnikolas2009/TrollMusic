@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/theme/app_fonts.dart';
 import '../services/fonts/font_service.dart';
 import 'providers.dart';
 import 'settings_provider.dart';
@@ -11,8 +12,11 @@ class FontState {
 
   final List<UserFont> fonts;
 
-  /// Идентификатор выбранного шрифта; `null` — стандартный.
+  /// Идентификатор выбранного шрифта: импортированного, встроенного
+  /// (`builtin:…`) или `null` для стандартного.
   final String? selectedId;
+
+  BuiltInFont? get selectedBuiltIn => BuiltInFont.byId(selectedId);
 
   UserFont? get selected {
     for (final font in fonts) {
@@ -21,8 +25,12 @@ class FontState {
     return null;
   }
 
+  /// Название выбранного шрифта для интерфейса.
+  String get selectedName =>
+      selectedBuiltIn?.name ?? selected?.name ?? 'Стандартный';
+
   /// Семейство для темы; `null` — стандартный шрифт.
-  String? get family => selected?.family;
+  String? get family => selectedBuiltIn?.family ?? selected?.family;
 }
 
 /// Выбор шрифта: стандартный или импортированный. Сохраняется в
@@ -39,7 +47,9 @@ class FontController extends Notifier<FontState> {
     final id = ref.read(settingsProvider).fontId;
     return FontState(
       fonts: fonts,
-      selectedId: fonts.any((f) => f.id == id) ? id : null,
+      selectedId: BuiltInFont.byId(id) != null || fonts.any((f) => f.id == id)
+          ? id
+          : null,
     );
   }
 

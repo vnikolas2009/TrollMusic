@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -17,6 +18,18 @@ import 'services/storage/storage_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Лицензии встроенных шрифтов (SIL OFL) для экрана лицензий.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(
+      ['Inter'],
+      await rootBundle.loadString('assets/fonts/OFL-Inter.txt'),
+    );
+    yield LicenseEntryWithLineBreaks(
+      ['Manrope'],
+      await rootBundle.loadString('assets/fonts/OFL-Manrope.txt'),
+    );
+  });
 
   // 1. Локальное хранилище.
   await Hive.initFlutter();
