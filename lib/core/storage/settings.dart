@@ -52,6 +52,18 @@ class Settings {
 
   set lyricsStyle(String value) => _box.put('lyricsStyle', value);
 
+  /// Импортированные шрифты: JSON-записи `{id, name, file}`.
+  List<String> get userFonts =>
+      ((_box.get('userFonts') as List?) ?? const []).whereType<String>().toList();
+
+  set userFonts(List<String> value) => _box.put('userFonts', value);
+
+  /// Идентификатор выбранного импортированного шрифта; `null` — стандартный.
+  String? get fontId => _box.get('fontId') as String?;
+
+  set fontId(String? value) =>
+      value == null ? _box.delete('fontId') : _box.put('fontId', value);
+
   /// Пропуск тишины в треках (Android).
   bool get skipSilence => _box.get('skipSilence', defaultValue: false) as bool;
 

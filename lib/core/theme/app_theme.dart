@@ -7,7 +7,9 @@ abstract final class AppTheme {
   /// Тема по умолчанию (для тестов и до инициализации настроек).
   static ThemeData get dark => build(AppPalette.current);
 
-  static ThemeData build(AppPalette p) {
+  /// [fontFamily] — семейство выбранного пользователем шрифта; `null` —
+  /// стандартный шрифт платформы.
+  static ThemeData build(AppPalette p, {String? fontFamily}) {
     final scheme = (p.isDark ? ColorScheme.dark : ColorScheme.light)(
       primary: p.accent,
       onPrimary: p.onAccent,
@@ -22,6 +24,7 @@ abstract final class AppTheme {
 
     final base = ThemeData(
       useMaterial3: true,
+      fontFamily: fontFamily,
       brightness: p.isDark ? Brightness.dark : Brightness.light,
       colorScheme: scheme,
       scaffoldBackgroundColor: p.background,
@@ -55,7 +58,8 @@ abstract final class AppTheme {
           bodyMedium: _title(p, 13, FontWeight.w400, 0),
           labelLarge: _title(p, 13, FontWeight.w600, 0.1),
           labelSmall: _label(p, 10, FontWeight.w700, 1.2),
-        );
+        )
+        .apply(fontFamily: fontFamily);
 
     return base.copyWith(
       textTheme: text,
@@ -68,6 +72,7 @@ abstract final class AppTheme {
         centerTitle: false,
         titleSpacing: 16,
         titleTextStyle: TextStyle(
+          fontFamily: fontFamily,
           color: p.textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w800,
@@ -117,6 +122,7 @@ abstract final class AppTheme {
       snackBarTheme: SnackBarThemeData(
         backgroundColor: p.surfaceHigh,
         contentTextStyle: TextStyle(
+          fontFamily: fontFamily,
           color: p.textPrimary,
           fontSize: 13,
           fontWeight: FontWeight.w500,
@@ -134,7 +140,8 @@ abstract final class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: p.textPrimary,
-          textStyle: const TextStyle(
+          textStyle: TextStyle(
+            fontFamily: fontFamily,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -149,7 +156,8 @@ abstract final class AppTheme {
           elevation: 0,
           minimumSize: const Size(0, 44),
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          textStyle: const TextStyle(
+          textStyle: TextStyle(
+            fontFamily: fontFamily,
             fontSize: 14,
             fontWeight: FontWeight.w700,
           ),
@@ -171,11 +179,13 @@ abstract final class AppTheme {
         disabledColor: p.surface,
         side: BorderSide.none,
         labelStyle: TextStyle(
+          fontFamily: fontFamily,
           color: p.textPrimary,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
         secondaryLabelStyle: TextStyle(
+          fontFamily: fontFamily,
           color: p.inverse,
           fontSize: 12,
           fontWeight: FontWeight.w700,
@@ -187,6 +197,7 @@ abstract final class AppTheme {
         filled: true,
         fillColor: p.surfaceAlt,
         hintStyle: TextStyle(
+          fontFamily: fontFamily,
           color: p.textTertiary,
           fontSize: 14,
         ),
@@ -220,8 +231,9 @@ abstract final class AppTheme {
         indicatorSize: TabBarIndicatorSize.label,
         labelColor: p.textPrimary,
         unselectedLabelColor: p.textSecondary,
-        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        labelStyle: TextStyle(fontFamily: fontFamily, fontSize: 13, fontWeight: FontWeight.w700),
         unselectedLabelStyle: TextStyle(
+          fontFamily: fontFamily,
           fontSize: 13,
           fontWeight: FontWeight.w500,
         ),

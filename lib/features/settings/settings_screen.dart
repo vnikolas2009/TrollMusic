@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/lyrics_job.dart';
+import '../../app/font_controller.dart';
 import '../../app/lyrics_style_provider.dart';
 import '../../app/providers.dart';
 import '../../app/settings_provider.dart';
@@ -12,6 +13,7 @@ import '../../core/utils/formatters.dart';
 import '../../core/utils/lyric_style.dart';
 import '../../shared/widgets/spring_switch.dart';
 import '../../shared/widgets/spring_switch_tile.dart';
+import 'font_screen.dart';
 import '../../shared/widgets/tab_header.dart';
 import 'storage_meter.dart';
 
@@ -189,6 +191,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             subtitle: 'Чисто чёрный фон в тёмной теме',
             value: theme.amoled,
             onChanged: themeCtl.setAmoled,
+          ),
+
+          const _Section('Шрифт'),
+          ListTile(
+            title: const Text('Шрифт интерфейса'),
+            subtitle: Text(ref.watch(fontControllerProvider).selected?.name ??
+                'Стандартный'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const FontScreen()),
+            ),
           ),
 
           const _Section('Воспроизведение'),

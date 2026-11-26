@@ -14,12 +14,14 @@ lib/
     lyrics_job.dart              пакетный поиск текстов (3 параллельных запроса, отмена)
     tab_provider.dart, theme_controller.dart
     lyrics_style_provider.dart   стиль текстов песен (spotify / minimal / classic), хранится в настройках
+    font_controller.dart         выбранный шрифт (стандартный / импортированный), применяется в теме
   core/
     config/app_config.dart       расширения файлов, таймауты, user-agent
     network/http_client.dart     createDio() для запросов текстов
     network/lyrics/lyrics_providers.dart   LRCLIB, Lyrics.ovh (Kugou и QQ — в asia_providers.dart)
     storage/settings.dart        настройки и история прослушивания (Hive)
     utils/lrc_parser.dart        разбор/запись LRC и enhanced LRC, plainLines для текста без таймкодов
+    utils/font_check.dart        проверка TTF/OTF (заголовок, таблицы, имя семейства) до загрузки
     utils/lyric_style.dart       LyricsStyle: вид строк и яркость по расстоянию до текущей
     utils/lyrics_match.dart      чистка названий, варианты запросов, выбор кандидата, сопоставление .lrc с треком
     utils/track_sort.dart        сортировка, группировка по альбомам
@@ -33,6 +35,7 @@ lib/
     audio/audio_handler.dart     just_audio + audio_service: очередь, таймер сна, кроссфейд
     storage/storage_service.dart файлы приложения, импорт тегов/обложек, сохранение текста
     storage/import_service.dart  выбор файлов и папок, привязка .lrc, онлайн-поиск текста
+    fonts/font_service.dart      импорт шрифтов: проверка, копия в <root>/fonts, регистрация через FontLoader
     lyrics/lyrics_service.dart   перебор источников, выбор лучшего текста
   features/                      home, library (+track_list_screen), playlist, search, player,
                                  lyrics, create (импорт, теги, резервная копия), settings

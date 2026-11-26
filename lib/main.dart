@@ -12,6 +12,7 @@ import 'app/settings_provider.dart';
 import 'core/storage/settings.dart';
 import 'data/repositories/library_repository.dart';
 import 'services/audio/audio_handler.dart';
+import 'services/fonts/font_service.dart';
 import 'services/storage/storage_service.dart';
 
 Future<void> main() async {
@@ -23,6 +24,14 @@ Future<void> main() async {
   final settings = await Settings.open();
   final library = await LibraryRepository.open();
   final storage = await StorageService.open(library: library);
+
+  // Пользовательские шрифты регистрируются до первого кадра, чтобы
+  // интерфейс сразу открылся выбранным шрифтом. Сбой не критичен.
+  try {
+    await FontService(settings: settings, root: storage.root).loadSaved();
+  } catch (error) {
+    debugPrint('TrollMusic: loadSaved fonts failed: $error');
+  }
 
   // 2. Инициализация audio_service.
   final audio = await AudioService.init(

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../shared/widgets/splash_gate.dart';
+import 'font_controller.dart';
 import 'providers.dart';
 import 'theme_controller.dart';
 
@@ -87,7 +88,10 @@ class _TrollMusicAppState extends ConsumerState<TrollMusicApp>
       }
     }
 
-    final theme = AppTheme.build(palette);
+    final theme = AppTheme.build(
+      palette,
+      fontFamily: ref.watch(fontControllerProvider).family,
+    );
 
     return MaterialApp(
       title: 'TrollMusic',
