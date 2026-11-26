@@ -2,11 +2,13 @@ import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/track_swipe.dart';
 import '../../core/theme/appearance.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/utils/formatters.dart';
@@ -47,6 +49,20 @@ class MiniPlayer extends ConsumerWidget {
         onTap: onTap,
         onVerticalDragEnd: (details) {
           if ((details.primaryVelocity ?? 0) < -200) onTap?.call();
+        },
+        // Свайп вправо/влево по панели — предыдущий/следующий трек.
+        onHorizontalDragEnd: (details) {
+          final audio = ref.read(audioHandlerProvider);
+          switch (trackSwipeFor(details.primaryVelocity)) {
+            case TrackSwipe.next:
+              HapticFeedback.selectionClick();
+              audio.skipToNext();
+            case TrackSwipe.previous:
+              HapticFeedback.selectionClick();
+              audio.skipToPrevious();
+            case TrackSwipe.none:
+              break;
+          }
         },
         child: Container(
           height: 62,
