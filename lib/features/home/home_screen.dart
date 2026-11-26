@@ -16,6 +16,10 @@ import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/section_header.dart';
 import '../../shared/widgets/track_actions.dart';
 import '../../shared/widgets/tab_header.dart';
+import '../../data/models/playlist.dart';
+import '../../core/utils/formatters.dart';
+import '../playlist/playlist_screen.dart';
+import 'news_banner.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -28,6 +32,7 @@ class HomeScreen extends ConsumerWidget {
     final audio = ref.read(audioHandlerProvider);
     final current = ref.watch(currentTrackProvider).value;
     final job = ref.watch(lyricsJobProvider);
+    final playlists = ref.watch(playlistsProvider).value ?? const <Playlist>[];
 
     final byId = {for (final t in tracks) t.id: t};
     final recent = sortTracks(tracks, TrackSort.recent).take(20).toList();
@@ -61,6 +66,7 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
         ),
+        const SliverToBoxAdapter(child: NewsBanner()),
         SliverToBoxAdapter(
           child: tracks.isEmpty
               ? _EmptyLibrary(
@@ -115,11 +121,41 @@ class HomeScreen extends ConsumerWidget {
                         index: 3,
                         child: _Rail(title: 'Часто слушаете', tracks: top, all: tracks),
                       ),
+                    if (playlists.isNotEmpty) ...[
+                      const SectionHeader(title: 'Плейлисты'),
+                      for (final playlist in playlists)
+                        _PlaylistRow(playlist: playlist),
+                    ],
                     const SizedBox(height: 96),
                   ],
                 ),
         ),
       ],
+    );
+  }
+}
+
+/// Строка списка плейлистов на главной: обложка первого трека, название и
+/// сводка; нажатие открывает плейлист.
+class _PlaylistRow extends StatelessWidget {
+  const _PlaylistRow({required this.playlist});
+
+  final Playlist playlist;
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = playlist.tracks.isEmpty ? null : playlist.tracks.first.artworkPath;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: CoverArt(path: cover, size: 48, radius: 10),
+      title: Text(playlist.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        '${playlist.tracks.length} треков · ${formatLongDuration(playlist.totalDuration)}',
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => PlaylistScreen(id: playlist.id)),
+      ),
     );
   }
 }

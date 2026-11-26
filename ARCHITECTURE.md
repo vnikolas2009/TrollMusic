@@ -46,6 +46,7 @@ lib/
   shared/widgets/                track_tile, track_actions (общее меню трека), cover_art, mini_player,
                                  mini_player_bar (мини-плеер для экранов поверх оболочки), tab_header
                                  (единый заголовок вкладок), rubber_dock, jelly_slider (+ JellyValueSlider), scale_slider_tile, ...
+  features/home/news_banner      синяя плашка с каналом t.me/TrollCerts (url_launcher, открывает внешнее приложение; сеть самим приложением не используется)
   features/player/lyric_preview  текущая строка под обложкой (или кнопка «Текст песни»); нажатие → openLyricsScreen (круговое раскрытие)
   features/lyrics/lyrics_settings_sheet  все настройки текста (стиль, размер, строка под обложкой); кнопка в шапке экрана текста
 test/                            чистая логика: LRC, сопоставление, сортировка, поиск, модели
