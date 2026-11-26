@@ -108,6 +108,34 @@ abstract final class LrcParser {
     );
   }
 
+  /// Строки текста без таймкодов для показа: метки времени и служебные теги
+  /// убраны, границы куплетов сохранены как пустые строки (подряд идущие
+  /// пустые схлопываются, в начале и в конце их нет).
+  static List<String> plainLines(String raw) {
+    final out = <String>[];
+    for (final row in _normalize(raw).split('\n')) {
+      final line = row.trim();
+      if (line.isEmpty) {
+        if (out.isNotEmpty && out.last.isNotEmpty) out.add('');
+        continue;
+      }
+      if (_metaTag.hasMatch(line) && !_lineTag.hasMatch(line)) continue;
+
+      var pos = 0;
+      while (true) {
+        final m = _lineTag.matchAsPrefix(line, pos);
+        if (m == null) break;
+        pos = m.end;
+      }
+      final clean = _stripWordTags(line.substring(pos).trim());
+      if (clean.isNotEmpty) out.add(clean);
+    }
+    while (out.isNotEmpty && out.last.isEmpty) {
+      out.removeLast();
+    }
+    return out;
+  }
+
   /// Положительный `[offset:]` — текст появляется раньше, как в большинстве плееров.
   static Duration _shifted(Duration value, Duration offset) {
     final result = value - offset;

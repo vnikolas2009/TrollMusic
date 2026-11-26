@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -63,6 +64,12 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
   int _activeIndex = -1;
   int _offsetMs = 0;
 
+  /// Пока пользователь листает текст сам, автопрокрутка не мешает; через
+  /// несколько секунд после отпускания экран возвращается к текущей строке.
+  bool _userScrolling = false;
+  bool _positioned = false;
+  Timer? _resumeTimer;
+
   Color _aurora = _defaultAurora;
   String? _colorSourceId;
 
@@ -74,6 +81,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
 
   @override
   void dispose() {
+    _resumeTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -168,7 +176,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
             child: AuroraBackground(color: _aurora),
           ),
           Positioned.fill(
-            child: _body(lyrics),
+            child: _body(lyrics, raw),
           ),
         ],
       ),
@@ -511,7 +519,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     return progress.clamp(0.0, 1.0).toDouble();
   }
 
-  Widget _body(Lyrics lyrics) {
+  Widget _body(Lyrics lyrics, String? raw) {
     if (lyrics.isEmpty) {
       return const Center(
         child: Padding(
@@ -528,26 +536,12 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
       );
     }
 
-    if (!lyrics.synced) {
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(24, 110, 24, 120),
-        children: [
-          Text(
-            lyrics.plainText,
-            style: const TextStyle(
-              fontSize: 20,
-              height: 1.6,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      );
-    }
+    if (!lyrics.synced) return _plainBody(raw ?? lyrics.plainText);
 
     final positions = ref.watch(audioHandlerProvider).positionStream;
 
-    Duration shifted(Duration raw) {
-      final value = raw + Duration(milliseconds: _offsetMs);
+    Duration shifted(Duration position) {
+      final value = position + Duration(milliseconds: _offsetMs);
 
       return value < Duration.zero
           ? Duration.zero
@@ -557,6 +551,8 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     final indexes = positions
         .map((p) => lyrics.indexAt(shifted(p)))
         .distinct();
+
+    final screenHeight = MediaQuery.sizeOf(context).height;
 
     return StreamBuilder<int>(
       stream: indexes,
@@ -568,63 +564,127 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           _activeIndex = index;
 
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _ensureVisible(index);
+            if (!_userScrolling) _ensureVisible(index);
           });
         }
 
-        return ListView.builder(
-          controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(24, 120, 24, 260),
-          itemCount: lyrics.lines.length,
-          itemBuilder: (context, i) {
-            final line = lyrics.lines[i];
-            final distance = index < 0 ? 99 : i - index;
-
-            Widget child;
-
-            if (i == index) {
-              final lineEnd = i + 1 < lyrics.lines.length
-                  ? lyrics.lines[i + 1].time
-                  : line.time + const Duration(seconds: 5);
-
-              child = StreamBuilder<Duration>(
-                stream: positions,
-                builder: (context, position) {
-                  final safe = shifted(
-                    position.data ?? Duration.zero,
-                  );
-
-                  final progress = line.hasWordTiming
-                      ? _wordProgress(line, safe, lineEnd)
-                      : _lineProgress(line, safe, lineEnd);
-
-                  return _LyricLine(
-                    text: line.text,
-                    distance: 0,
-                    progress: progress,
-                  );
-                },
-              );
-            } else {
-              child = _LyricLine(
-                text: line.text,
-                distance: distance,
-                progress: 0,
-              );
-            }
-
-            return GestureDetector(
-              key: _keys.putIfAbsent(i, () => GlobalKey()),
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                ref.read(audioHandlerProvider).seek(line.time);
-              },
-              child: RepaintBoundary(child: child),
-            );
-          },
+        // Все строки лежат в Column, поэтому у каждой всегда есть контекст
+        // для прокрутки, даже если она далеко за экраном (после перемотки).
+        return NotificationListener<ScrollNotification>(
+          onNotification: _onScroll,
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            padding: EdgeInsets.fromLTRB(24, 120, 24, screenHeight * 0.55),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < lyrics.lines.length; i++)
+                  _buildLine(lyrics, i, index, positions, shifted),
+              ],
+            ),
+          ),
         );
       },
     );
+  }
+
+  Widget _buildLine(
+    Lyrics lyrics,
+    int i,
+    int index,
+    Stream<Duration> positions,
+    Duration Function(Duration) shifted,
+  ) {
+    final line = lyrics.lines[i];
+    final distance = index < 0 ? 99 : i - index;
+
+    Widget? active;
+
+    if (i == index) {
+      final lineEnd = i + 1 < lyrics.lines.length
+          ? lyrics.lines[i + 1].time
+          : line.time + const Duration(seconds: 5);
+
+      active = StreamBuilder<Duration>(
+        stream: positions,
+        builder: (context, position) {
+          final safe = shifted(position.data ?? Duration.zero);
+
+          return ReadAlongText(
+            text: line.text,
+            progress: line.hasWordTiming
+                ? _wordProgress(line, safe, lineEnd)
+                : _lineProgress(line, safe, lineEnd),
+            style: _LyricLine.style,
+          );
+        },
+      );
+    }
+
+    return GestureDetector(
+      key: _keys.putIfAbsent(i, () => GlobalKey()),
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        _resumeTimer?.cancel();
+        _userScrolling = false;
+        ref.read(audioHandlerProvider).seek(line.time);
+      },
+      child: RepaintBoundary(
+        child: _LyricLine(
+          text: line.text,
+          distance: distance,
+          active: active,
+        ),
+      ),
+    );
+  }
+
+  /// Текст без таймкодов: обычное чтение с прокруткой, куплеты разделены
+  /// отступами.
+  Widget _plainBody(String raw) {
+    final rows = LrcParser.plainLines(raw);
+
+    return ListView.builder(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 110, 24, 120),
+      itemCount: rows.length,
+      itemBuilder: (context, i) {
+        final row = rows[i];
+
+        if (row.isEmpty) return const SizedBox(height: 22);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Text(
+            row,
+            style: _LyricLine.style.copyWith(
+              fontSize: 22,
+              color: Colors.white.withValues(alpha: 0.92),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    if (n is ScrollStartNotification && n.dragDetails != null) {
+      _resumeTimer?.cancel();
+      _userScrolling = true;
+    } else if (n is ScrollEndNotification && _userScrolling) {
+      _resumeTimer?.cancel();
+      _resumeTimer = Timer(const Duration(seconds: 3), () {
+        if (!mounted) return;
+        _userScrolling = false;
+        _ensureVisible(_activeIndex);
+      });
+    }
+    return false;
   }
 
   /// Прежняя синхронизация по времени всей строки для обычного LRC.
@@ -643,33 +703,44 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
   }
 
   void _ensureVisible(int index) {
+    if (index < 0) return;
+
     final ctx = _keys[index]?.currentContext;
 
     if (ctx == null) return;
 
+    // Первое позиционирование (открытие экрана) — без анимации.
+    final first = !_positioned;
+    _positioned = true;
+
     Scrollable.ensureVisible(
       ctx,
       alignment: 0.32,
-      duration: const Duration(milliseconds: 420),
+      duration: first ? Duration.zero : const Duration(milliseconds: 520),
       curve: Curves.easeOutCubic,
     );
   }
 }
 
-/// Строка текста: активная подсвечивается слева направо,
-/// соседние строки постепенно становятся менее яркими.
+/// Строка текста. Активная подсвечивается слева направо, пройденные
+/// приглушены слабее, будущие сильнее. Смена состояния плавная: меняются
+/// прозрачность и масштаб, а не сама строка.
 class _LyricLine extends StatelessWidget {
   const _LyricLine({
     required this.text,
     required this.distance,
-    required this.progress,
+    this.active,
   });
 
   final String text;
-  final int distance;
-  final double progress;
 
-  static const _style = TextStyle(
+  /// Расстояние до текущей строки: 0 — текущая, меньше нуля — пройденные.
+  final int distance;
+
+  /// Виджет активной строки (с подсветкой по словам); у остальных `null`.
+  final Widget? active;
+
+  static const style = TextStyle(
     fontSize: 28,
     height: 1.25,
     fontWeight: FontWeight.w800,
@@ -678,39 +749,37 @@ class _LyricLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = text.isEmpty ? '♪' : text;
-    final active = distance == 0;
-
-    Widget child;
-
-    if (active) {
-      child = text.trim().isEmpty
-          ? Text(label, style: _style)
-          : ReadAlongText(
-              text: text,
-              progress: progress,
-              style: _style,
-            );
-    } else {
-      final dist = distance.abs();
-      final alpha = (0.62 - dist * 0.05)
-          .clamp(0.34, 0.62)
-          .toDouble();
-
-      child = Text(
-        label,
-        style: _style.copyWith(
-          color: Colors.white.withValues(alpha: alpha),
-        ),
-      );
-    }
+    final label = text.trim().isEmpty ? '♪' : text;
+    final isActive = distance == 0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: child,
+      child: AnimatedOpacity(
+        duration: AppMotion.slow,
+        curve: AppMotion.enter,
+        opacity: lyricLineOpacity(distance),
+        child: AnimatedScale(
+          duration: AppMotion.slow,
+          curve: AppMotion.emphasized,
+          alignment: Alignment.centerLeft,
+          scale: isActive ? 1.0 : 0.94,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: isActive && text.trim().isNotEmpty
+                ? active ?? Text(label, style: style)
+                : Text(label, style: style),
+          ),
+        ),
       ),
     );
   }
+}
+
+/// Яркость строки по расстоянию до текущей: текущая — полная, пройденные
+/// ярче будущих, дальние постепенно тускнеют до нижней границы.
+double lyricLineOpacity(int distance) {
+  if (distance == 0) return 1.0;
+  final far = distance.abs() - 1;
+  if (distance < 0) return (0.55 - far * 0.04).clamp(0.3, 0.55).toDouble();
+  return (0.38 - far * 0.02).clamp(0.24, 0.38).toDouble();
 }
