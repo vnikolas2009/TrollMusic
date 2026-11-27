@@ -46,6 +46,7 @@ lib/
   shared/widgets/                track_tile, track_actions (общее меню трека), cover_art, mini_player,
                                  mini_player_bar (мини-плеер для экранов поверх оболочки), tab_header
                                  (единый заголовок вкладок), rubber_dock, jelly_slider (+ JellyValueSlider), scale_slider_tile, ...
+  features/lyrics/lyrics_backdrop      фон экрана текста: картинка/GIF под затемнением или градиентом, иначе цвет обложки (lyrics_background_provider, core/utils/lyrics_bg)
   features/browser/web_browser_screen  встроенный браузер (webview_flutter): JS-хук `play()` и перехват ссылок на аудио → предложение скачать → ImportService.importDownloaded
   services/web/web_download_service    скачивание по прямой ссылке (Dio), проверка типа ответа, имя файла
   core/utils/web_audio                 адресная строка → URL/поиск, признаки аудио, имя файла (тесты: web_audio_test)

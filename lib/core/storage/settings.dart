@@ -112,6 +112,23 @@ class Settings {
   set coverShapeIndex(int value) => _box.put('coverShape', value);
 
   /// Показывать текущую строку текста под обложкой в плеере.
+  /// Имя файла фона экрана текстов в `<root>/backgrounds`; пусто — без фона.
+  String? get lyricsBgFile => _box.get('lyricsBgFile') as String?;
+
+  set lyricsBgFile(String? value) =>
+      value == null ? _box.delete('lyricsBgFile') : _box.put('lyricsBgFile', value);
+
+  double get lyricsBgDim =>
+      ((_box.get('lyricsBgDim') as num?)?.toDouble() ?? 0.55).clamp(0.2, 0.9).toDouble();
+
+  set lyricsBgDim(double value) => _box.put('lyricsBgDim', value);
+
+  /// `true` — затемнение градиентом (сверху светлее), `false` — ровное.
+  bool get lyricsBgGradient =>
+      _box.get('lyricsBgGradient', defaultValue: true) as bool;
+
+  set lyricsBgGradient(bool value) => _box.put('lyricsBgGradient', value);
+
   bool get showLyricPreview =>
       _box.get('showLyricPreview', defaultValue: true) as bool;
 

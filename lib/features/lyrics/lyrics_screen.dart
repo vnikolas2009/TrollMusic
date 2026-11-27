@@ -19,7 +19,7 @@ import '../../core/utils/read_along.dart';
 import '../../data/models/lyrics.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/read_along_text.dart';
-import 'aurora_background.dart';
+import 'lyrics_backdrop.dart';
 import 'lyrics_settings_sheet.dart';
 
 const _defaultAurora = Color(0xFF3A4570);
@@ -229,7 +229,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: AuroraBackground(color: _aurora),
+            child: LyricsBackdrop(color: _aurora),
           ),
           Positioned.fill(
             child: _body(lyrics, raw),

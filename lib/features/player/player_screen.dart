@@ -197,7 +197,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                         break;
                                     }
                                   },
-                                  child: _Artwork(track: track),
+                                  child: _Artwork(track: track, playing: playing),
                                 ),
                                 LyricPreview(trackId: track.id),
                                 const SizedBox(height: 26),
@@ -821,9 +821,12 @@ class _SeekBarState extends ConsumerState<_SeekBar> {
 }
 
 class _Artwork extends StatelessWidget {
-  const _Artwork({required this.track});
+  const _Artwork({required this.track, required this.playing});
 
   final Track track;
+
+  /// На паузе обложка плавно уменьшается, при воспроизведении возвращается.
+  final bool playing;
 
   @override
   Widget build(BuildContext context) {
@@ -838,7 +841,11 @@ class _Artwork extends StatelessWidget {
     } else {
       child = _placeholder();
     }
-    return AspectRatio(
+    return AnimatedScale(
+      scale: playing ? 1.0 : 0.92,
+      duration: AppMotion.slow,
+      curve: AppMotion.emphasized,
+      child: AspectRatio(
       aspectRatio: 1,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -859,6 +866,7 @@ class _Artwork extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }
