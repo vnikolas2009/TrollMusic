@@ -55,6 +55,11 @@ lib/
   core/utils/translation.dart          языки, исходные строки, пакеты, разбор ответа, выравнивание по строкам
   core/utils/smart_shuffle.dart        умное перемешивание (вес по истории, разведение исполнителей)
   core/utils/session.dart              restoreQueue/trimQueue: восстановление очереди без недоступных треков
+  app/dock_provider.dart               порядок и скрытие вкладок нижней панели (dockLayoutProvider), описания вкладок
+  core/utils/dock_layout.dart          normalizeDock/setTabHidden/reorderTabs: настройки скрыть нельзя, видимых ≥ 2
+  features/settings/dock_settings_screen  перетаскивание и переключатели вкладок
+  core/utils/track_filter.dart         lacksArtwork: фильтр «без обложек» в медиатеке (+ добавление по очереди)
+  shared/widgets/confirm_dialog.dart   confirmAction: общий диалог подтверждения необратимых действий
   features/home/news_banner      синяя плашка с каналом t.me/TrollCerts (url_launcher, открывает внешнее приложение; сеть самим приложением не используется)
   features/player/lyric_preview  текущая строка под обложкой (или кнопка «Текст песни»); нажатие → openLyricsScreen (круговое раскрытие)
   features/lyrics/lyrics_settings_sheet  все настройки текста (стиль, размер, строка под обложкой); кнопка в шапке экрана текста
@@ -65,6 +70,8 @@ test/                            чистая логика: LRC, сопоста�
 
 - `Track.id` вида `local:<uuid>`; файл копируется в `<support>/trollmusic/audio`, обложки в `artwork`, тексты в `lyrics`.
 - Хранилище Hive: боксы `tracks`, `playlists`, `lyrics` (сырой LRC/текст по id трека), `settings`.
+- Нижняя панель: `AppShell` строит док и `IndexedStack` из видимых вкладок (`visibleDockTabs`), состояние вкладок сохраняется по `ValueKey(id)`. Номера вкладок (`AppTab`) постоянны, меняются только порядок и видимость. Если «Импорт» скрыт, пустая главная открывает его отдельным экраном.
+- Переходы между экранами: `AppPageTransitionsBuilder` (въезд снизу с масштабом, нижний экран уходит вглубь); при отключённых анимациях переход мгновенный.
 - Старые записи стриминговых версий читаются без ошибок (лишние ключи JSON игнорируются); записи без файла удаляются при запуске (`pruneUnplayable`).
 - Путь файла на iOS меняется при переустановке: `StorageService.repairPaths` ищет файл по имени в новой папке.
 

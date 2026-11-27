@@ -12,6 +12,8 @@ Russian version: [README.md](README.md). Project structure: [ARCHITECTURE.md](AR
 - Tabs: all tracks, playlists, artists, albums, favorites. Sorting (recent, title, artist, album, duration, most played) and an "only without lyrics" filter.
 - Search by title, artist, album and by a line of the lyrics.
 - Playlists: create, add tracks, reorder, rename. Track menu: play next, add to queue, favorite, tags and artwork, delete.
+- An "only without artwork" filter and adding artwork one by one (for each track you can pick a file, skip it or stop).
+- Confirmation before deleting a track, playlist, lyrics or imported font, and before clearing the queue or history.
 - Library backup to JSON.
 - Search for tracks on the web: Import tab → built-in browser. When audio starts playing on a page, or a direct link to an audio file is opened, the app offers to download it to your library. Streams without a direct file (YouTube, Spotify, etc.) cannot be downloaded.
 
@@ -37,6 +39,8 @@ On the lyrics screen: word-by-word highlighting, three styles (Spotify-like, min
 ### Appearance
 - Themes (dark, light, system, AMOLED), accent color, gradient background.
 - Custom fonts (TTF/OTF) plus built-in Inter and Manrope, four weight levels and interface text size.
+- Bottom bar: reorder the tabs by dragging and hide the ones you do not need (Settings cannot be hidden, at least two tabs stay visible).
+- Screen transitions: the new screen slides in with a fade, the previous one recedes.
 - Animation modes (smooth, fast, calm, minimal), effects level, cover shape.
 
 ### Home

@@ -30,9 +30,17 @@ abstract final class AppMotion {
   static const int staggerMaxIndex = 8;
 }
 
-/// Переход между экранами: fade + короткий подъём снизу.
+/// Переход между экранами: новый экран выезжает снизу с проявлением и
+/// лёгким увеличением, а экран под ним отъезжает вглубь (уменьшается и
+/// притемняется). Только opacity и transform — композиция на GPU.
 class AppPageTransitionsBuilder extends PageTransitionsBuilder {
   const AppPageTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 380);
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 300);
 
   @override
   Widget buildTransitions<T>(
@@ -42,7 +50,25 @@ class AppPageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    if (route.isFirst) return child;
+    // Режим «без анимаций» и системная настройка: переход мгновенный.
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+
+    // Экран под новым: уходит вглубь.
+    final depth = CurvedAnimation(
+      parent: secondaryAnimation,
+      curve: AppMotion.emphasized,
+      reverseCurve: AppMotion.exit,
+    );
+    final Widget page = ScaleTransition(
+      scale: Tween<double>(begin: 1, end: 0.96).animate(depth),
+      child: FadeTransition(
+        opacity: Tween<double>(begin: 1, end: 0.6).animate(depth),
+        child: child,
+      ),
+    );
+
+    // Корневой экран сам не «въезжает».
+    if (route.isFirst) return page;
 
     final enter = CurvedAnimation(
       parent: animation,
@@ -58,10 +84,13 @@ class AppPageTransitionsBuilder extends PageTransitionsBuilder {
       opacity: fade,
       child: SlideTransition(
         position: Tween<Offset>(
-          begin: const Offset(0, 0.035),
+          begin: const Offset(0, 0.06),
           end: Offset.zero,
         ).animate(enter),
-        child: child,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.97, end: 1).animate(enter),
+          child: page,
+        ),
       ),
     );
   }
