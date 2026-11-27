@@ -5,6 +5,7 @@ import '../../app/providers.dart';
 import '../../app/settings_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
+import '../../core/utils/track_filter.dart';
 import '../../core/utils/track_groups.dart';
 import '../../core/utils/track_search.dart';
 import '../../core/utils/track_sort.dart';
@@ -183,6 +184,48 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
   String _query = '';
   late TrackSort _sort = TrackSort.fromIndex(ref.read(settingsProvider).sortIndex);
   bool _onlyWithoutLyrics = false;
+  bool _onlyWithoutArtwork = false;
+
+  /// Быстрое добавление обложек: по очереди предлагает выбрать картинку для
+  /// каждого трека из списка, можно пропустить трек или остановиться.
+  Future<void> _addCovers(List<Track> list) async {
+    final queue = [...list];
+    var added = 0;
+
+    for (var i = 0; i < queue.length; i++) {
+      if (!mounted) return;
+      final track = queue[i];
+      final action = await showDialog<String>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          backgroundColor: AppColors.surfaceAlt,
+          title: Text('Обложка ${i + 1} из ${queue.length}'),
+          content: Text('«${track.title}» — ${track.artist}'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialog, 'stop'), child: const Text('Стоп')),
+            TextButton(onPressed: () => Navigator.pop(dialog, 'skip'), child: const Text('Пропустить')),
+            FilledButton(onPressed: () => Navigator.pop(dialog, 'pick'), child: const Text('Выбрать')),
+          ],
+        ),
+      );
+      if (action == null || action == 'stop') break;
+      if (action == 'skip') continue;
+
+      try {
+        final updated = await ref.read(importProvider).importArtworkFromFile(track.id);
+        if (updated != null) added++;
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Не удалось добавить обложку: $e')));
+      }
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Добавлено обложек: $added')),
+    );
+  }
 
   @override
   void dispose() {
@@ -203,6 +246,9 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
     );
     if (_onlyWithoutLyrics) {
       tracks = tracks.where((t) => !library.hasLyrics(t.id)).toList();
+    }
+    if (_onlyWithoutArtwork) {
+      tracks = tracks.where(lacksArtwork).toList();
     }
 
     return Column(
@@ -246,6 +292,8 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
                     if (value is TrackSort) {
                       _sort = value;
                       settings.sortIndex = value.index;
+                    } else if (value == 'artwork') {
+                      _onlyWithoutArtwork = !_onlyWithoutArtwork;
                     } else {
                       _onlyWithoutLyrics = !_onlyWithoutLyrics;
                     }
@@ -264,11 +312,25 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
                     checked: _onlyWithoutLyrics,
                     child: const Text('Только без текста'),
                   ),
+                  CheckedPopupMenuItem<Object>(
+                    value: 'artwork',
+                    checked: _onlyWithoutArtwork,
+                    child: const Text('Только без обложек'),
+                  ),
                 ],
               ),
             ],
           ),
         ),
+        if (_onlyWithoutArtwork && tracks.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: FilledButton.tonalIcon(
+              onPressed: () => _addCovers(tracks),
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: Text('Добавить обложки по очереди (${tracks.length})'),
+            ),
+          ),
         if (tracks.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 12, 4),
