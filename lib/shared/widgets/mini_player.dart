@@ -13,6 +13,7 @@ import '../../core/theme/appearance.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/track.dart';
+import 'confirm_dialog.dart';
 
 /// Мини-плеер: стеклянная плашка, которая плавно появляется и умеет
 /// свайпнуться вверх, чтобы открыть полноэкранный плеер.
@@ -242,8 +243,14 @@ class QueueSheet extends ConsumerWidget {
                     const Spacer(),
                     if (items.isNotEmpty)
                       TextButton(
-                        onPressed: () =>
-                            ref.read(audioHandlerProvider).clearQueue(),
+                        onPressed: () async {
+                          final ok = await confirmAction(
+                            context,
+                            title: 'Очистить очередь?',
+                            confirmLabel: 'Очистить',
+                          );
+                          if (ok) await ref.read(audioHandlerProvider).clearQueue();
+                        },
                         child: const Text('Очистить'),
                       ),
                   ],

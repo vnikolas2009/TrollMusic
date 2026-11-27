@@ -21,6 +21,7 @@ import '../../core/utils/read_along.dart';
 import '../../data/models/lyrics.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/read_along_text.dart';
+import '../../shared/widgets/confirm_dialog.dart';
 import 'lyrics_backdrop.dart';
 import 'lyrics_settings_sheet.dart';
 
@@ -389,6 +390,12 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
         }
 
         if (value == remove) {
+          final ok = await confirmAction(
+            context,
+            title: 'Удалить текст?',
+            message: 'Текст песни «${track.title}» будет удалён. Его можно найти или загрузить заново.',
+          );
+          if (!ok || !mounted) return;
           await ref.read(libraryProvider).clearLyrics(track.id);
           if (mounted) setState(() {});
           return;

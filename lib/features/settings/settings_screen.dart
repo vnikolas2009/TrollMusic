@@ -12,6 +12,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_fonts.dart';
 import '../../core/theme/appearance.dart';
 import '../../core/utils/formatters.dart';
+import '../../shared/widgets/confirm_dialog.dart';
 import '../../shared/widgets/spring_switch.dart';
 import '../../shared/widgets/scale_slider_tile.dart';
 import '../../shared/widgets/spring_switch_tile.dart';
@@ -383,7 +384,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
             trailing: TextButton(
-              onPressed: () {
+              onPressed: () async {
+                final ok = await confirmAction(
+                  context,
+                  title: 'Очистить историю?',
+                  message: 'Пропадут «Недавно слушали», «Часто слушаете» и счётчики прослушиваний; '
+                      'они же влияют на умное перемешивание.',
+                  confirmLabel: 'Очистить',
+                );
+                if (!ok || !mounted) return;
                 settings.clearHistory();
                 setState(() {});
                 ScaffoldMessenger.of(context).showSnackBar(
