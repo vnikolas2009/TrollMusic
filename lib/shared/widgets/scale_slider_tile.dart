@@ -34,7 +34,15 @@ class ScaleSliderTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(title)),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
               Text(
                 percent(value),
                 style: TextStyle(color: AppColors.textSecondary),

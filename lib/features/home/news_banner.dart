@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../shared/widgets/press_scale.dart';
+import '../../shared/widgets/telegram_logo.dart';
 
 /// Канал с новостями приложения.
 final Uri newsChannelUrl = Uri.parse('https://t.me/TrollCerts');
@@ -42,8 +43,12 @@ class NewsBanner extends StatelessWidget {
           ),
           child: const Row(
             children: [
-              Icon(Icons.send_rounded, color: Colors.white, size: 22),
-              SizedBox(width: 12),
+              TelegramLogo(
+                size: 42,
+                color: Colors.white,
+                plane: Color(0xFF29A9EB),
+              ),
+              SizedBox(width: 14),
               Expanded(
                 child: Text(
                   'Подпишись на TrollCerts, чтобы следить за новостями',

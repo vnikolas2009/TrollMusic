@@ -71,7 +71,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: ListView(
+      body: ListTileTheme(
+        data: ListTileTheme.of(context).copyWith(
+          titleTextStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          subtitleTextStyle: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        child: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
           const TabHeader(title: 'Настройки'),
@@ -258,7 +263,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Кроссфейд', style: TextStyle(fontSize: 14)),
+                const Text('Кроссфейд', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -393,6 +398,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -410,10 +416,10 @@ class _Section extends StatelessWidget {
       child: Text(
         title.toUpperCase(),
         style: TextStyle(
-          fontSize: 10,
+          fontSize: 13,
           fontWeight: FontWeight.w800,
-          letterSpacing: 1.3,
-          color: AppColors.textTertiary,
+          letterSpacing: 1.2,
+          color: AppColors.accent,
         ),
       ),
     );
@@ -546,7 +552,10 @@ class _ChoiceTile<T> extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,

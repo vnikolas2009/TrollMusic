@@ -28,8 +28,8 @@ class SpringSwitchTile extends StatelessWidget {
         title,
         style: TextStyle(
           color: AppColors.textPrimary,
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
         ),
       ),
       subtitle: subtitle == null
@@ -38,7 +38,7 @@ class SpringSwitchTile extends StatelessWidget {
               subtitle!,
               style: TextStyle(
                 color: AppColors.textSecondary,
-                fontSize: 12,
+                fontSize: 13,
               ),
             ),
       trailing: SpringSwitch(
