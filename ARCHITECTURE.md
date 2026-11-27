@@ -1,6 +1,6 @@
 # Архитектура TrollMusic
 
-Flutter-приложение: только локальные файлы. Сеть используется для одного: поиск текстов песен (LRCLIB, Kugou, QQ Music, Lyrics.ovh). Бэкенда нет.
+Flutter-приложение: только локальные файлы. Сеть используется для двух вещей: поиск текстов песен (LRCLIB, Kugou, QQ Music, Lyrics.ovh) и встроенный браузер, из которого можно скачать аудиофайл в медиатеку. Бэкенда нет.
 
 ## Карта файлов
 
@@ -46,6 +46,9 @@ lib/
   shared/widgets/                track_tile, track_actions (общее меню трека), cover_art, mini_player,
                                  mini_player_bar (мини-плеер для экранов поверх оболочки), tab_header
                                  (единый заголовок вкладок), rubber_dock, jelly_slider (+ JellyValueSlider), scale_slider_tile, ...
+  features/browser/web_browser_screen  встроенный браузер (webview_flutter): JS-хук `play()` и перехват ссылок на аудио → предложение скачать → ImportService.importDownloaded
+  services/web/web_download_service    скачивание по прямой ссылке (Dio), проверка типа ответа, имя файла
+  core/utils/web_audio                 адресная строка → URL/поиск, признаки аудио, имя файла (тесты: web_audio_test)
   features/home/news_banner      синяя плашка с каналом t.me/TrollCerts (url_launcher, открывает внешнее приложение; сеть самим приложением не используется)
   features/player/lyric_preview  текущая строка под обложкой (или кнопка «Текст песни»); нажатие → openLyricsScreen (круговое раскрытие)
   features/lyrics/lyrics_settings_sheet  все настройки текста (стиль, размер, строка под обложкой); кнопка в шапке экрана текста

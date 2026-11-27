@@ -11,6 +11,7 @@ import '../../shared/widgets/entrance.dart';
 import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/tab_header.dart';
 import '../../shared/widgets/track_tile.dart';
+import '../browser/web_browser_screen.dart';
 import 'backup_screen.dart';
 import 'track_edit_sheet.dart';
 
@@ -100,6 +101,12 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
             .whereType<Track>());
       }, 'Ошибка сканирования');
 
+  void _openBrowser() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const WebBrowserScreen()),
+    );
+  }
+
   void _openBackup() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const BackupScreen()),
@@ -131,6 +138,18 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Entrance(
+                  index: 0,
+                  child: _ActionCard(
+                    icon: Icons.travel_explore_rounded,
+                    title: 'Поиск треков в интернете',
+                    subtitle: 'Встроенный браузер: включите трек на сайте — '
+                        'плеер предложит скачать (прямые аудиофайлы)',
+                    onTap: _openBrowser,
+                    busy: false,
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Entrance(
                   index: 0,
                   child: _ActionCard(

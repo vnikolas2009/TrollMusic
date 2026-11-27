@@ -76,6 +76,18 @@ class ImportService {
     return ImportResult(tracks: imported, lyricsAttached: attached);
   }
 
+  /// Добавляет в медиатеку уже скачанный файл (из встроенного браузера);
+  /// временный файл после копирования удаляется.
+  Future<Track> importDownloaded(File file) async {
+    try {
+      return await _storage.importLocalFile(file);
+    } finally {
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+  }
+
   /// Выбор только файлов с текстами для уже импортированных треков.
   Future<ImportResult> pickAndImportLyrics() async {
     final files = await FilePicker.pickFiles(
