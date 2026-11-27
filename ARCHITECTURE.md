@@ -1,6 +1,6 @@
 # Архитектура TrollMusic
 
-Flutter-приложение: только локальные файлы. Сеть используется для двух вещей: поиск текстов песен (LRCLIB, Kugou, QQ Music, Lyrics.ovh) и встроенный браузер, из которого можно скачать аудиофайл в медиатеку. Бэкенда нет.
+Flutter-приложение: только локальные файлы. Сеть используется для: поиска текстов песен (LRCLIB, Kugou, QQ Music, Lyrics.ovh), перевода текстов (бесплатная точка Google Translate без ключа) и встроенного браузера, из которого можно скачать аудиофайл в медиатеку. Бэкенда нет.
 
 ## Карта файлов
 
@@ -50,6 +50,11 @@ lib/
   features/browser/web_browser_screen  встроенный браузер (webview_flutter): JS-хук `play()` и перехват ссылок на аудио → предложение скачать → ImportService.importDownloaded
   services/web/web_download_service    скачивание по прямой ссылке (Dio), проверка типа ответа, имя файла
   core/utils/web_audio                 адресная строка → URL/поиск, признаки аудио, имя файла (тесты: web_audio_test)
+  app/translation_provider.dart        перевод: включён ли и язык (настройки), lyricsTranslationProvider(trackId) — кэш, затем сеть
+  services/lyrics/translation_service  перевод пакетами строк, кэш в <root>/translations (хэш исходных строк), исходный LRC не меняется
+  core/utils/translation.dart          языки, исходные строки, пакеты, разбор ответа, выравнивание по строкам
+  core/utils/smart_shuffle.dart        умное перемешивание (вес по истории, разведение исполнителей)
+  core/utils/session.dart              restoreQueue/trimQueue: восстановление очереди без недоступных треков
   features/home/news_banner      синяя плашка с каналом t.me/TrollCerts (url_launcher, открывает внешнее приложение; сеть самим приложением не используется)
   features/player/lyric_preview  текущая строка под обложкой (или кнопка «Текст песни»); нажатие → openLyricsScreen (круговое раскрытие)
   features/lyrics/lyrics_settings_sheet  все настройки текста (стиль, размер, строка под обложкой); кнопка в шапке экрана текста
@@ -77,6 +82,8 @@ test/                            чистая логика: LRC, сопоста�
 - Позицию (`positionProvider`) слушайте только в узких виджетах (`_SeekBar`, `_MiniProgress`), не в `build` экранов.
 - Таймер сна «до конца трека» следит за позицией: `completed` в just_audio наступает только в конце очереди.
 - Ошибка файла: `_skipBroken` включает следующий трек.
+- Сессия: `queue` и индекс сохраняются в настройках (`sessionQueue`, `sessionIndex`) при любом изменении, позиция — раз в 5 с, при паузе и при уходе в фон (`flushSession` из `app.dart`). Пока трек не загружен или идёт восстановление, позиция не записывается; `restoreLastPlayed` читает её до загрузки очереди.
+- `playShuffled` при включённом «умном перемешивании» готовит порядок сам (`smartShuffle`) и выключает случайный режим плеера, иначе он перемешал бы его заново.
 
 ## Ограничения
 

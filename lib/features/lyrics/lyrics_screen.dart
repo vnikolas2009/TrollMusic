@@ -9,6 +9,8 @@ import 'package:palette_generator/palette_generator.dart';
 import '../../app/appearance_controller.dart';
 import '../../app/lyrics_style_provider.dart';
 import '../../app/settings_provider.dart';
+import '../../app/translation_provider.dart';
+import '../../core/utils/translation.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
@@ -177,6 +179,25 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
       _resolveColor(track);
     }
 
+    final prefs = ref.watch(translationPrefsProvider);
+    final translating = prefs.enabled &&
+        ref.watch(lyricsTranslationProvider(widget.trackId)).isLoading;
+
+    ref.listen(lyricsTranslationProvider(widget.trackId), (_, next) {
+      final message = next.whenOrNull(
+        data: (r) => r != null && r.isSameLanguage
+            ? 'Текст уже на языке «${translationLanguageName(r.lang)}»'
+            : null,
+        error: (e, _) => '$e',
+      );
+      if (message == null) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+      // Выключаем, чтобы повторное нажатие запускало перевод заново.
+      ref.read(translationPrefsProvider.notifier).setEnabled(false);
+    });
+
     return Scaffold(
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
@@ -217,6 +238,29 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           ],
         ),
         actions: [
+          if (!lyrics.isEmpty)
+            translating
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 14),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                : IconButton(
+                    tooltip: prefs.enabled ? 'Скрыть перевод' : 'Показать перевод',
+                    icon: Icon(
+                      Icons.translate_rounded,
+                      size: 22,
+                      color: prefs.enabled ? AppColors.accent : Colors.white,
+                    ),
+                    onPressed: () => ref
+                        .read(translationPrefsProvider.notifier)
+                        .setEnabled(!prefs.enabled),
+                  ),
           if (lyrics.synced) _offsetMenu(),
           IconButton(
             tooltip: 'Настройки текста',
@@ -609,7 +653,9 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
       );
     }
 
-    if (!lyrics.synced) return _plainBody(raw ?? lyrics.plainText);
+    final translation = _translationLines();
+
+    if (!lyrics.synced) return _plainBody(raw ?? lyrics.plainText, translation);
 
     final positions = ref.watch(audioHandlerProvider).positionStream;
 
@@ -657,7 +703,16 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (var i = 0; i < lyrics.lines.length; i++)
-                  _buildLine(lyrics, i, index, positions, shifted, style, fontScale),
+                  _buildLine(
+                    lyrics,
+                    i,
+                    index,
+                    positions,
+                    shifted,
+                    style,
+                    fontScale,
+                    translation != null && i < translation.length ? translation[i] : null,
+                  ),
               ],
             ),
           ),
@@ -674,6 +729,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     Duration Function(Duration) shifted,
     LyricsStyle style,
     double fontScale,
+    String? translation,
   ) {
     final line = lyrics.lines[i];
     final distance = index < 0 ? 99 : i - index;
@@ -724,6 +780,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           lyricsStyle: style,
           fontScale: fontScale,
           active: active,
+          translation: translation,
         ),
       ),
     );
@@ -756,8 +813,17 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
 
   /// Текст без таймкодов: обычное чтение с прокруткой, куплеты разделены
   /// отступами.
-  Widget _plainBody(String raw) {
+  /// Перевод текущего трека по строкам или `null`, если он выключен,
+  /// ещё грузится или текст уже на нужном языке.
+  List<String>? _translationLines() {
+    final result = ref.watch(lyricsTranslationProvider(widget.trackId)).value;
+    if (result == null || result.isSameLanguage) return null;
+    return result.lines;
+  }
+
+  Widget _plainBody(String raw, List<String>? translation) {
     final rows = LrcParser.plainLines(raw);
+    final plainScale = ref.watch(appearanceProvider).lyricsScale;
     // Провайдеры читаем здесь, а не в itemBuilder: ref.watch допустим в build.
     final rowStyle = ref
         .watch(lyricsStyleProvider)
@@ -779,9 +845,29 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
 
         if (row.isEmpty) return const SizedBox(height: 22);
 
+        final translated =
+            translation != null && i < translation.length ? translation[i] : '';
+
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 5),
-          child: Text(row, style: rowStyle),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(row, style: rowStyle),
+              if (translated.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  translated,
+                  style: TextStyle(
+                    fontSize: 15 * plainScale,
+                    height: 1.3,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ],
+          ),
         );
       },
     );
@@ -848,9 +934,13 @@ class _LyricLine extends StatelessWidget {
     required this.lyricsStyle,
     required this.fontScale,
     this.active,
+    this.translation,
   });
 
   final String text;
+
+  /// Перевод строки; показывается мелким шрифтом под оригиналом.
+  final String? translation;
 
   /// Расстояние до текущей строки: 0 — текущая, меньше нуля — пройденные.
   final int distance;
@@ -887,13 +977,32 @@ class _LyricLine extends StatelessWidget {
           scale: isActive ? 1.0 : look.inactiveScale,
           child: Align(
             alignment: Alignment.centerLeft,
-            child: isActive && active != null && text.trim().isNotEmpty
-                ? active
-                : AnimatedDefaultTextStyle(
-                    duration: AppMotion.base,
-                    style: style,
-                    child: Text(label),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                isActive && active != null && text.trim().isNotEmpty
+                    ? active!
+                    : AnimatedDefaultTextStyle(
+                        duration: AppMotion.base,
+                        style: style,
+                        child: Text(label),
+                      ),
+                if (translation != null && translation!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      translation!,
+                      style: TextStyle(
+                        fontSize: 15 * fontScale,
+                        height: 1.3,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withValues(alpha: 0.62),
+                      ),
+                    ),
                   ),
+              ],
+            ),
           ),
         ),
       ),

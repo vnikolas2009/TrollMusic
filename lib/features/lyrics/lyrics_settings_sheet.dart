@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/appearance_controller.dart';
 import '../../app/lyrics_background_provider.dart';
 import '../../app/lyrics_style_provider.dart';
+import '../../app/translation_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/appearance.dart';
 import '../../core/utils/lyric_style.dart';
+import '../../core/utils/translation.dart';
 import '../../shared/widgets/scale_slider_tile.dart';
 import '../../shared/widgets/spring_switch_tile.dart';
 
@@ -34,6 +36,8 @@ class _LyricsSettingsSheet extends ConsumerWidget {
     final lookCtl = ref.read(appearanceProvider.notifier);
     final style = ref.watch(lyricsStyleProvider);
     final bg = ref.watch(lyricsBackgroundProvider);
+    final tr = ref.watch(translationPrefsProvider);
+    final trCtl = ref.read(translationPrefsProvider.notifier);
     final bgCtl = ref.read(lyricsBackgroundProvider.notifier);
 
     return SafeArea(
@@ -132,6 +136,27 @@ class _LyricsSettingsSheet extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
             ],
+            SpringSwitchTile(
+              title: 'Перевод под строками',
+              subtitle: 'Оригинал и перевод вместе; перевод сохраняется на устройстве',
+              value: tr.enabled,
+              onChanged: trCtl.setEnabled,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final l in translationLanguages)
+                    ChoiceChip(
+                      label: Text(l.name),
+                      selected: tr.lang == l.code,
+                      onSelected: (_) => trCtl.setLang(l.code),
+                    ),
+                ],
+              ),
+            ),
             SpringSwitchTile(
               title: 'Строка текста под обложкой',
               subtitle: 'Текущая строка в плеере; нажатие открывает весь текст',
