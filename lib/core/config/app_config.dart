@@ -1,6 +1,6 @@
 abstract final class AppConfig {
   static const appName = 'TrollMusic';
-  static const appVersion = '3.0.0';
+  static const appVersion = '2.0.0';
 
   static const connectTimeout = Duration(seconds: 10);
   static const requestTimeout = Duration(seconds: 20);
