@@ -152,6 +152,33 @@ class Settings {
 
   set repeatIndex(int value) => _box.put('repeatIndex', value);
 
+  /// Очередь последней сессии (id треков) и индекс текущего трека.
+  List<String> get sessionQueue =>
+      (_box.get('sessionQueue') as List?)?.cast<String>().toList() ?? const [];
+
+  set sessionQueue(List<String> value) => _box.put('sessionQueue', value);
+
+  int get sessionIndex => (_box.get('sessionIndex') as num?)?.toInt() ?? 0;
+
+  set sessionIndex(int value) => _box.put('sessionIndex', value);
+
+  /// Умное перемешивание для кнопок «вперемешку».
+  bool get smartShuffle =>
+      _box.get('smartShuffle', defaultValue: true) as bool;
+
+  set smartShuffle(bool value) => _box.put('smartShuffle', value);
+
+  /// Перевод текстов песен: включён ли показ и язык (код вроде `ru`).
+  bool get translationEnabled =>
+      _box.get('translationEnabled', defaultValue: false) as bool;
+
+  set translationEnabled(bool value) => _box.put('translationEnabled', value);
+
+  String get translationLang =>
+      _box.get('translationLang', defaultValue: 'ru') as String;
+
+  set translationLang(String value) => _box.put('translationLang', value);
+
   String? get lastTrackId => _box.get('lastTrackId') as String?;
 
   set lastTrackId(String? value) => _box.put('lastTrackId', value);

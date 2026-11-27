@@ -36,6 +36,15 @@ class _TrollMusicAppState extends ConsumerState<TrollMusicApp>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      ref.read(audioHandlerProvider).flushSession();
+    }
+  }
+
+  @override
   void didChangePlatformBrightness() {
     if (ref.read(themeControllerProvider).mode == ThemeMode.system) {
       setState(() {});

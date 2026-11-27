@@ -282,6 +282,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
+          SpringSwitchTile(
+            title: 'Умное перемешивание',
+            subtitle: 'Кнопки «вперемешку»: реже недавние треки, '
+                'один исполнитель не идёт подряд',
+            value: settings.smartShuffle,
+            onChanged: (v) => setState(() => settings.smartShuffle = v),
+          ),
           ListTile(
             title: const Text('Пропуск тишины'),
             subtitle: const Text('Убирает паузы в начале и конце треков (Android)'),

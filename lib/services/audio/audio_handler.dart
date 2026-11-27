@@ -9,6 +9,8 @@ import 'package:just_audio/just_audio.dart';
 import '../../core/storage/settings.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../core/utils/loop_range.dart';
+import '../../core/utils/session.dart';
+import '../../core/utils/smart_shuffle.dart';
 import '../../data/models/lyrics.dart';
 import '../../data/models/track.dart';
 import '../../data/repositories/library_repository.dart';
@@ -76,10 +78,13 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     _player.processingStateStream.listen((state) {
       if (state == ProcessingState.completed) _onCompleted();
     });
+    // Очередь и текущий индекс сохраняются при любом изменении.
+    queue.listen((_) => _persistQueue());
     _player.currentIndexStream.listen((_) {
       _loop.value = null;
       _syncQueueIndex();
       _persistCurrentTrack();
+      _persistQueue();
       if (!_restoring) _fadeIn();
     });
     _player.positionStream.listen((position) {
@@ -113,16 +118,37 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   Future<void> restoreLastPlayed() async {
     final settings = _settings;
     if (settings == null) return;
-    final id = settings.lastTrackId;
-    if (id == null || id.isEmpty) return;
-    final track = _library.trackById(id);
-    if (track == null || !_library.isAvailable(track)) return;
+    // Позицию читаем до загрузки: при смене трека она сбрасывается.
+    final savedPosition = Duration(milliseconds: settings.lastPositionMs);
+    final lastId = settings.lastTrackId;
+
+    bool available(String id) {
+      final t = _library.trackById(id);
+      return t != null && _library.isAvailable(t);
+    }
+
+    var restored = restoreQueue(
+      savedIds: settings.sessionQueue,
+      savedIndex: settings.sessionIndex,
+      isAvailable: available,
+    );
+    // Старые версии хранили только последний трек.
+    if (restored.ids.isEmpty && lastId != null && lastId.isNotEmpty && available(lastId)) {
+      restored = (ids: [lastId], index: 0, sameTrack: true);
+    }
+    if (restored.ids.isEmpty) return;
+
+    final tracks = [
+      for (final id in restored.ids) _library.trackById(id)!,
+    ];
+    final position = restored.sameTrack && tracks[restored.index].id == lastId
+        ? savedPosition
+        : Duration.zero;
 
     _restoring = true;
     try {
-      await setLibraryQueue([track], autoPlay: false);
-      final saved = Duration(milliseconds: settings.lastPositionMs);
-      if (saved > Duration.zero) await _player.seek(saved);
+      await setLibraryQueue(tracks, initialIndex: restored.index, autoPlay: false);
+      if (position > Duration.zero) await _player.seek(position);
     } catch (_) {
     } finally {
       _restoring = false;
@@ -170,8 +196,22 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
 
   /// Играть список в случайном порядке с первого трека.
   Future<void> playShuffled(Iterable<Track> tracks) async {
-    final list = tracks.toList()..shuffle();
-    if (list.isEmpty) return;
+    final source = tracks.toList();
+    if (source.isEmpty) return;
+
+    final settings = _settings;
+    final List<Track> list;
+    if (settings != null && settings.smartShuffle) {
+      list = smartShuffle(
+        source,
+        recentIds: settings.recentIds,
+        playCounts: settings.playCounts,
+      );
+      // Порядок уже готов: режим случайного порядка плеера его перемешал бы.
+      await setShuffle(false);
+    } else {
+      list = source..shuffle();
+    }
     await setLibraryQueue(list);
   }
 
@@ -246,6 +286,7 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
       _emitError('Не удалось открыть файл');
     } finally {
       _loading = false;
+      _persistQueue();
     }
   }
 
@@ -520,6 +561,9 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   void _persistPosition(Duration position, {bool force = false}) {
     final settings = _settings;
     if (settings == null) return;
+    // Пока трек не загружен или идёт восстановление, позицию не трогаем:
+    // иначе нулевая позиция при старте затрёт сохранённую.
+    if (_restoring || _loading || mediaItem.value == null) return;
     final now = DateTime.now();
     if (!force && now.difference(_lastPositionSave) < const Duration(seconds: 5)) {
       return;
@@ -528,14 +572,32 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     settings.lastPositionMs = position.inMilliseconds;
   }
 
+  void _persistQueue() {
+    final settings = _settings;
+    if (settings == null || _loading) return;
+    final ids = [for (final item in queue.value) item.id];
+    // Пустую очередь (старт приложения до восстановления) не сохраняем.
+    if (ids.isEmpty) return;
+    final trimmed = trimQueue(ids, _player.currentIndex ?? 0);
+    settings.sessionQueue = trimmed.ids;
+    settings.sessionIndex = trimmed.index;
+  }
+
+  /// Сохраняет позицию сразу (приложение уходит в фон или закрывается).
+  void flushSession() {
+    _persistPosition(_player.position, force: true);
+    _persistQueue();
+  }
+
   void _persistCurrentTrack() {
     final settings = _settings;
     if (settings == null) return;
     final item = mediaItem.value;
     if (item == null) return;
     settings.lastTrackId = item.id;
+    if (_restoring) return;
     settings.lastPositionMs = 0;
-    if (!_restoring) settings.recordPlay(item.id);
+    settings.recordPlay(item.id);
   }
 
   void _onCompleted() {
