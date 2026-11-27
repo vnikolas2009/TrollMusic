@@ -11,6 +11,8 @@ import '../features/settings/settings_screen.dart';
 import '../shared/widgets/mini_player.dart';
 import '../shared/widgets/mini_player_bar.dart';
 import '../shared/widgets/rubber_dock.dart';
+import '../core/utils/dock_layout.dart';
+import 'dock_provider.dart';
 import 'tab_provider.dart';
 
 class AppShell extends ConsumerStatefulWidget {
@@ -29,14 +31,6 @@ class _AppShellState extends ConsumerState<AppShell> {
     SettingsScreen(),
   ];
 
-  static const _dockTabs = <RubberDockTab>[
-    RubberDockTab(icon: Icons.home_rounded, label: 'Главная'),
-    RubberDockTab(icon: Icons.search_rounded, label: 'Поиск'),
-    RubberDockTab(icon: Icons.library_music_rounded, label: 'Медиатека'),
-    RubberDockTab(icon: Icons.download_rounded, label: 'Импорт'),
-    RubberDockTab(icon: Icons.settings_rounded, label: 'Настройки'),
-  ];
-
   @override
   Widget build(BuildContext context) {
     ref.listen(audioErrorsProvider, (_, next) {
@@ -48,7 +42,10 @@ class _AppShellState extends ConsumerState<AppShell> {
       );
     });
 
-    final index = ref.watch(selectedTabProvider);
+    final selectedId = ref.watch(selectedTabProvider);
+    final visible = visibleDockTabs(ref.watch(dockLayoutProvider));
+    // Если выбранную вкладку скрыли, показываем первую из видимых.
+    final current = visible.contains(selectedId) ? selectedId : visible.first;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
@@ -60,7 +57,15 @@ class _AppShellState extends ConsumerState<AppShell> {
           child: Column(
             children: [
               // IndexedStack сохраняет состояние вкладок и рисует только активную.
-              Expanded(child: IndexedStack(index: index, children: _tabs)),
+              Expanded(
+                child: IndexedStack(
+                  index: visible.indexOf(current),
+                  children: [
+                    for (final id in visible)
+                      KeyedSubtree(key: ValueKey(id), child: _tabs[id]),
+                  ],
+                ),
+              ),
               // Мини-плеер один на все вкладки: стоит над доком, как только
               // загружен трек.
               MiniPlayer(
@@ -70,10 +75,14 @@ class _AppShellState extends ConsumerState<AppShell> {
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 8 + bottomInset),
                 // Без карточки-панели: док занимает только свою высоту.
                 child: RubberDock(
-                  tabs: _dockTabs,
-                  selected: index,
+                  // Состав или порядок вкладок изменился — док собирается заново.
+                  key: ValueKey(visible.join(',')),
+                  tabs: [for (final id in visible) dockTabInfos[id]],
+                  selected: visible.indexOf(current),
                   panelHeight: 1,
-                  onSelected: ref.read(selectedTabProvider.notifier).select,
+                  onSelected: (position) => ref
+                      .read(selectedTabProvider.notifier)
+                      .select(visible[position]),
                 ),
               ),
             ],

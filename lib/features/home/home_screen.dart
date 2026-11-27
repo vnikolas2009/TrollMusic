@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/dock_provider.dart';
 import '../../app/lyrics_job.dart';
+import '../../core/utils/dock_layout.dart';
+import '../create/create_screen.dart';
 import '../../app/providers.dart';
 import '../../app/settings_provider.dart';
 import '../../app/tab_provider.dart';
@@ -70,8 +73,7 @@ class HomeScreen extends ConsumerWidget {
         SliverToBoxAdapter(
           child: tracks.isEmpty
               ? _EmptyLibrary(
-                  onImport: () =>
-                      ref.read(selectedTabProvider.notifier).select(AppTab.create),
+                  onImport: () => _openImport(context, ref),
                 )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,6 +160,24 @@ class _PlaylistRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Открывает импорт: вкладкой, а если она скрыта в нижней панели, — отдельным экраном.
+void _openImport(BuildContext context, WidgetRef ref) {
+  final visible = visibleDockTabs(ref.read(dockLayoutProvider));
+  if (visible.contains(AppTab.create)) {
+    ref.read(selectedTabProvider.notifier).select(AppTab.create);
+    return;
+  }
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(backgroundColor: Colors.transparent),
+        body: const CreateScreen(),
+      ),
+    ),
+  );
 }
 
 class _EmptyLibrary extends StatelessWidget {

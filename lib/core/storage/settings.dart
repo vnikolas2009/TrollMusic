@@ -162,6 +162,19 @@ class Settings {
 
   set sessionIndex(int value) => _box.put('sessionIndex', value);
 
+  /// Нижняя панель: порядок вкладок и скрытые вкладки (номера `AppTab`).
+  List<int>? get dockOrder =>
+      (_box.get('dockOrder') as List?)?.map((e) => (e as num).toInt()).toList();
+
+  set dockOrder(List<int>? value) =>
+      value == null ? _box.delete('dockOrder') : _box.put('dockOrder', value);
+
+  List<int>? get dockHidden =>
+      (_box.get('dockHidden') as List?)?.map((e) => (e as num).toInt()).toList();
+
+  set dockHidden(List<int>? value) =>
+      value == null ? _box.delete('dockHidden') : _box.put('dockHidden', value);
+
   /// Умное перемешивание для кнопок «вперемешку».
   bool get smartShuffle =>
       _box.get('smartShuffle', defaultValue: true) as bool;

@@ -13,6 +13,7 @@ import '../../core/theme/app_fonts.dart';
 import '../../core/theme/appearance.dart';
 import '../../core/utils/formatters.dart';
 import '../../shared/widgets/confirm_dialog.dart';
+import 'dock_settings_screen.dart';
 import '../../shared/widgets/spring_switch.dart';
 import '../../shared/widgets/scale_slider_tile.dart';
 import '../../shared/widgets/spring_switch_tile.dart';
@@ -215,6 +216,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
 
           const _Section('Оформление'),
+          ListTile(
+            leading: const Icon(Icons.view_carousel_outlined),
+            title: const Text('Нижняя панель'),
+            subtitle: const Text('Порядок и видимость вкладок'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const DockSettingsScreen()),
+            ),
+          ),
           _ChoiceTile<int>(
             title: 'Толщина шрифта',
             hint: fonts.supportsWeight
