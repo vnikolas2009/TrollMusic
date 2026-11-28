@@ -35,4 +35,18 @@ void main() {
   test('длинные слова маскируются не длиннее 10 знаков', () {
     expect(maskLyricLine('Internationalization', seed: 1), '__________');
   });
+
+  test('practiceSegments: тот же текст, скрытые слова отдельными фрагментами', () {
+    const text = 'Hello, world! Again';
+    final parts = practiceSegments(text, seed: 2, ratio: 1);
+    expect(parts.map((e) => e.text).join(), text);
+    expect(parts.where((e) => e.hidden).map((e) => e.text), ['Hello', 'world', 'Again']);
+    expect(parts.where((e) => !e.hidden).map((e) => e.text).join(), ', ! ');
+  });
+
+  test('practiceSegments: пустая строка и строка без слов', () {
+    expect(practiceSegments('', seed: 1), isEmpty);
+    final blank = practiceSegments('  ', seed: 1);
+    expect(blank.single.hidden, isFalse);
+  });
 }

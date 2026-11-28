@@ -12,6 +12,7 @@ import '../../core/utils/track_sort.dart';
 import '../../data/models/playlist.dart';
 import '../../data/models/track.dart';
 import '../../shared/widgets/cover_art.dart';
+import '../../shared/widgets/image_source_picker.dart';
 import '../../shared/widgets/press_scale.dart';
 import '../../shared/widgets/tab_header.dart';
 import '../../shared/widgets/track_actions.dart';
@@ -204,6 +205,7 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialog, 'stop'), child: const Text('Стоп')),
             TextButton(onPressed: () => Navigator.pop(dialog, 'skip'), child: const Text('Пропустить')),
+            TextButton(onPressed: () => Navigator.pop(dialog, 'online'), child: const Text('Найти онлайн')),
             FilledButton(onPressed: () => Navigator.pop(dialog, 'pick'), child: const Text('Выбрать')),
           ],
         ),
@@ -212,7 +214,19 @@ class _AllTracksTabState extends ConsumerState<_AllTracksTab> {
       if (action == 'skip') continue;
 
       try {
-        final updated = await ref.read(importProvider).importArtworkFromFile(track.id);
+        Track? updated;
+        if (action == 'online') {
+          updated = await ref.read(importProvider).findArtworkOnline(track);
+          if (updated == null && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Подходящая обложка не найдена')),
+            );
+          }
+        } else {
+          final path = await pickImagePath(context, title: 'Обложка');
+          if (path == null) continue;
+          updated = await ref.read(importProvider).importArtworkFromPath(track.id, path);
+        }
         if (updated != null) added++;
       } catch (e) {
         if (!mounted) return;

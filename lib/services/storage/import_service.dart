@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/config/app_config.dart';
+import '../../core/network/artwork/artwork_search.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../core/utils/lyrics_match.dart';
 import '../../data/models/track.dart';
@@ -17,13 +18,16 @@ class ImportService {
     required LibraryRepository library,
     required StorageService storage,
     required LyricsService lyrics,
+    ArtworkSearch? artwork,
   })  : _library = library,
         _storage = storage,
-        _lyrics = lyrics;
+        _lyrics = lyrics,
+        _artwork = artwork ?? ArtworkSearch();
 
   final LibraryRepository _library;
   final StorageService _storage;
   final LyricsService _lyrics;
+  final ArtworkSearch _artwork;
 
   static final _audioSet = AppConfig.audioExtensions.toSet();
   static final _lyricsSet = AppConfig.lyricsExtensions.toSet();
@@ -290,14 +294,30 @@ class ImportService {
     return _storage.attachLyricsFile(trackId, File(path));
   }
 
-  Future<Track?> importArtworkFromFile(String trackId) async {
-    final file = await FilePicker.pickFile(
-      type: FileType.image,
-      dialogTitle: 'Выбрать обложку',
+  /// Привязывает уже выбранную картинку (из медиатеки или файлов).
+  Future<Track?> importArtworkFromPath(String trackId, String path) =>
+      _storage.attachArtworkFile(trackId, File(path));
+
+  /// Ищет обложку в интернете по исполнителю и названию. `null` — уверенного
+  /// совпадения нет или сеть недоступна.
+  Future<Track?> findArtworkOnline(Track track) async {
+    final bytes = await _artwork.findCover(
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
     );
-    final path = file?.path;
-    if (path == null) return null;
-    return _storage.attachArtworkFile(trackId, File(path));
+    if (bytes == null) return null;
+
+    final dir = await Directory.systemTemp.createTemp('cover_');
+    try {
+      final file = File(p.join(dir.path, 'cover.jpg'));
+      await file.writeAsBytes(bytes, flush: true);
+      return await _storage.attachArtworkFile(track.id, file);
+    } finally {
+      try {
+        await dir.delete(recursive: true);
+      } catch (_) {}
+    }
   }
 
   /// Ищет текст в сети и сохраняет. [provider] — идентификатор источника

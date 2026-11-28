@@ -49,6 +49,26 @@ void main() {
     expect(s.topTracks.length, 1);
   });
 
+  test('cleanPlayLog убирает дубли и мгновенные пропуски старой версии', () {
+    final events = [
+      (trackId: 'a', at: now),
+      (trackId: 'a', at: now.add(const Duration(seconds: 1))),
+      (trackId: 'b', at: now.add(const Duration(seconds: 3))),
+      (trackId: 'c', at: now.add(const Duration(seconds: 120))),
+    ];
+    final cleaned = cleanPlayLog(events);
+    expect(cleaned.map((e) => e.trackId), ['b', 'c']);
+  });
+
+  test('cleanPlayLog сортирует и сохраняет последнюю запись', () {
+    final events = [
+      (trackId: 'b', at: now.add(const Duration(minutes: 5))),
+      (trackId: 'a', at: now),
+    ];
+    expect(cleanPlayLog(events).map((e) => e.trackId), ['a', 'b']);
+    expect(cleanPlayLog(const []), isEmpty);
+  });
+
   test('пустой журнал', () {
     final s = computeStats(const [], tracks);
     expect(s.plays, 0);

@@ -9,6 +9,7 @@ import 'package:just_audio/just_audio.dart';
 import '../../core/storage/settings.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../core/utils/loop_range.dart';
+import '../../core/utils/play_counter.dart';
 import '../../core/utils/session.dart';
 import '../../core/utils/sleep_fade.dart';
 import '../../core/utils/smart_shuffle.dart';
@@ -31,6 +32,10 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   final Settings? _settings;
 
   final AudioPlayer _player = AudioPlayer();
+
+  late final PlayCounter _playCounter = PlayCounter(
+    onPlay: (id) => _settings?.recordPlay(id),
+  );
 
   final _crossfade = ValueNotifier<Duration>(Duration.zero);
   final _shuffleEnabled = ValueNotifier<bool>(false);
@@ -90,6 +95,7 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
       if (!_restoring) _fadeIn();
     });
     _player.positionStream.listen((position) {
+      _playCounter.tick(position, playing: _player.playing);
       _maybeLoop(position);
       _maybeFadeOut(position);
       _maybeSleepAtTrackEnd(position);
@@ -624,9 +630,14 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     final item = mediaItem.value;
     if (item == null) return;
     settings.lastTrackId = item.id;
-    if (_restoring) return;
+    // Тот же трек (повторное уведомление об индексе) не обнуляет позицию и
+    // не пишется заново; статистику ведёт [_playCounter]. Восстановленный
+    // при старте трек тоже запоминается, но ничего не пишет.
+    final isNewTrack = _playCounter.currentId != item.id;
+    _playCounter.startTrack(item.id, item.duration ?? _player.duration);
+    if (_restoring || !isNewTrack) return;
     settings.lastPositionMs = 0;
-    settings.recordPlay(item.id);
+    settings.recordRecent(item.id);
   }
 
   void _onCompleted() {
@@ -636,6 +647,7 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
       return;
     }
     if (_repeat.value == TrollRepeat.one) {
+      _playCounter.restart();
       _player.seek(Duration.zero);
       _player.play();
       return;

@@ -38,7 +38,11 @@ class TranslationService {
   final Directory root;
   final Dio _dio;
 
-  static const _endpoint = 'https://translate.googleapis.com/translate_a/single';
+  /// Основной и запасной адреса; запасной пробуется при сбое первого.
+  static const _endpoints = [
+    'https://translate.googleapis.com/translate_a/single',
+    'https://translate.google.com/translate_a/single',
+  ];
 
   Directory get _dir => Directory(p.join(root.path, 'translations'));
 
@@ -97,26 +101,54 @@ class TranslationService {
   }
 
   Future<({String text, String? sourceLang})> _request(String text, String lang) async {
-    try {
-      final response = await _dio.post<Object?>(
-        _endpoint,
-        queryParameters: {'client': 'gtx', 'sl': 'auto', 'tl': lang, 'dt': 't'},
-        data: {'q': text},
-        options: Options(
-          contentType: Headers.formUrlEncodedContentType,
-          responseType: ResponseType.json,
-        ),
-      );
-      final code = response.statusCode ?? 0;
-      if (code == 429) throw const TranslationException('Сервис перевода просит подождать, попробуйте позже');
-      if (code < 200 || code >= 300) throw TranslationException('Сервис перевода ответил кодом $code');
+    TranslationException? failure;
+    for (final endpoint in _endpoints) {
+      try {
+        final response = await _dio.post<Object?>(
+          endpoint,
+          queryParameters: {'client': 'gtx', 'sl': 'auto', 'tl': lang, 'dt': 't'},
+          data: {'q': text},
+          options: Options(
+            contentType: Headers.formUrlEncodedContentType,
+            // Ответ разбираем сами: тип содержимого бывает не JSON, и тогда
+            // Dio отдаёт строку.
+            responseType: ResponseType.plain,
+            headers: const {
+              'user-agent':
+                  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 '
+                      '(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+              'accept': '*/*',
+            },
+          ),
+        );
+        final code = response.statusCode ?? 0;
+        if (code == 429) {
+          failure = const TranslationException('Сервис перевода просит подождать, попробуйте позже');
+          continue;
+        }
+        if (code < 200 || code >= 300) {
+          failure = TranslationException('Сервис перевода ответил кодом $code');
+          continue;
+        }
 
-      final parsed = parseTranslateResponse(response.data);
-      if (parsed == null) throw const TranslationException('Не удалось разобрать ответ сервиса перевода');
-      return parsed;
-    } on DioException {
-      throw const TranslationException('Нет связи с сервисом перевода');
+        final data = response.data;
+        Object? decoded;
+        try {
+          decoded = data is String ? jsonDecode(data) : data;
+        } catch (_) {
+          decoded = null;
+        }
+        final parsed = parseTranslateResponse(decoded);
+        if (parsed == null) {
+          failure = const TranslationException('Не удалось разобрать ответ сервиса перевода');
+          continue;
+        }
+        return parsed;
+      } on DioException {
+        failure = const TranslationException('Нет связи с сервисом перевода');
+      }
     }
+    throw failure ?? const TranslationException('Нет связи с сервисом перевода');
   }
 
   Future<void> _save(String trackId, String lang, List<String> source, TranslationResult r) async {

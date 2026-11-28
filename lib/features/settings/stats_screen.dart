@@ -43,7 +43,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
 
     final span = _period.span;
     final stats = computeStats(
-      parsePlayLog(settings.playLog),
+      cleanPlayLog(parsePlayLog(settings.playLog)),
       tracks,
       since: span == null ? null : DateTime.now().subtract(span),
     );

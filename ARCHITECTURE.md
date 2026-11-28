@@ -1,6 +1,6 @@
 # Архитектура TrollMusic
 
-Flutter-приложение: только локальные файлы. Сеть используется для: поиска текстов песен (LRCLIB, Kugou, QQ Music, Lyrics.ovh), перевода текстов (бесплатная точка Google Translate без ключа) и встроенного браузера, из которого можно скачать аудиофайл в медиатеку. Бэкенда нет.
+Flutter-приложение: только локальные файлы. Сеть используется для: поиска текстов песен (LRCLIB, Kugou, QQ Music, Lyrics.ovh), перевода текстов (бесплатная точка Google Translate без ключа), автопоиска обложек (iTunes Search и Deezer, без ключей) и встроенного браузера, из которого можно скачать аудиофайл в медиатеку. Бэкенда нет.
 
 ## Карта файлов
 
@@ -19,6 +19,7 @@ lib/
   core/
     config/app_config.dart       расширения файлов, таймауты, user-agent
     network/http_client.dart     createDio() для запросов текстов
+    network/artwork/artwork_search.dart   поиск и загрузка обложки (iTunes, Deezer); выбор совпадения — core/utils/artwork_match
     network/lyrics/lyrics_providers.dart   LRCLIB, Lyrics.ovh (Kugou и QQ — в asia_providers.dart)
     storage/settings.dart        настройки и история прослушивания (Hive)
     utils/lrc_parser.dart        разбор/запись LRC и enhanced LRC, plainLines для текста без таймкодов
@@ -61,8 +62,10 @@ lib/
   core/utils/track_filter.dart         lacksArtwork: фильтр «без обложек» в медиатеке (+ добавление по очереди)
   shared/widgets/confirm_dialog.dart   confirmAction: общий диалог подтверждения необратимых действий
   core/utils/sleep_fade.dart           громкость затухания таймера сна (последние 45 с; «до конца трека» — 20 с)
-  core/utils/lyric_practice.dart       режим тренировки: частичное скрытие слов строки (app/lyrics_practice_provider)
-  core/utils/play_stats.dart           журнал прослушиваний (Settings.playLog) → статистика за период (features/settings/stats_screen)
+  core/utils/lyric_practice.dart       режим тренировки: слова для скрытия и фрагменты строки (скрытое слово — плашка по ширине слова, app/lyrics_practice_provider)
+  shared/widgets/image_source_picker   выбор картинки/GIF: «Из медиатеки» или «Из файлов» (обложка трека, фон экрана текста)
+  core/utils/play_counter.dart         когда засчитывать прослушивание (30 с или половина трека; дубли, перемотка, быстрые пропуски не считаются)
+  core/utils/play_stats.dart           журнал прослушиваний (Settings.playLog, пишет PlayCounter через TrollAudioHandler) → cleanPlayLog (чистит дубли старой версии) → статистика за период (features/settings/stats_screen)
   shared/widgets/heart_button.dart     «Нравится» с частицами; пульс кнопки воспроизведения — в player_screen
   features/home/news_banner      синяя плашка с каналом t.me/TrollCerts (url_launcher, открывает внешнее приложение; сеть самим приложением не используется)
   features/player/lyric_preview  текущая строка под обложкой (или кнопка «Текст песни»); нажатие → openLyricsScreen (круговое раскрытие)

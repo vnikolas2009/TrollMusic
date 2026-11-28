@@ -1,11 +1,9 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
-import '../core/utils/lyrics_bg.dart';
 import 'providers.dart';
 import 'settings_provider.dart';
 
@@ -59,16 +57,9 @@ class LyricsBackgroundController extends Notifier<LyricsBackground> {
     );
   }
 
-  /// Выбор файла. Возвращает `false`, если пользователь отказался.
-  Future<bool> pick() async {
-    final picked = await FilePicker.pickFile(
-      type: FileType.custom,
-      allowedExtensions: lyricsBgExtensions,
-      dialogTitle: 'Фон экрана текста',
-    );
-    final source = picked?.path;
-    if (source == null) return false;
-
+  /// Сохраняет выбранную картинку как фон ([source] — путь к файлу из
+  /// медиатеки или файлов).
+  Future<void> setFrom(String source) async {
     final ext = p.extension(source).toLowerCase();
     await _dir.create(recursive: true);
     final target = File(p.join(
@@ -84,7 +75,6 @@ class LyricsBackgroundController extends Notifier<LyricsBackground> {
       dim: state.dim,
       gradient: state.gradient,
     );
-    return true;
   }
 
   Future<void> clear() async {

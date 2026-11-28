@@ -43,10 +43,16 @@ class NewsBanner extends StatelessWidget {
           ),
           child: const Row(
             children: [
-              TelegramLogo(
-                size: 42,
-                color: Colors.white,
-                plane: Color(0xFF29A9EB),
+              // Белая обводка: синий круг логотипа не сливается с плашкой.
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(2),
+                  child: TelegramLogo(size: 42),
+                ),
               ),
               SizedBox(width: 14),
               Expanded(

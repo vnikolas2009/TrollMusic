@@ -241,12 +241,18 @@ class Settings {
     return const {};
   }
 
-  void recordPlay(String trackId) {
+  /// Трек начал играть: он попадает в начало «недавних».
+  void recordRecent(String trackId) {
     if (trackId.isEmpty) return;
     final recent = [...recentIds]..remove(trackId);
     recent.insert(0, trackId);
     _box.put('recentIds', recent.take(100).toList());
+  }
 
+  /// Прослушивание засчитано (см. `PlayCounter`): счётчик и журнал
+  /// статистики.
+  void recordPlay(String trackId) {
+    if (trackId.isEmpty) return;
     final counts = {...playCounts};
     counts[trackId] = (counts[trackId] ?? 0) + 1;
     _box.put('playCounts', counts);

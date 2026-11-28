@@ -52,8 +52,12 @@ final translationServiceProvider = Provider<TranslationService>(
 
 /// Перевод текста трека на выбранный язык (`null`, пока перевод выключен или
 /// у трека нет текста). Сначала кэш на диске, потом сеть.
-final lyricsTranslationProvider =
-    FutureProvider.autoDispose.family<TranslationResult?, String>((ref, trackId) async {
+///
+/// Автоповтор Riverpod 3 отключён: при ошибке сети он молча перезапускал
+/// запрос с задержкой, индикатор крутился бесконечно, а сообщение об ошибке
+/// не показывалось. Повтор — повторное нажатие кнопки перевода.
+final lyricsTranslationProvider = FutureProvider.autoDispose
+    .family<TranslationResult?, String>(retry: (_, __) => null, (ref, trackId) async {
   final prefs = ref.watch(translationPrefsProvider);
   if (!prefs.enabled) return null;
 

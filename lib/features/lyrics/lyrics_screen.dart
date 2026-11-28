@@ -751,9 +751,9 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
 
     // Тренировка: текущая и будущие строки скрыты частично, спетые видны.
     final masked = _practice && (index < 0 || i >= index);
-    final shownText = masked
-        ? maskLyricLine(line.text, seed: i * 7919 + line.time.inMilliseconds)
-        : line.text;
+    final segments = masked
+        ? practiceSegments(line.text, seed: i * 7919 + line.time.inMilliseconds)
+        : null;
 
     Widget? active;
 
@@ -800,7 +800,8 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
           offsetY: 0.14,
           duration: AppMotion.slower,
           child: _LyricLine(
-            text: shownText,
+            text: line.text,
+            segments: segments,
             distance: distance,
             lyricsStyle: style,
             fontScale: fontScale,
@@ -961,9 +962,13 @@ class _LyricLine extends StatelessWidget {
     required this.fontScale,
     this.active,
     this.translation,
+    this.segments,
   });
 
   final String text;
+
+  /// Режим тренировки: фрагменты строки, часть из них скрыта плашкой.
+  final List<PracticeSegment>? segments;
 
   /// Перевод строки; показывается мелким шрифтом под оригиналом.
   final String? translation;
@@ -1012,7 +1017,27 @@ class _LyricLine extends StatelessWidget {
                     : AnimatedDefaultTextStyle(
                         duration: AppMotion.base,
                         style: style,
-                        child: Text(label),
+                        child: segments == null || segments!.isEmpty
+                            ? Text(label)
+                            : Text.rich(
+                                TextSpan(
+                                  children: [
+                                    for (final part in segments!)
+                                      TextSpan(
+                                        text: part.text,
+                                        // Скрытое слово: невидимые буквы на
+                                        // плашке той же ширины.
+                                        style: part.hidden
+                                            ? TextStyle(
+                                                color: Colors.transparent,
+                                                backgroundColor:
+                                                    Colors.white.withValues(alpha: 0.24),
+                                              )
+                                            : null,
+                                      ),
+                                  ],
+                                ),
+                              ),
                       ),
                 if (translation != null && translation!.isNotEmpty)
                   Padding(

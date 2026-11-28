@@ -27,15 +27,28 @@ class LyricsBackdrop extends ConsumerWidget {
       fit: StackFit.expand,
       children: [
         aurora,
+        // Стандартный layoutBuilder у AnimatedSwitcher ослабляет ограничения
+        // (StackFit.loose), и картинка оставалась своего размера, не
+        // заполняя экран. Здесь фон растягивается на весь экран с обрезкой
+        // по краям (cover).
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 500),
-          child: Image.file(
-            File(path),
+          layoutBuilder: (current, previous) => Stack(
+            fit: StackFit.expand,
+            children: [...previous, if (current != null) current],
+          ),
+          child: SizedBox.expand(
             key: ValueKey(path),
-            fit: BoxFit.cover,
-            gaplessPlayback: true,
-            filterQuality: FilterQuality.medium,
-            errorBuilder: (_, __, ___) => const SizedBox.expand(),
+            child: Image.file(
+              File(path),
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              alignment: Alignment.center,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (_, __, ___) => const SizedBox.expand(),
+            ),
           ),
         ),
         DecoratedBox(

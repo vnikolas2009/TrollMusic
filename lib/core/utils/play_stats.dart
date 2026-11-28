@@ -20,6 +20,24 @@ List<PlayEvent> parsePlayLog(Iterable<String> rows) {
   return out;
 }
 
+/// Убирает из журнала ложные записи старой версии: она писала прослушивание
+/// при каждом уведомлении об индексе трека (дубли при перестановке очереди,
+/// мгновенные пропуски). Если следующая запись появилась раньше чем через
+/// [minGap], эта запись не считается. Последняя запись всегда остаётся.
+List<PlayEvent> cleanPlayLog(
+  Iterable<PlayEvent> events, {
+  Duration minGap = const Duration(seconds: 10),
+}) {
+  final sorted = events.toList()..sort((a, b) => a.at.compareTo(b.at));
+  final out = <PlayEvent>[];
+  for (var i = 0; i < sorted.length; i++) {
+    final isLast = i == sorted.length - 1;
+    if (!isLast && sorted[i + 1].at.difference(sorted[i].at) < minGap) continue;
+    out.add(sorted[i]);
+  }
+  return out;
+}
+
 class StatsSummary {
   const StatsSummary({
     required this.plays,

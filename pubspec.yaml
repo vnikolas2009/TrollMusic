@@ -45,6 +45,7 @@ flutter:
   assets:
     - assets/fonts/OFL-Inter.txt
     - assets/fonts/OFL-Manrope.txt
+    - assets/images/telegram_logo.png
 
   fonts:
     - family: Inter

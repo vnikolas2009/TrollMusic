@@ -7,6 +7,7 @@ import '../../app/providers.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/track.dart';
+import '../../shared/widgets/image_source_picker.dart';
 
 class TrackEditSheet extends ConsumerStatefulWidget {
   const TrackEditSheet({super.key, required this.trackId});
@@ -23,6 +24,7 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
   late final TextEditingController _album;
   String _lyricsInput = '';
   int _revision = 0;
+  bool _searching = false;
 
   @override
   void initState() {
@@ -42,6 +44,26 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
   }
 
   Track? get _track => ref.read(libraryProvider).trackById(widget.trackId);
+
+  /// Автопоиск обложки по исполнителю и названию (iTunes, Deezer).
+  Future<void> _findOnline() async {
+    final track = _track;
+    if (track == null) return;
+    setState(() => _searching = true);
+    String message;
+    try {
+      final updated = await ref.read(importProvider).findArtworkOnline(track);
+      message = updated == null ? 'Подходящая обложка не найдена' : 'Обложка найдена';
+    } catch (e) {
+      message = 'Не удалось найти обложку: $e';
+    }
+    if (!mounted) return;
+    setState(() {
+      _searching = false;
+      _revision++;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,11 +105,32 @@ class _TrackEditSheetState extends ConsumerState<TrackEditSheet> {
             children: [
               OutlinedButton.icon(
                 onPressed: () async {
-                  await ref.read(importProvider).importArtworkFromFile(widget.trackId);
-                  setState(() => _revision++);
+                  final path = await pickImagePath(context, title: 'Обложка');
+                  if (path == null) return;
+                  try {
+                    await ref.read(importProvider).importArtworkFromPath(widget.trackId, path);
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Не удалось добавить обложку: $e')),
+                    );
+                    return;
+                  }
+                  if (mounted) setState(() => _revision++);
                 },
                 icon: const Icon(Icons.image_outlined),
                 label: const Text('Выбрать изображение'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _searching ? null : _findOnline,
+                icon: _searching
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.travel_explore_rounded),
+                label: const Text('Найти в интернете'),
               ),
               if (_track?.artworkPath != null)
                 OutlinedButton.icon(
