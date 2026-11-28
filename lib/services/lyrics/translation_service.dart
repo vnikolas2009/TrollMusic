@@ -103,7 +103,7 @@ class TranslationService {
     String lang,
   ) async {
     final order = _microsoftFirst ? [true, false] : [false, true];
-    TranslationException? failure;
+    final failures = <String>[];
     for (final microsoft in order) {
       try {
         final result = microsoft
@@ -112,10 +112,11 @@ class TranslationService {
         _microsoftFirst = microsoft;
         return result;
       } on TranslationException catch (e) {
-        failure ??= e;
+        failures.add('${microsoft ? 'Microsoft' : 'Google'}: ${e.message}');
       }
     }
-    throw failure ?? const TranslationException('Нет связи с сервисом перевода');
+    // Показываем причины обоих сервисов, чтобы было понятно, что не так.
+    throw TranslationException(failures.join('\n'));
   }
 
   Future<({List<String> rows, String? sourceLang})> _translateGoogle(
@@ -143,16 +144,27 @@ class TranslationService {
     }
     final response = await _dio.get<String>(
       'https://edge.microsoft.com/translate/auth',
-      options: Options(responseType: ResponseType.plain),
+      options: Options(
+        responseType: ResponseType.plain,
+        followRedirects: true,
+        maxRedirects: 5,
+        headers: _edgeHeaders,
+      ),
     );
     final token = response.data?.trim();
     if (response.statusCode != 200 || token == null || token.isEmpty) {
-      throw const TranslationException('Сервис перевода не выдал доступ');
+      throw TranslationException('не выдал доступ (код ${response.statusCode})');
     }
     _msToken = token;
     _msTokenAt = DateTime.now();
     return token;
   }
+
+  static const _edgeHeaders = {
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+        '(KHTML, like Gecko) Chrome/124.0 Safari/537.36 Edg/124.0',
+    'accept': '*/*',
+  };
 
   /// Код языка для Microsoft: китайский там `zh-Hans`.
   static String _microsoftLang(String code) => code == 'zh-CN' ? 'zh-Hans' : code;
@@ -170,23 +182,23 @@ class TranslationService {
         options: Options(
           contentType: 'application/json',
           responseType: ResponseType.plain,
-          headers: {'authorization': 'Bearer $token'},
+          headers: {..._edgeHeaders, 'authorization': 'Bearer $token'},
         ),
       );
       final code = response.statusCode ?? 0;
       if (code == 401 || code == 403) _msToken = null;
       if (code < 200 || code >= 300) {
-        throw TranslationException('Сервис перевода ответил кодом $code');
+        throw TranslationException('ответил кодом $code');
       }
       final parsed = parseMicrosoftResponse(jsonDecode(response.data ?? ''), texts.length);
       if (parsed == null) {
-        throw const TranslationException('Не удалось разобрать ответ сервиса перевода');
+        throw const TranslationException('не удалось разобрать ответ');
       }
       return parsed;
     } on DioException {
-      throw const TranslationException('Нет связи с сервисом перевода');
+      throw const TranslationException('нет связи');
     } on FormatException {
-      throw const TranslationException('Не удалось разобрать ответ сервиса перевода');
+      throw const TranslationException('не удалось разобрать ответ');
     }
   }
 
@@ -213,11 +225,16 @@ class TranslationService {
         );
         final code = response.statusCode ?? 0;
         if (code == 429) {
-          failure = const TranslationException('Сервис перевода просит подождать, попробуйте позже');
+          failure = const TranslationException('просит подождать, попробуйте позже');
+          continue;
+        }
+        if (code >= 300 && code < 400) {
+          // Обычно страница капчи или согласия: бывает у адресов VPN.
+          failure = TranslationException('перенаправил запрос (код $code), возможно из-за VPN');
           continue;
         }
         if (code < 200 || code >= 300) {
-          failure = TranslationException('Сервис перевода ответил кодом $code');
+          failure = TranslationException('ответил кодом $code');
           continue;
         }
 
@@ -230,15 +247,15 @@ class TranslationService {
         }
         final parsed = parseTranslateResponse(decoded);
         if (parsed == null) {
-          failure = const TranslationException('Не удалось разобрать ответ сервиса перевода');
+          failure = const TranslationException('не удалось разобрать ответ');
           continue;
         }
         return parsed;
       } on DioException {
-        failure = const TranslationException('Нет связи с сервисом перевода');
+        failure = const TranslationException('нет связи');
       }
     }
-    throw failure ?? const TranslationException('Нет связи с сервисом перевода');
+    throw failure ?? const TranslationException('нет связи');
   }
 
   Future<void> _save(String trackId, String lang, List<String> source, TranslationResult r) async {
