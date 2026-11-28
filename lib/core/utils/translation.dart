@@ -87,6 +87,27 @@ List<List<int>> chunkIndices(List<String> lines, {int maxChars = 3000}) {
   return (text: text, sourceLang: lang);
 }
 
+/// Разбирает ответ Microsoft Translator: по одному переводу на каждую
+/// отправленную строку, в том же порядке. `null`, если ответ не подходит.
+({List<String> rows, String? sourceLang})? parseMicrosoftResponse(Object? json, int expected) {
+  if (json is! List || json.length != expected) return null;
+  final rows = <String>[];
+  String? lang;
+  for (final item in json) {
+    if (item is! Map) return null;
+    final translations = item['translations'];
+    if (translations is! List || translations.isEmpty || translations.first is! Map) return null;
+    final text = (translations.first as Map)['text'];
+    if (text is! String) return null;
+    rows.add(text.replaceAll('\n', ' ').trim());
+    final detected = item['detectedLanguage'];
+    if (lang == null && detected is Map && detected['language'] is String) {
+      lang = detected['language'] as String;
+    }
+  }
+  return (rows: rows, sourceLang: lang);
+}
+
 /// Раскладывает переведённый текст обратно по строкам. Возвращает `null`,
 /// если число строк не совпало с числом исходных (тогда нужен перевод по
 /// одной строке).

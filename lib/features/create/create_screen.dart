@@ -68,38 +68,50 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
         _autoLyrics(result.tracks);
       }, 'Ошибка импорта');
 
-  Future<void> _importLyrics() => _run(() async {
-        final result = await ref.read(importProvider).pickAndImportLyrics();
-        if (result.lyricsAttached == 0 && result.lyricsSkipped == 0) {
-          _say('Файлы не выбраны');
-          return;
-        }
-        _say([
-          'Привязано текстов: ${result.lyricsAttached}',
-          if (result.lyricsSkipped > 0)
-            'не нашлось трека: ${result.lyricsSkipped}',
-        ].join(' · '), seconds: 6);
-      }, 'Ошибка импорта текстов');
+  bool _coversRunning = false;
+  bool _coversCancel = false;
+  int _coversDone = 0;
+  int _coversTotal = 0;
+  int _coversFound = 0;
 
-  Future<void> _scanFolder({required bool fullRescan}) => _run(() async {
-        final result =
-            await ref.read(importProvider).scanFolder(fullRescan: fullRescan);
-        if (result == null) return;
-
-        _say([
-          'Проверено: ${result.scanned}',
-          'Добавлено: ${result.added}',
-          if (result.updated > 0) 'Обновлено: ${result.updated}',
-          if (result.skipped > 0) 'Пропущено: ${result.skipped}',
-          if (result.lyricsAttached > 0) 'Текстов: ${result.lyricsAttached}',
-          if (result.errors > 0) 'Ошибок: ${result.errors}',
-        ].join(' · '), seconds: 6);
-
-        final library = ref.read(libraryProvider);
-        _autoLyrics(result.newTrackIds
-            .map(library.trackById)
-            .whereType<Track>());
-      }, 'Ошибка сканирования');
+  /// Поиск обложек в интернете для всех треков без обложки.
+  Future<void> _findAllCovers() async {
+    if (_coversRunning) {
+      _coversCancel = true;
+      return;
+    }
+    setState(() {
+      _coversRunning = true;
+      _coversCancel = false;
+      _coversDone = 0;
+      _coversTotal = 0;
+      _coversFound = 0;
+    });
+    int found = 0;
+    try {
+      found = await ref.read(importProvider).findMissingArtwork(
+        isCancelled: () => _coversCancel || !mounted,
+        onProgress: (done, total, hit) {
+          if (!mounted) return;
+          setState(() {
+            _coversDone = done;
+            _coversTotal = total;
+            _coversFound = hit;
+          });
+        },
+      );
+    } catch (e) {
+      _say('Ошибка поиска обложек: $e');
+    }
+    final total = _coversTotal;
+    final cancelled = _coversCancel;
+    if (mounted) setState(() => _coversRunning = false);
+    if (total == 0 && !cancelled) {
+      _say('У всех треков уже есть обложка');
+    } else {
+      _say('${cancelled ? 'Остановлено. ' : ''}Найдено обложек: $found из $total', seconds: 6);
+    }
+  }
 
   void _openBrowser() {
     Navigator.of(context).push(
@@ -165,35 +177,16 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                 Entrance(
                   index: 1,
                   child: _ActionCard(
-                    icon: Icons.folder_open_rounded,
-                    title: 'Сканировать папку',
-                    subtitle: 'Новые и изменённые треки, .lrc рядом с аудио '
-                        'подключаются сами',
-                    onTap: _busy ? null : () => _scanFolder(fullRescan: false),
-                    busy: _busy,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Entrance(
-                  index: 2,
-                  child: _ActionCard(
-                    icon: Icons.refresh_rounded,
-                    title: 'Полное сканирование',
-                    subtitle: 'Заново прочитать теги всех файлов в папке',
-                    onTap: _busy ? null : () => _scanFolder(fullRescan: true),
-                    busy: _busy,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Entrance(
-                  index: 3,
-                  child: _ActionCard(
-                    icon: Icons.lyrics_outlined,
-                    title: 'Импорт текстов (.lrc, .txt)',
-                    subtitle: 'Несколько файлов сразу, в том числе enhanced '
-                        'LRC с пословными метками',
-                    onTap: _busy ? null : _importLyrics,
-                    busy: _busy,
+                    icon: Icons.image_search_rounded,
+                    title: _coversRunning
+                        ? 'Ищу обложки: $_coversDone из $_coversTotal'
+                        : 'Найти все обложки',
+                    subtitle: _coversRunning
+                        ? 'Найдено $_coversFound. Нажмите, чтобы остановить'
+                        : 'Для треков без обложки: поиск в интернете по '
+                            'исполнителю и названию',
+                    onTap: _findAllCovers,
+                    busy: _coversRunning,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -308,7 +301,7 @@ class _ActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PressScale(
-      onTap: busy ? null : onTap,
+      onTap: onTap,
       scale: 0.98,
       child: Container(
         padding: const EdgeInsets.all(14),

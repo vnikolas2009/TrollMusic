@@ -68,4 +68,29 @@ void main() {
     expect(translationLanguageName('ru'), 'Русский');
     expect(translationLanguageName('xx'), 'xx');
   });
+
+  test('parseMicrosoftResponse: строки по порядку и исходный язык', () {
+    final r = parseMicrosoftResponse([
+      {
+        'detectedLanguage': {'language': 'en', 'score': 1.0},
+        'translations': [
+          {'text': 'Привет', 'to': 'ru'},
+        ],
+      },
+      {
+        'translations': [
+          {'text': 'Мир\nдругой', 'to': 'ru'},
+        ],
+      },
+    ], 2);
+    expect(r?.rows, ['Привет', 'Мир другой']);
+    expect(r?.sourceLang, 'en');
+  });
+
+  test('parseMicrosoftResponse: неверный ответ даёт null', () {
+    expect(parseMicrosoftResponse('x', 1), isNull);
+    expect(parseMicrosoftResponse([], 1), isNull);
+    expect(parseMicrosoftResponse([{'translations': []}], 1), isNull);
+    expect(parseMicrosoftResponse([{'translations': [{'text': 1}]}], 1), isNull);
+  });
 }

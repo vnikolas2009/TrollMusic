@@ -79,25 +79,115 @@ class TranslationService {
 
     for (final chunk in chunkIndices(source)) {
       final texts = [for (final i in chunk) source[i].trim()];
-      final joined = await _request(texts.join('\n'), lang);
-      sourceLang ??= joined.sourceLang;
-
-      var rows = splitTranslated(joined.text, texts.length);
-      if (rows == null) {
-        // Строки склеились или разъехались: переводим по одной.
-        rows = [];
-        for (final text in texts) {
-          rows.add((await _request(text, lang)).text.replaceAll('\n', ' ').trim());
-        }
-      }
+      final part = await _translateChunk(texts, lang);
+      sourceLang ??= part.sourceLang;
       for (var k = 0; k < chunk.length; k++) {
-        out[chunk[k]] = rows[k];
+        out[chunk[k]] = part.rows[k];
       }
     }
 
     final result = TranslationResult(lines: out, lang: lang, sourceLang: sourceLang);
     await _save(trackId, lang, source, result);
     return result;
+  }
+
+  /// Какой провайдер сработал последним: со следующего пакета (и перевода)
+  /// начинаем с него, чтобы не ждать таймаут заблокированного.
+  bool _microsoftFirst = false;
+
+  /// Перевод пакета строк: Google (два адреса), при сбое — Microsoft Edge
+  /// Translator. Часть сетей и VPN режет один из сервисов, второй обычно
+  /// доступен.
+  Future<({List<String> rows, String? sourceLang})> _translateChunk(
+    List<String> texts,
+    String lang,
+  ) async {
+    final order = _microsoftFirst ? [true, false] : [false, true];
+    TranslationException? failure;
+    for (final microsoft in order) {
+      try {
+        final result = microsoft
+            ? await _translateMicrosoft(texts, lang)
+            : await _translateGoogle(texts, lang);
+        _microsoftFirst = microsoft;
+        return result;
+      } on TranslationException catch (e) {
+        failure ??= e;
+      }
+    }
+    throw failure ?? const TranslationException('Нет связи с сервисом перевода');
+  }
+
+  Future<({List<String> rows, String? sourceLang})> _translateGoogle(
+    List<String> texts,
+    String lang,
+  ) async {
+    final joined = await _request(texts.join('\n'), lang);
+    var rows = splitTranslated(joined.text, texts.length);
+    if (rows == null) {
+      // Строки склеились или разъехались: переводим по одной.
+      rows = [];
+      for (final text in texts) {
+        rows.add((await _request(text, lang)).text.replaceAll('\n', ' ').trim());
+      }
+    }
+    return (rows: rows, sourceLang: joined.sourceLang);
+  }
+
+  String? _msToken;
+  DateTime _msTokenAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  Future<String> _microsoftToken() async {
+    if (_msToken != null && DateTime.now().difference(_msTokenAt) < const Duration(minutes: 8)) {
+      return _msToken!;
+    }
+    final response = await _dio.get<String>(
+      'https://edge.microsoft.com/translate/auth',
+      options: Options(responseType: ResponseType.plain),
+    );
+    final token = response.data?.trim();
+    if (response.statusCode != 200 || token == null || token.isEmpty) {
+      throw const TranslationException('Сервис перевода не выдал доступ');
+    }
+    _msToken = token;
+    _msTokenAt = DateTime.now();
+    return token;
+  }
+
+  /// Код языка для Microsoft: китайский там `zh-Hans`.
+  static String _microsoftLang(String code) => code == 'zh-CN' ? 'zh-Hans' : code;
+
+  Future<({List<String> rows, String? sourceLang})> _translateMicrosoft(
+    List<String> texts,
+    String lang,
+  ) async {
+    try {
+      final token = await _microsoftToken();
+      final response = await _dio.post<String>(
+        'https://api-edge.cognitive.microsofttranslator.com/translate',
+        queryParameters: {'api-version': '3.0', 'to': _microsoftLang(lang)},
+        data: jsonEncode([for (final t in texts) {'Text': t}]),
+        options: Options(
+          contentType: 'application/json',
+          responseType: ResponseType.plain,
+          headers: {'authorization': 'Bearer $token'},
+        ),
+      );
+      final code = response.statusCode ?? 0;
+      if (code == 401 || code == 403) _msToken = null;
+      if (code < 200 || code >= 300) {
+        throw TranslationException('Сервис перевода ответил кодом $code');
+      }
+      final parsed = parseMicrosoftResponse(jsonDecode(response.data ?? ''), texts.length);
+      if (parsed == null) {
+        throw const TranslationException('Не удалось разобрать ответ сервиса перевода');
+      }
+      return parsed;
+    } on DioException {
+      throw const TranslationException('Нет связи с сервисом перевода');
+    } on FormatException {
+      throw const TranslationException('Не удалось разобрать ответ сервиса перевода');
+    }
   }
 
   Future<({String text, String? sourceLang})> _request(String text, String lang) async {

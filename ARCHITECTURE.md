@@ -48,11 +48,11 @@ lib/
                                  mini_player_bar (мини-плеер для экранов поверх оболочки), tab_header
                                  (единый заголовок вкладок), rubber_dock, jelly_slider (+ JellyValueSlider), scale_slider_tile, ...
   features/lyrics/lyrics_backdrop      фон экрана текста: картинка/GIF под затемнением или градиентом, иначе цвет обложки (lyrics_background_provider, core/utils/lyrics_bg)
-  features/browser/web_browser_screen  встроенный браузер (webview_flutter): JS-хук `play()` и перехват ссылок на аудио → предложение скачать → ImportService.importDownloaded
+  features/browser/web_browser_screen  встроенный браузер (webview_flutter): готовые закладки на сайты со свободной музыкой + свои (Settings.browserBookmarks, core/utils/browser_bookmarks), JS-хук `play()`, перехват ссылок на аудио и кнопка «Найти аудио на странице» (скрипт + parseFoundAudio) → скачать → ImportService.importDownloaded
   services/web/web_download_service    скачивание по прямой ссылке (Dio), проверка типа ответа, имя файла
   core/utils/web_audio                 адресная строка → URL/поиск, признаки аудио, имя файла (тесты: web_audio_test)
   app/translation_provider.dart        перевод: включён ли и язык (настройки), lyricsTranslationProvider(trackId) — кэш, затем сеть
-  services/lyrics/translation_service  перевод пакетами строк, кэш в <root>/translations (хэш исходных строк), исходный LRC не меняется
+  services/lyrics/translation_service  перевод пакетами строк (Google, при сбое — Microsoft Edge Translator), кэш в <root>/translations (хэш исходных строк), исходный LRC не меняется
   core/utils/translation.dart          языки, исходные строки, пакеты, разбор ответа, выравнивание по строкам
   core/utils/smart_shuffle.dart        умное перемешивание (вес по истории, разведение исполнителей)
   core/utils/session.dart              restoreQueue/trimQueue: восстановление очереди без недоступных треков
@@ -84,7 +84,7 @@ test/                            чистая логика: LRC, сопоста�
 
 ## Поток импорта и текстов
 
-1. `ImportService.pickAndImport` / `scanFolder` копируют аудио, читают теги (`audio_metadata_reader`).
+1. `ImportService.pickAndImport` копирует аудио, читают теги (`audio_metadata_reader`).
 2. Текст для трека берётся в порядке: `.lrc` рядом с аудио → тег файла → (после импорта, если включено) онлайн-поиск.
 3. Оставшиеся `.lrc` привязываются к трекам: по имени аудиофайла, названию, «Артист - Название», тегам `[ti:]`/`[ar:]` (`lyricsFileMatchesTrack`).
 4. Онлайн: `LyricsService.find` строит до трёх запросов (`buildQueries`), опрашивает источники по очереди, `pickBest` оценивает кандидатов (название, исполнитель, длительность, наличие меток; enhanced > LRC > обычный).

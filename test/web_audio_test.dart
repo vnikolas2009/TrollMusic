@@ -95,4 +95,26 @@ void main() {
       expect(downloadFileName(url: Uri.parse('https://a.b/')), 'track.mp3');
     });
   });
+
+  group('parseFoundAudio', () {
+    test('берёт медиаэлементы и аудио-ссылки, без повторов и мусора', () {
+      final found = parseFoundAudio(
+        '{"page":"https://a.b","items":['
+        '{"src":"https://a.b/s/stream?id=1","title":" Song  One ","media":true},'
+        '{"src":"https://a.b/x.mp3","title":"","media":false},'
+        '{"src":"https://a.b/x.mp3","title":"dup","media":false},'
+        '{"src":"https://a.b/page.html","title":"page","media":false},'
+        '{"src":"blob:https://a.b/1","title":"blob","media":true},'
+        '{"src":"javascript:void(0)","title":"js","media":true}]}',
+      );
+      expect(found.map((e) => e.url.toString()), ['https://a.b/s/stream?id=1', 'https://a.b/x.mp3']);
+      expect(found.first.title, 'Song One');
+      expect(found.last.title, isNull);
+    });
+
+    test('повреждённый ответ даёт пустой список', () {
+      expect(parseFoundAudio('не json'), isEmpty);
+      expect(parseFoundAudio('{"items":5}'), isEmpty);
+    });
+  });
 }

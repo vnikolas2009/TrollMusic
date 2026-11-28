@@ -227,6 +227,13 @@ class Settings {
 
   void clearSearchQueries() => _box.delete('searchQueries');
 
+  /// Свои закладки встроенного браузера («название␟адрес», см.
+  /// `encodeBookmark`).
+  List<String> get browserBookmarks =>
+      (_box.get('browserBookmarks') as List?)?.cast<String>().toList() ?? const [];
+
+  set browserBookmarks(List<String> value) => _box.put('browserBookmarks', value);
+
   List<String> get recentIds =>
       (_box.get('recentIds') as List?)?.cast<String>().toList() ?? const [];
 

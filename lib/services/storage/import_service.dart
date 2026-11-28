@@ -109,114 +109,6 @@ class ImportService {
     return ImportResult(lyricsAttached: attached, lyricsSkipped: list.length - attached);
   }
 
-  /// Выбирает папку и сканирует её вместе со вложенными.
-  ///
-  /// [fullRescan] = false пропускает файлы, не изменившиеся с прошлого раза.
-  /// Файлы `.lrc`/`.txt` с тем же именем, что у аудио, подключаются сразу,
-  /// остальные привязываются к трекам по названию и исполнителю.
-  Future<FolderScanResult?> scanFolder({required bool fullRescan}) async {
-    final selectedPath = await FilePicker.getDirectoryPath(
-      dialogTitle: 'Выберите папку с музыкой',
-    );
-    if (selectedPath == null || selectedPath.isEmpty) return null;
-
-    final root = Directory(selectedPath);
-    if (!await root.exists()) {
-      throw FileSystemException('Выбранная папка не существует', selectedPath);
-    }
-
-    final existingByPath = <String, Track>{
-      for (final track in _library.tracks)
-        if (track.sourcePath != null && track.sourcePath!.isNotEmpty)
-          p.normalize(track.sourcePath!): track,
-    };
-
-    final audioFiles = <File>[];
-    final lyricsFiles = <File>[];
-    var errors = 0;
-
-    final pending = <Directory>[root];
-    while (pending.isNotEmpty) {
-      final dir = pending.removeLast();
-      try {
-        await for (final entity in dir.list(followLinks: false)) {
-          if (entity is Directory) {
-            pending.add(entity);
-          } else if (entity is File) {
-            final ext = _ext(entity.path);
-            if (_audioSet.contains(ext)) {
-              audioFiles.add(entity);
-            } else if (_lyricsSet.contains(ext)) {
-              lyricsFiles.add(entity);
-            }
-          }
-        }
-      } catch (_) {
-        errors++;
-      }
-    }
-
-    var added = 0;
-    var updated = 0;
-    var skipped = 0;
-    var attached = 0;
-    final newIds = <String>[];
-    final unpaired = [...lyricsFiles];
-
-    for (final file in audioFiles) {
-      try {
-        final absolutePath = p.normalize(file.absolute.path);
-        final stat = await file.stat();
-        final existing = existingByPath[absolutePath];
-        final side = _takeSibling(file.path, unpaired);
-
-        final unchanged = existing != null &&
-            existing.sourceSize == stat.size &&
-            existing.sourceModifiedAtMs == stat.modified.millisecondsSinceEpoch;
-
-        if (!fullRescan && unchanged) {
-          skipped++;
-          if (side != null && existing != null && !_library.hasLyrics(existing.id)) {
-            await _storage.attachLyricsFile(existing.id, side);
-            attached++;
-          }
-          continue;
-        }
-
-        final track = await _storage.importLocalFile(
-          file,
-          sourcePath: absolutePath,
-          sourceSize: stat.size,
-          sourceModifiedAtMs: stat.modified.millisecondsSinceEpoch,
-          existingTrackId: existing?.id,
-          lyricsFile: side,
-        );
-        if (side != null) attached++;
-        if (existing == null) {
-          added++;
-          newIds.add(track.id);
-        } else {
-          updated++;
-        }
-      } catch (_) {
-        errors++;
-      }
-    }
-
-    attached += await _attachByMatching(unpaired);
-
-    return FolderScanResult(
-      scanned: audioFiles.length,
-      added: added,
-      updated: updated,
-      skipped: skipped,
-      errors: errors,
-      fullRescan: fullRescan,
-      lyricsAttached: attached,
-      newTrackIds: newIds,
-    );
-  }
-
   /// Забирает из [candidates] файл с текстом, лежащий рядом с [audioPath]
   /// и называющийся так же.
   File? _takeSibling(String audioPath, List<File> candidates) {
@@ -320,6 +212,32 @@ class ImportService {
     }
   }
 
+  /// Ищет обложки в интернете для всех треков без обложки. [onProgress]
+  /// получает (обработано, всего, найдено); [isCancelled] позволяет
+  /// остановить поиск. Возвращает число найденных обложек.
+  Future<int> findMissingArtwork({
+    void Function(int done, int total, int found)? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    final missing = [
+      for (final t in _library.tracks)
+        if (t.artworkPath == null || t.artworkPath!.isEmpty || !File(t.artworkPath!).existsSync()) t,
+    ];
+    var found = 0;
+    for (var i = 0; i < missing.length; i++) {
+      if (isCancelled?.call() ?? false) break;
+      try {
+        if (await findArtworkOnline(missing[i]) != null) found++;
+      } catch (_) {
+        // Один сбой сети не должен останавливать весь поиск.
+      }
+      onProgress?.call(i + 1, missing.length, found);
+      // iTunes ограничивает частоту запросов (около 20 в минуту).
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+    }
+    return found;
+  }
+
   /// Ищет текст в сети и сохраняет. [provider] — идентификатор источника
   /// (`lrclib`, `kugou`, `qq`, `ovh`); без него перебираются все.
   Future<LyricsUpdate> findLyricsOnline(Track track, {String? provider}) async {
@@ -363,28 +281,6 @@ class ImportResult {
   final List<Track> tracks;
   final int lyricsAttached;
   final int lyricsSkipped;
-}
-
-class FolderScanResult {
-  const FolderScanResult({
-    required this.scanned,
-    required this.added,
-    required this.updated,
-    required this.skipped,
-    required this.errors,
-    required this.fullRescan,
-    this.lyricsAttached = 0,
-    this.newTrackIds = const [],
-  });
-
-  final int scanned;
-  final int added;
-  final int updated;
-  final int skipped;
-  final int errors;
-  final bool fullRescan;
-  final int lyricsAttached;
-  final List<String> newTrackIds;
 }
 
 class LyricsUpdate {

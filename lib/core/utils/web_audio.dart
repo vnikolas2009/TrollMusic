@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:path/path.dart' as p;
 
 import '../config/app_config.dart';
@@ -105,4 +107,42 @@ String downloadFileName({
   if (base.isEmpty) base = 'track';
   if (base.length > 120) base = base.substring(0, 120).trim();
   return '$base.$ext';
+}
+
+/// Аудио, найденное на странице.
+class FoundAudio {
+  const FoundAudio(this.url, this.title);
+
+  final Uri url;
+  final String? title;
+}
+
+/// Разбирает ответ скрипта поиска аудио на странице: элементы
+/// `{src, title, media}`. Оставляет http(s)-ссылки на медиаэлементы и на
+/// файлы с аудио-расширением, без повторов.
+List<FoundAudio> parseFoundAudio(String json) {
+  Object? data;
+  try {
+    data = jsonDecode(json);
+  } catch (_) {
+    return const [];
+  }
+  final items = data is Map ? data['items'] : null;
+  if (items is! List) return const [];
+
+  final seen = <String>{};
+  final out = <FoundAudio>[];
+  for (final item in items.whereType<Map>()) {
+    final uri = Uri.tryParse('${item['src'] ?? ''}');
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) {
+      continue;
+    }
+    if (item['media'] != true && !looksLikeAudioUrl(uri)) continue;
+    if (!seen.add(uri.toString())) continue;
+
+    var title = '${item['title'] ?? ''}'.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (title.length > 100) title = title.substring(0, 100).trim();
+    out.add(FoundAudio(uri, title.isEmpty ? null : title));
+  }
+  return out;
 }
