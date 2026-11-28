@@ -60,6 +60,6 @@ flutter test
 flutter run
 ```
 
-Релизные сборки (Android APK, iOS IPA) запускаются вручную через workflow `.github/workflows/build_release.yml`.
+Релизные сборки (Android APK, iOS IPA) запускаются вручную через workflow `.github/workflows/build_release.yml`. В поле «version» можно указать версию вида `2.1.0`; если оставить пустым, версия будет `2.0.N`.
 
 Сеть нужна только для онлайн-поиска и перевода текстов, встроенного браузера и ссылки на канал; остальное работает без неё.

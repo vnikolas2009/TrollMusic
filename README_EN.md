@@ -60,6 +60,6 @@ flutter test
 flutter run
 ```
 
-Release builds (Android APK, iOS IPA) are started manually via the `.github/workflows/build_release.yml` workflow.
+Release builds (Android APK, iOS IPA) are started manually via the `.github/workflows/build_release.yml` workflow. The "version" field accepts a version like `2.1.0`; if left empty, the version is `2.0.N`.
 
 The network is used only for online lyrics search and translation, the built-in browser and the channel link; everything else works offline.
