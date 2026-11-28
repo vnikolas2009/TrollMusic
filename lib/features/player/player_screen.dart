@@ -18,6 +18,7 @@ import '../../core/theme/app_motion.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/track.dart';
 import '../../services/audio/audio_handler.dart';
+import '../../shared/widgets/heart_button.dart';
 import '../../shared/widgets/jelly_slider.dart';
 import '../library/track_list_screen.dart';
 import '../lyrics/lyrics_screen.dart';
@@ -246,15 +247,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                         final liked = ref
                                             .watch(libraryProvider)
                                             .isLiked(track.id);
-                                        return IconButton(
-                                          icon: Icon(
-                                            liked
-                                                ? Icons.favorite
-                                                : Icons.favorite_border,
-                                            color: liked
-                                                ? AppColors.accent
-                                                : AppColors.textSecondary,
-                                          ),
+                                        return HeartButton(
+                                          liked: liked,
                                           onPressed: () async {
                                             await ref
                                                 .read(libraryProvider)
@@ -891,11 +885,78 @@ class _PlayButton extends StatefulWidget {
   State<_PlayButton> createState() => _PlayButtonState();
 }
 
-class _PlayButtonState extends State<_PlayButton> {
+class _PlayButtonState extends State<_PlayButton>
+    with SingleTickerProviderStateMixin {
   bool _pressed = false;
+
+  /// Мягкое кольцо вокруг кнопки, пока играет музыка.
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncPulse();
+  }
+
+  @override
+  void didUpdateWidget(_PlayButton old) {
+    super.didUpdateWidget(old);
+    _syncPulse();
+  }
+
+  void _syncPulse() {
+    final enabled = widget.playing && !MediaQuery.disableAnimationsOf(context);
+    if (enabled && !_pulse.isAnimating) {
+      _pulse.repeat();
+    } else if (!enabled && _pulse.isAnimating) {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      clipBehavior: Clip.none,
+      children: [
+        IgnorePointer(
+          child: AnimatedBuilder(
+            animation: _pulse,
+            builder: (_, __) {
+              final t = _pulse.value;
+              return Opacity(
+                opacity: t == 0 ? 0 : (1 - t) * 0.28,
+                child: Transform.scale(
+                  scale: 1 + 0.45 * Curves.easeOut.transform(t),
+                  child: Container(
+                    width: 66,
+                    height: 66,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        _button(),
+      ],
+    );
+  }
+
+  Widget _button() {
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) => setState(() => _pressed = false),

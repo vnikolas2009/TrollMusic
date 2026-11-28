@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/appearance_controller.dart';
 import '../../app/lyrics_background_provider.dart';
+import '../../app/lyrics_practice_provider.dart';
 import '../../app/lyrics_style_provider.dart';
 import '../../app/translation_provider.dart';
 import '../../core/theme/app_colors.dart';
@@ -36,6 +37,7 @@ class _LyricsSettingsSheet extends ConsumerWidget {
     final lookCtl = ref.read(appearanceProvider.notifier);
     final style = ref.watch(lyricsStyleProvider);
     final bg = ref.watch(lyricsBackgroundProvider);
+    final practice = ref.watch(lyricsPracticeProvider);
     final tr = ref.watch(translationPrefsProvider);
     final trCtl = ref.read(translationPrefsProvider.notifier);
     final bgCtl = ref.read(lyricsBackgroundProvider.notifier);
@@ -136,6 +138,13 @@ class _LyricsSettingsSheet extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
             ],
+            SpringSwitchTile(
+              title: 'Режим тренировки',
+              subtitle: 'Часть слов в ещё не спетых строках скрыта; спетые строки открываются. '
+                  'Только для текстов с таймкодами',
+              value: practice,
+              onChanged: ref.read(lyricsPracticeProvider.notifier).set,
+            ),
             SpringSwitchTile(
               title: 'Перевод под строками',
               subtitle: 'Оригинал и перевод вместе; перевод сохраняется на устройстве',

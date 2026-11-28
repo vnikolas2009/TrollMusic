@@ -14,6 +14,7 @@ import '../../core/theme/appearance.dart';
 import '../../core/utils/formatters.dart';
 import '../../shared/widgets/confirm_dialog.dart';
 import 'dock_settings_screen.dart';
+import 'stats_screen.dart';
 import '../../shared/widgets/spring_switch.dart';
 import '../../shared/widgets/scale_slider_tile.dart';
 import '../../shared/widgets/spring_switch_tile.dart';
@@ -291,6 +292,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
               ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.bar_chart_rounded),
+            title: const Text('Статистика прослушиваний'),
+            subtitle: const Text('Топ треков и исполнителей за период'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const StatsScreen()),
             ),
           ),
           SpringSwitchTile(

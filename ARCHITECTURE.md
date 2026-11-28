@@ -60,6 +60,10 @@ lib/
   features/settings/dock_settings_screen  перетаскивание и переключатели вкладок
   core/utils/track_filter.dart         lacksArtwork: фильтр «без обложек» в медиатеке (+ добавление по очереди)
   shared/widgets/confirm_dialog.dart   confirmAction: общий диалог подтверждения необратимых действий
+  core/utils/sleep_fade.dart           громкость затухания таймера сна (последние 45 с; «до конца трека» — 20 с)
+  core/utils/lyric_practice.dart       режим тренировки: частичное скрытие слов строки (app/lyrics_practice_provider)
+  core/utils/play_stats.dart           журнал прослушиваний (Settings.playLog) → статистика за период (features/settings/stats_screen)
+  shared/widgets/heart_button.dart     «Нравится» с частицами; пульс кнопки воспроизведения — в player_screen
   features/home/news_banner      синяя плашка с каналом t.me/TrollCerts (url_launcher, открывает внешнее приложение; сеть самим приложением не используется)
   features/player/lyric_preview  текущая строка под обложкой (или кнопка «Текст песни»); нажатие → openLyricsScreen (круговое раскрытие)
   features/lyrics/lyrics_settings_sheet  все настройки текста (стиль, размер, строка под обложкой); кнопка в шапке экрана текста

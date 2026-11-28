@@ -9,7 +9,10 @@ import 'package:palette_generator/palette_generator.dart';
 import '../../app/appearance_controller.dart';
 import '../../app/lyrics_style_provider.dart';
 import '../../app/settings_provider.dart';
+import '../../app/lyrics_practice_provider.dart';
 import '../../app/translation_provider.dart';
+import '../../core/utils/lyric_practice.dart';
+import '../../shared/widgets/entrance.dart';
 import '../../core/utils/translation.dart';
 import '../../app/providers.dart';
 import '../../core/theme/app_colors.dart';
@@ -661,6 +664,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     }
 
     final translation = _translationLines();
+    _practice = ref.watch(lyricsPracticeProvider);
 
     if (!lyrics.synced) return _plainBody(raw ?? lyrics.plainText, translation);
 
@@ -728,6 +732,9 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     );
   }
 
+  /// Режим тренировки включён (обновляется в `_body`).
+  bool _practice = false;
+
   Widget _buildLine(
     Lyrics lyrics,
     int i,
@@ -742,11 +749,17 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     final distance = index < 0 ? 99 : i - index;
     final look = style.look;
 
+    // Тренировка: текущая и будущие строки скрыты частично, спетые видны.
+    final masked = _practice && (index < 0 || i >= index);
+    final shownText = masked
+        ? maskLyricLine(line.text, seed: i * 7919 + line.time.inMilliseconds)
+        : line.text;
+
     Widget? active;
 
     // Подсветка по словам нужна только стилю с wordHighlight; у остальных
     // текущая строка — обычный текст, и позицию слушать не надо.
-    if (i == index && look.wordHighlight) {
+    if (i == index && look.wordHighlight && !masked) {
       final lineEnd = i + 1 < lyrics.lines.length
           ? lyrics.lines[i + 1].time
           : line.time + const Duration(seconds: 5);
@@ -781,13 +794,19 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
       },
       onLongPress: () => _loopLine(lyrics, i),
       child: RepaintBoundary(
-        child: _LyricLine(
-          text: line.text,
-          distance: distance,
-          lyricsStyle: style,
-          fontScale: fontScale,
-          active: active,
-          translation: translation,
+        // Строки появляются волной при открытии экрана.
+        child: Entrance(
+          index: i,
+          offsetY: 0.14,
+          duration: AppMotion.slower,
+          child: _LyricLine(
+            text: shownText,
+            distance: distance,
+            lyricsStyle: style,
+            fontScale: fontScale,
+            active: active,
+            translation: masked ? null : translation,
+          ),
         ),
       ),
     );

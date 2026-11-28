@@ -1,5 +1,7 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../utils/play_stats.dart';
+
 class Settings {
   Settings(this._box);
 
@@ -248,10 +250,19 @@ class Settings {
     final counts = {...playCounts};
     counts[trackId] = (counts[trackId] ?? 0) + 1;
     _box.put('playCounts', counts);
+
+    // Журнал для статистики по периодам: последние 3000 прослушиваний.
+    final log = [...playLog, encodePlayEvent(trackId, DateTime.now())];
+    _box.put('playLog', log.length > 3000 ? log.sublist(log.length - 3000) : log);
   }
+
+  /// Журнал прослушиваний (`<мс>:<id>`), старые записи в начале.
+  List<String> get playLog =>
+      (_box.get('playLog') as List?)?.cast<String>().toList() ?? const [];
 
   void clearHistory() {
     _box.delete('recentIds');
     _box.delete('playCounts');
+    _box.delete('playLog');
   }
 }

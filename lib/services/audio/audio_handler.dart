@@ -10,6 +10,7 @@ import '../../core/storage/settings.dart';
 import '../../core/utils/lrc_parser.dart';
 import '../../core/utils/loop_range.dart';
 import '../../core/utils/session.dart';
+import '../../core/utils/sleep_fade.dart';
 import '../../core/utils/smart_shuffle.dart';
 import '../../data/models/lyrics.dart';
 import '../../data/models/track.dart';
@@ -42,6 +43,7 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   List<Track> _playable = const [];
 
   Timer? _sleepTimer;
+  bool _sleepFading = false;
   Timer? _fadeTimer;
   DateTime _lastPositionSave = DateTime.fromMillisecondsSinceEpoch(0);
   bool _fading = false;
@@ -446,9 +448,10 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
       if (remaining <= Duration.zero) {
         timer.cancel();
         _sleepRemaining.value = null;
-        pause();
+        _stopFaded();
       } else {
         _sleepRemaining.value = remaining;
+        _applySleepFade(remaining, const Duration(seconds: 45));
       }
     });
   }
@@ -459,7 +462,28 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     _sleepAtTrackEnd.value = true;
   }
 
+  /// Плавное затухание перед остановкой по таймеру сна.
+  void _applySleepFade(Duration remaining, Duration fade) {
+    final volume = sleepFadeVolume(remaining, fade: fade);
+    if (volume >= 1 && !_sleepFading) return;
+    _sleepFading = volume < 1;
+    unawaited(_player.setVolume(volume));
+  }
+
+  /// Пауза после затухания; громкость возвращается, чтобы следующий
+  /// запуск не был тихим.
+  void _stopFaded() {
+    unawaited(pause().then((_) async {
+      _sleepFading = false;
+      await _player.setVolume(1);
+    }));
+  }
+
   void cancelSleepTimer() {
+    if (_sleepFading) {
+      _sleepFading = false;
+      unawaited(_player.setVolume(1));
+    }
     _sleepTimer?.cancel();
     _sleepRemaining.value = null;
     _sleepAtTrackEnd.value = false;
@@ -528,9 +552,14 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     if (!_sleepAtTrackEnd.value) return;
     final duration = _player.duration;
     if (duration == null || duration <= Duration.zero) return;
-    if (duration - position > const Duration(milliseconds: 400)) return;
+    final left = duration - position;
+    const fade = Duration(seconds: 20);
+    if (left > const Duration(milliseconds: 400)) {
+      _applySleepFade(left, fade);
+      return;
+    }
     _sleepAtTrackEnd.value = false;
-    unawaited(pause());
+    _stopFaded();
   }
 
   void _fadeIn() {
@@ -603,7 +632,7 @@ class TrollAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   void _onCompleted() {
     if (_sleepAtTrackEnd.value) {
       _sleepAtTrackEnd.value = false;
-      unawaited(pause());
+      _stopFaded();
       return;
     }
     if (_repeat.value == TrollRepeat.one) {
